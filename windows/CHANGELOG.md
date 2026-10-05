@@ -29,6 +29,7 @@ Coucou v2 is [JaimeTR](https://github.com/JaimeTR)'s fork of [Coucou by Louis Ra
 
 **Fixes**
 - The ticker froze after 20 steps in a long session.
+- The pill for Claude Code sessions is now labelled "Claude Code" (the original app calls it "VS Code", which hid what it was). Its id is unchanged.
 
 **Under the hood**
 - 27 Rust tests, 9 relay tests and 23 TypeScript tests (`npm test`) cover the hooks and statusLine merge, the question protocol, the live diff, the "Always allow" rules, DEVMARK AI, the greeting, and the Gemini / OpenCode / PowerShell installers (including the generated PowerShell block, which was also run in PowerShell 7 and 5.1).

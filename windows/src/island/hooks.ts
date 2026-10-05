@@ -157,7 +157,7 @@ function clearSession() {
   t.stepDiffs = [];
   t.seq = 0;
   t.stepIndex = 0;
-  t.name = "VS Code";
+  t.name = "Claude Code";
   t.pillBadge = null;
   t.sessionPids = null;
   State.clearDiffs();
