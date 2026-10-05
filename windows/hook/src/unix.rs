@@ -14,6 +14,29 @@ use std::time::{Duration, Instant};
 
 use crate::CONNECT_TIMEOUT;
 
+/// Our parent, our grandparent and so on, nearest first, read from /proc.
+/// (Bringing a terminal window forward is not done on Linux yet; the chain is
+/// still sent so the app can use it when it can.)
+pub fn ancestor_pids() -> Vec<u32> {
+    let mut chain = Vec::new();
+    let mut pid = std::process::id();
+    while chain.len() < 16 {
+        // "pid (comm) S ppid …": comm may hold spaces and parentheses, so the
+        // fields are counted from the last ')'.
+        let Ok(stat) = std::fs::read_to_string(format!("/proc/{pid}/stat")) else { break };
+        let Some(rest) = stat.rsplit_once(')').map(|(_, r)| r) else { break };
+        let Some(parent) = rest.split_whitespace().nth(1).and_then(|p| p.parse::<u32>().ok()) else {
+            break;
+        };
+        if parent <= 1 || chain.contains(&parent) {
+            break;
+        }
+        chain.push(parent);
+        pid = parent;
+    }
+    chain
+}
+
 /// `$XDG_RUNTIME_DIR/coucou.sock`, or `/run/user/<uid>/coucou.sock` when the
 /// variable is missing (a hook started from a stripped-down environment). The
 /// directory must be ours and closed to everyone else, or there is no relay.

@@ -23,7 +23,8 @@ export interface ViewActions {
   /** The ↗ button: opens whatever the focused pill points at. */
   openTarget(): void;
   openUrl(url: string): void;
-  decide(d: "allow" | "deny"): void;
+  /** "always" allows this one and remembers the rule behind the card's button. */
+  decide(d: "allow" | "deny" | "always"): void;
   /** Answers to Claude's question, or null to reply in the terminal instead. */
   answerQuestion(answers: Record<string, string | string[]> | null): void;
   /** Opens the live diff behind a ticker step. */
@@ -374,14 +375,22 @@ function buildApproval(actions: ViewActions): ViewHost {
       // is the command, the file path or the URL being authorised, not just the
       // name of the tool asking.
       code.textContent = State.pendingApproval?.command || State.pendingApproval?.tool || "…";
-      // Two buttons, built once. Rebuilding them between a mouse-down and a
-      // mouse-up would swallow the click, and there is nothing left to vary:
-      // "Always" is gone until the remembered-rules list exists to back it.
-      if (rowKey === "built") return;
-      rowKey = "built";
+      // "Always" exists only when this request can be remembered (see rules.ts),
+      // and its tooltip says exactly what would be remembered. The row is rebuilt
+      // only when that changes: rebuilding between a mouse-down and a mouse-up
+      // would swallow the click.
+      const rule = State.pendingApproval?.rule ?? null;
+      const key = `${State.pendingApproval?.requestId ?? ""}|${rule?.pattern ?? ""}`;
+      if (rowKey === key) return;
+      rowKey = key;
       clear(row);
+      const always = rule
+        ? btn("Always", "secondary", () => actions.decide("always"))
+        : null;
+      if (always && rule) always.title = `Always allow: ${rule.label}`;
       row.append(
         btn("Deny", "secondary", () => actions.decide("deny"), "N"),
+        ...(always ? [always] : []),
         btn("Allow", "primary", () => actions.decide("allow"), "Y"),
       );
     },

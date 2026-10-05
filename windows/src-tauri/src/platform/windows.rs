@@ -13,10 +13,14 @@ use ::windows::Win32::Security::{GetTokenInformation, TokenUser, TOKEN_QUERY, TO
 use ::windows::Win32::System::Ole::RevokeDragDrop;
 use ::windows::Win32::System::SystemInformation::GetLocalTime;
 use ::windows::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
-use ::windows::Win32::UI::Input::KeyboardAndMouse::{GetAsyncKeyState, VK_LBUTTON};
+use ::windows::Win32::UI::Input::KeyboardAndMouse::{
+    keybd_event, GetAsyncKeyState, KEYEVENTF_KEYUP, VK_LBUTTON, VK_MENU,
+};
 use ::windows::Win32::UI::WindowsAndMessaging::{
-    EnumChildWindows, GetClassNameW, GetCursorPos, GetWindowLongPtrW, SetWindowLongPtrW,
-    GWL_EXSTYLE, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW,
+    EnumChildWindows, EnumWindows, GetClassNameW, GetCursorPos, GetWindow, GetWindowLongPtrW,
+    GetWindowTextLengthW, GetWindowThreadProcessId, IsIconic, IsWindowVisible, SetForegroundWindow,
+    SetWindowLongPtrW, ShowWindow, GWL_EXSTYLE, GW_OWNER, SW_RESTORE, WS_EX_NOACTIVATE,
+    WS_EX_TOOLWINDOW,
 };
 
 use super::LocalTime;
@@ -100,6 +104,70 @@ pub fn find_on_path(stem: &str) -> Option<PathBuf> {
         }
     }
     None
+}
+
+// ── Terminal windows ──────────────────────────────────────────────────────────
+
+/// Brings forward the window of the terminal a Claude Code session runs in.
+///
+/// `pids` is the session's process chain, nearest first (coucou-hook walks it).
+/// The nearest process that owns a real top-level window is the terminal host —
+/// Windows Terminal, VS Code, a classic console — because the shells and
+/// OpenConsole.exe in between have none. Going further up would end at
+/// explorer.exe, which owns every folder window, so the walk stops at the first
+/// hit. Several windows of the same host cannot be told apart: the top one wins.
+pub fn focus_terminal(pids: &[u32]) -> bool {
+    struct Search<'a> {
+        pids: &'a [u32],
+        best: Option<(usize, HWND)>,
+    }
+
+    unsafe extern "system" fn visit(hwnd: HWND, lparam: LPARAM) -> BOOL {
+        let search = unsafe { &mut *(lparam.0 as *mut Search) };
+        unsafe {
+            if !IsWindowVisible(hwnd).as_bool() {
+                return true.into();
+            }
+            // Owned windows (dialogs, popups) and tool windows are not the terminal.
+            if GetWindow(hwnd, GW_OWNER).map(|w| !w.0.is_null()).unwrap_or(false) {
+                return true.into();
+            }
+            if GetWindowLongPtrW(hwnd, GWL_EXSTYLE) & WS_EX_TOOLWINDOW.0 as isize != 0 {
+                return true.into();
+            }
+            if GetWindowTextLengthW(hwnd) == 0 {
+                return true.into();
+            }
+            let mut pid = 0u32;
+            GetWindowThreadProcessId(hwnd, Some(&mut pid));
+            if let Some(rank) = search.pids.iter().position(|p| *p == pid) {
+                // EnumWindows runs top of the z-order first, so on a tie the
+                // first window seen is kept.
+                if search.best.map(|(r, _)| rank < r).unwrap_or(true) {
+                    search.best = Some((rank, hwnd));
+                }
+            }
+        }
+        true.into()
+    }
+
+    let mut search = Search { pids, best: None };
+    unsafe {
+        let _ = EnumWindows(Some(visit), LPARAM(&mut search as *mut Search as isize));
+    }
+    let Some((_, hwnd)) = search.best else { return false };
+
+    unsafe {
+        if IsIconic(hwnd).as_bool() {
+            let _ = ShowWindow(hwnd, SW_RESTORE);
+        }
+        // Windows only lets the process that last received input take the
+        // foreground. A tap on Alt makes ours count as that one.
+        keybd_event(VK_MENU.0 as u8, 0, Default::default(), 0);
+        let ok = SetForegroundWindow(hwnd).as_bool();
+        keybd_event(VK_MENU.0 as u8, 0, KEYEVENTF_KEYUP, 0);
+        ok
+    }
 }
 
 // ── Who we are ────────────────────────────────────────────────────────────────

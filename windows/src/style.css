@@ -1397,10 +1397,8 @@ input[type="range"]::-webkit-slider-thumb {
 
 .plan-row {
   display: grid;
-  grid-template-columns: 52px 1fr 34px;
-  grid-template-rows: auto auto;
-  column-gap: 8px;
-  row-gap: 2px;
+  grid-template-columns: 20px 1fr 32px 54px;
+  column-gap: 7px;
   align-items: center;
 }
 
@@ -1429,9 +1427,9 @@ input[type="range"]::-webkit-slider-thumb {
 }
 
 .plan-reset {
-  grid-column: 2 / 4;
   font: 400 10px var(--font);
   color: var(--dim-3);
+  white-space: nowrap;
 }
 
 /* ── Live diff ──────────────────────────────────────────────────────────── */
@@ -1605,7 +1603,9 @@ input[type="range"]::-webkit-slider-thumb {
   white-space: nowrap;
 }
 
-.q-opt.sel {
+/* Beats .btn.secondary:hover, or a picked option turns grey under the pointer. */
+.btn.secondary.q-opt.sel,
+.btn.secondary.q-opt.sel:hover {
   background: var(--ink);
   color: #0b0c0e;
 }

@@ -3,6 +3,7 @@
 import type { BotEmoteName, BotStateName, IslandMode, IslandViewName } from "./layout";
 import type { EyeShape } from "../mochi/engine";
 import type { FileDiff } from "../island/diff";
+import type { Rule, RuleDraft } from "../island/rules";
 
 const MAX_DIFFS = 50;
 
@@ -26,6 +27,8 @@ export interface AgentTask {
   miniEye?: EyeShape | null;
   pillBadge?: PillBadge | null;
   sessionCwd?: string | null;
+  /** Process chain of the session (nearest first), to find its terminal window. */
+  sessionPids?: number[] | null;
 }
 
 export interface ApprovalInfo {
@@ -33,6 +36,8 @@ export interface ApprovalInfo {
   sessionId: string;
   tool: string;
   command: string;
+  /** What the "Always" button would remember; null when this request cannot be. */
+  rule?: RuleDraft | null;
 }
 
 /** One question from Claude (AskUserQuestion): 2–4 options, optionally several. */
@@ -186,6 +191,9 @@ class AppState {
   plan: PlanUsage | null = null;
   /** The header pill was clicked: the plan card replaces the current one. */
   showingPlanDetail = false;
+
+  /** The "Always allow" rules, as stored by Rust. */
+  rules: Rule[] = [];
 
   /** Live diffs, newest last. See island/diff.ts. */
   diffs = new Map<string, FileDiff>();

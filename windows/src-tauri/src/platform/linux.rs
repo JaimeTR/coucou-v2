@@ -134,6 +134,12 @@ pub fn reveal_folder(path: &str) {
     let _ = Command::new("xdg-open").arg(path).spawn();
 }
 
+/// Wayland gives no app the right to raise another one's window, and X11
+/// compositors differ: the island falls back to opening the folder in VS Code.
+pub fn focus_terminal(_pids: &[u32]) -> bool {
+    false
+}
+
 /// Our own `which`: the first executable file named `stem` on $PATH.
 pub fn find_on_path(stem: &str) -> Option<PathBuf> {
     let dirs = std::env::var_os("PATH")?;

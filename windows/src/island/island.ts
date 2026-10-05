@@ -102,6 +102,49 @@ export class Island {
     });
   }
 
+  /** The Allow / Deny buttons, and Ctrl+Alt+Y / N from anywhere. */
+  decideApproval(d: "allow" | "deny" | "always") {
+    const req = State.pendingApproval;
+    void Bridge.log(`decide ${d} req=${req?.requestId ?? "none"}`);
+    if (!req) return;
+    Sound.play(d === "deny" ? "blip" : "approve");
+    if (d === "always" && req.rule) {
+      // The person just clicked "Always": that click is what creates the rule.
+      Bridge.rulesAdd(req.rule).catch((err) => void Bridge.log(`could not save the rule: ${String(err)}`));
+    }
+    void Bridge.approvalDecision(req.requestId, d === "deny" ? "deny" : "allow");
+    void Bridge.setDecisionShortcuts(false);
+    State.pendingApproval = null;
+    State.isPinned = false;
+    this.fsm.pinned = false;
+    State.updateTask("integration_claude", "working");
+    State.setPillBadge("integration_claude", null);
+    this.setView(State.defaultView());
+  }
+
+  /** Ctrl+Alt+C: open the island, or close it if it is already open. */
+  toggleFromShortcut() {
+    if (State.mode === "expanded" && !State.isPinned) this.collapse();
+    else this.alert(State.defaultView());
+  }
+
+  /**
+   * "Open terminal": the exact window the session runs in when the relay told us
+   * where it is, the project folder in VS Code when that window can't be found.
+   */
+  private openSessionTerminal() {
+    const task = State.focusTask;
+    const cwd = task?.sessionCwd ?? null;
+    const pids = task?.sessionPids;
+    if (!pids || pids.length === 0) {
+      void Bridge.openInVSCode(cwd);
+      return;
+    }
+    void Bridge.focusTerminal(pids).then((found) => {
+      if (!found) void Bridge.openInVSCode(cwd);
+    });
+  }
+
   // ── DOM ─────────────────────────────────────────────────────────────────────
 
   private build() {
@@ -112,10 +155,7 @@ export class Island {
         State.setFocus(id);
         Sound.play("blip");
       },
-      openTerminal: () => {
-        const cwd = State.focusTask?.sessionCwd ?? null;
-        void Bridge.openInVSCode(cwd);
-      },
+      openTerminal: () => this.openSessionTerminal(),
       // The ↗ button — same targets as openAgentTarget() on macOS.
       openTarget: () => {
         const task = State.focusTask;
@@ -128,26 +168,14 @@ export class Island {
           integration_notion: "https://notion.so",
           integration_calcom: "https://app.cal.com/bookings",
         };
-        if (task.id === "integration_claude") void Bridge.openInVSCode(task.sessionCwd ?? null);
+        if (task.id === "integration_claude") this.openSessionTerminal();
         else if (task.id === "integration_n8n") void Bridge.openN8n();
         else if (urls[task.id]) void Bridge.openUrl(urls[task.id]);
       },
       openUrl: (url) => {
         if (url) void Bridge.openUrl(url);
       },
-      decide: (d) => {
-        const req = State.pendingApproval;
-        void Bridge.log(`decide ${d} req=${req?.requestId ?? "none"}`);
-        if (!req) return;
-        Sound.play(d === "deny" ? "blip" : "approve");
-        void Bridge.approvalDecision(req.requestId, d);
-        State.pendingApproval = null;
-        State.isPinned = false;
-        this.fsm.pinned = false;
-        State.updateTask("integration_claude", "working");
-        State.setPillBadge("integration_claude", null);
-        this.setView(State.defaultView());
-      },
+      decide: (d) => this.decideApproval(d),
       answerQuestion: (answers) => {
         const q = State.pendingQuestion;
         void Bridge.log(`question ${answers ? "answered" : "left to the terminal"} req=${q?.requestId ?? "none"}`);

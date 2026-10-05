@@ -34,30 +34,34 @@ export function primaryPercent(plan: PlanUsage | null, nowMs = Date.now()): numb
 export function untilReset(resetsAt: number | null, nowMs = Date.now()): string {
   if (resetsAt == null) return "";
   const seconds = Math.round(resetsAt - nowMs / 1000);
-  if (seconds <= 0) return "resets now";
+  if (seconds <= 0) return "now";
   const minutes = Math.floor(seconds / 60);
   const days = Math.floor(minutes / 1440);
   const hours = Math.floor((minutes % 1440) / 60);
-  if (days > 0) return `resets in ${days}d ${hours}h`;
-  if (hours > 0) return `resets in ${hours}h ${minutes % 60}m`;
-  return `resets in ${Math.max(1, minutes)}m`;
+  if (days > 0) return `${days}d ${hours}h`;
+  if (hours > 0) return `${hours}h ${minutes % 60}m`;
+  return `${Math.max(1, minutes)}m`;
 }
 
-function windowRow(label: string, w: PlanWindow | null): HTMLElement {
+function windowRow(label: { short: string; long: string }, w: PlanWindow | null): HTMLElement {
   const percent = planNow(w);
   const color = planColor(percent);
   const fill = h("i", { style: `width:${percent ?? 0}%;background:${color}` });
   return h(
     "div",
     { class: "plan-row" },
-    h("span", { class: "plan-label", text: label }),
+    h("span", { class: "plan-label", title: label.long, text: label.short }),
     h("div", { class: "plan-bar" }, fill),
     h("span", {
       class: "plan-pct",
       style: `color:${color}`,
       text: percent == null ? "—" : `${Math.round(percent)}%`,
     }),
-    h("span", { class: "plan-reset", text: w ? untilReset(w.resetsAt) : "" }),
+    h("span", {
+      class: "plan-reset",
+      title: w?.resetsAt != null ? `Resets in ${untilReset(w.resetsAt)}` : "",
+      text: w?.resetsAt != null ? `↻ ${untilReset(w.resetsAt)}` : "",
+    }),
   );
 }
 
@@ -75,6 +79,11 @@ export function renderPlanCard(plan: PlanUsage, onBack: () => void): HTMLElement
       h("b", { text: "Claude plan" }),
       h("span", { text: "usage" }),
     ),
-    h("div", { class: "plan-rows" }, windowRow("5 hours", plan.fiveHour), windowRow("7 days", plan.sevenDay)),
+    h(
+      "div",
+      { class: "plan-rows" },
+      windowRow({ short: "5h", long: "5-hour window" }, plan.fiveHour),
+      windowRow({ short: "7d", long: "7-day window" }, plan.sevenDay),
+    ),
   );
 }

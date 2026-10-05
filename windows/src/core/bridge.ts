@@ -6,6 +6,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import type { Settings } from "./state";
+import type { Rule, RuleDraft } from "../island/rules";
 
 export const IS_TAURI =
   typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -54,6 +55,21 @@ export const Bridge = {
 
   /** "Open terminal" → opens the folder in VS Code when `code` is on PATH. */
   openInVSCode: (path: string | null) => call<boolean>("open_in_vscode", { path }),
+
+  // ── "Always allow" rules ──────────────────────────────────────────────────
+  rulesList: () => call<Rule[]>("rules_list"),
+  /** Only from the "Always" button: the person's own, explicit click. */
+  rulesAdd: (draft: RuleDraft) => callOrThrow<Rule>("rules_add", { ...draft }),
+  rulesRemove: (id: string) => callOrThrow<void>("rules_remove", { id }),
+
+  /** Ctrl+Alt+Y / N are registered only while a permission card is up. */
+  setDecisionShortcuts: (active: boolean) => call<void>("set_decision_shortcuts", { active }),
+
+  /** A Windows toast; Rust checks the setting and keeps the text short. */
+  notify: (title: string, body: string) => call<void>("notify", { title, body }),
+
+  /** Brings forward the terminal window a session runs in; false if none was found. */
+  focusTerminal: (pids: number[]) => call<boolean>("focus_terminal", { pids }),
 
   /** The ↗ on the diff card: opens one edited file in VS Code, at its path. */
   openFile: (path: string) => call<boolean>("open_file_in_vscode", { path }),

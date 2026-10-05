@@ -46,12 +46,16 @@ const PREVIOUS_STATUSLINE_BUDGET: Duration = Duration::from_secs(10);
 #[cfg(windows)]
 mod win;
 #[cfg(windows)]
-use win::connect;
+use win::{ancestor_pids, connect};
 
 #[cfg(target_os = "linux")]
 mod unix;
 #[cfg(target_os = "linux")]
-use unix::connect;
+use unix::{ancestor_pids, connect};
+
+/// Events that fire dozens of times a minute carry no process chain: the island
+/// learns it from the first event of the session, and the walk is not free.
+const NO_CHAIN_EVENTS: &[&str] = &["PreToolUse", "PostToolUse", "PostToolUseFailure"];
 
 fn main() {
     if std::env::args().skip(1).any(|a| a == "--statusline") {
@@ -237,6 +241,16 @@ fn read_event() -> Option<Event> {
         if !map.contains_key(key) {
             let value = std::env::var(var).unwrap_or_default();
             map.insert(key.into(), serde_json::Value::String(value));
+        }
+    }
+
+    // Where this session lives, so "Open terminal" can bring the right window
+    // forward. A question's PreToolUse is the exception to the rule above: it
+    // waits for a person, and the card needs to know the terminal it came from.
+    if !NO_CHAIN_EVENTS.contains(&event.as_str()) || ask_questions.is_some() {
+        let chain = ancestor_pids();
+        if !chain.is_empty() {
+            map.insert("ancestor_pids".into(), chain.into());
         }
     }
 

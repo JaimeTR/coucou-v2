@@ -7,6 +7,7 @@ import { Bridge, onEvent } from "../core/bridge";
 import { Sound } from "../core/sound";
 import { State, type AskQuestion, type PlanUsage, type PlanWindow } from "../core/state";
 import { computeDiff, diffStepLabel } from "./diff";
+import { matchRule, ruleFor } from "./rules";
 import type { Island } from "./island";
 
 const CLAUDE_ID = "integration_claude";
@@ -33,6 +34,14 @@ interface HookPayload {
   tool_input?: Record<string, unknown>;
   /** Optional agent tag: lowercase, digits and hyphens, ≤ 24 chars. */
   coucou_agent?: string;
+  /** The relay's parent chain, nearest first: how to find the terminal window. */
+  ancestor_pids?: unknown;
+}
+
+/** A short list of process ids, or null. It comes from outside: check it. */
+function validPids(raw: unknown): number[] | null {
+  if (!Array.isArray(raw) || raw.length === 0 || raw.length > 16) return null;
+  return raw.every((p) => Number.isInteger(p) && p > 0) ? (raw as number[]) : null;
 }
 
 /** Same rule as HookServer.validateAgent on macOS. "claude" is reserved. */
@@ -128,6 +137,12 @@ function approvalTarget(tool: string, input: Record<string, unknown>): string {
   return tool;
 }
 
+/** A Windows toast for something that needs a person, when the setting is on. */
+function toast(title: string, body: string) {
+  if (!State.settings.nativeNotifications) return;
+  void Bridge.notify(title, body);
+}
+
 function upsert(projectName: string, cwd: string) {
   const t = State.tasks.find((x) => x.id === CLAUDE_ID);
   if (!t) return;
@@ -144,6 +159,7 @@ function clearSession() {
   t.stepIndex = 0;
   t.name = "VS Code";
   t.pillBadge = null;
+  t.sessionPids = null;
   State.clearDiffs();
 }
 
@@ -228,6 +244,16 @@ export function parseQuestions(input: Record<string, unknown> | undefined): AskQ
 export function registerHookHandlers(island: Island) {
   void onEvent<HookPayload>("hook", (payload) => handleHook(island, payload));
   void onEvent<StatuslinePayload>("statusline", (payload) => handleStatusline(payload));
+  // `npm run dev` in a plain browser has no relay: let the page replay events by
+  // hand (window.__coucou.hook({...})). Vite drops this from the real build.
+  if (import.meta.env.DEV) {
+    (window as unknown as Record<string, unknown>).__coucou = {
+      State,
+      island,
+      hook: (p: HookPayload) => handleHook(island, p),
+      statusline: (p: StatuslinePayload) => handleStatusline(p),
+    };
+  }
 }
 
 function handleHook(island: Island, payload: HookPayload) {
@@ -251,6 +277,13 @@ function handleHook(island: Island, payload: HookPayload) {
   const isExternalAgent = validAgent !== null;
 
   const focused = State.focusId === agentId;
+
+  // Remember where this session's terminal is (Claude Code's own pill only).
+  const pids = validPids(payload.ancestor_pids);
+  if (pids && !isExternalAgent) {
+    const claude = State.tasks.find((x) => x.id === CLAUDE_ID);
+    if (claude) claude.sessionPids = pids;
+  }
 
   /** Alerts force the island open; work events only reveal the compact island. */
   const surface = (view: Parameters<Island["alert"]>[0], isAlert: boolean) => {
@@ -333,6 +366,10 @@ function handleHook(island: Island, payload: HookPayload) {
     }
 
     case "Stop":
+      // A toast only when the island is not already open to say it.
+      if (State.mode !== "expanded") {
+        toast(`${isExternalAgent ? validAgent : "Claude Code"} finished`, projectName);
+      }
       State.updateTask(agentId, "finished");
       if (payload.message) State.appendStep(agentId, payload.message.slice(0, 60));
       Sound.play("finish");
@@ -349,6 +386,9 @@ function handleHook(island: Island, payload: HookPayload) {
       break;
 
     case "StopFailure":
+      if (State.mode !== "expanded") {
+        toast(`${isExternalAgent ? validAgent : "Claude Code"} stopped on an error`, projectName);
+      }
       State.updateTask(agentId, "error");
       Sound.play("error");
       if (focused) surface("error", true);
@@ -388,6 +428,22 @@ function handleHook(island: Island, payload: HookPayload) {
         if (requestId) void Bridge.approvalDecline(requestId);
         break;
       }
+      const tool = payload.tool_name ?? "Tool";
+      const input = payload.tool_input ?? {};
+
+      // A rule the person made with "Always" covers this exact kind of request:
+      // answer it without a card. It is never silent — the step shows in the
+      // ticker and the log keeps the rule's id — and removing the rule in
+      // Settings puts the question back on the card.
+      const covered = requestId ? matchRule(State.rules, tool, input, cwd) : undefined;
+      if (covered) {
+        void Bridge.log(`auto-allowed ${tool} by rule ${covered.id} (${covered.label})`);
+        void Bridge.approvalDecision(requestId, "allow");
+        upsert(projectName, cwd);
+        State.appendStep(CLAUDE_ID, `✓ Always allowed · ${covered.label}`);
+        break;
+      }
+
       // One card, one request. A second one must never quietly replace the first
       // — that would leave a human staring at request B while request A waits for
       // a decision nobody can give. Hand it straight back to the terminal.
@@ -400,17 +456,18 @@ function handleHook(island: Island, payload: HookPayload) {
       }
       upsert(projectName, cwd);
       if (pendingTimeout != null) window.clearTimeout(pendingTimeout);
-      const tool = payload.tool_name ?? "Tool";
-      const input = payload.tool_input ?? {};
       State.pendingApproval = {
         requestId,
         sessionId: payload.session_id ?? "",
         tool,
         command: approvalTarget(tool, input),
+        rule: ruleFor(tool, input, cwd),
       };
       // The relay's short ack window closes in 800 ms; everything below this
       // line is synchronous, so the card really is up by the time it lands.
       if (requestId) void Bridge.approvalAck(requestId);
+      void Bridge.setDecisionShortcuts(true);
+      toast("Claude Code needs permission", State.pendingApproval.command);
       State.updateTask(CLAUDE_ID, "approval");
       State.isPinned = true;
       Sound.play("approval");
@@ -428,6 +485,7 @@ function handleHook(island: Island, payload: HookPayload) {
       pendingTimeout = window.setTimeout(() => {
         pendingTimeout = null;
         if (!State.pendingApproval) return;
+        void Bridge.setDecisionShortcuts(false);
         State.pendingApproval = null;
         State.isPinned = false;
         island.dropPin();
@@ -470,6 +528,7 @@ function handleQuestion(
   if (questionTimeout != null) window.clearTimeout(questionTimeout);
   State.pendingQuestion = { requestId, sessionId: payload.session_id ?? "", questions };
   void Bridge.approvalAck(requestId);
+  toast("Claude Code has a question", questions[0].question);
   State.updateTask(CLAUDE_ID, "question");
   State.isPinned = true;
   Sound.play("question");

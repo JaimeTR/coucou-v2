@@ -6,6 +6,7 @@ import "./settings.css";
 import { Bridge, onEvent, type HookStatus } from "../core/bridge";
 import { DEFAULT_SETTINGS, type Settings } from "../core/state";
 import { h, clear } from "../views/dom";
+import type { Rule } from "../island/rules";
 
 let settings: Settings = { ...DEFAULT_SETTINGS };
 let version = "";
@@ -286,6 +287,59 @@ function planSection(status: HookStatus): HTMLElement {
   return section;
 }
 
+// ── Always allowed section ────────────────────────────────────────────────────
+
+/**
+ * What "Always" on a permission card has remembered. Each rule is for one
+ * project and one kind of request; removing it puts the question back on the
+ * card the next time. Nothing here can add a rule — only the card can.
+ */
+function rulesSection(initial: Rule[]): HTMLElement {
+  const list = h("div", { style: "display:flex;flex-direction:column;gap:8px" });
+  const section = h(
+    "section",
+    {},
+    h("h2", {}, h("span", { text: "Always allowed" })),
+    h("div", {
+      class: "hint",
+      text: "Requests you chose to always allow with the “Always” button. They are answered without asking, and each one shows in the island's ticker. Remove one to be asked again.",
+    }),
+    list,
+  );
+
+  function draw(rules: Rule[]) {
+    clear(list);
+    if (rules.length === 0) {
+      list.append(h("div", { class: "hint", text: "Nothing yet." }));
+      return;
+    }
+    for (const rule of rules) {
+      const project = rule.project.split("/").filter(Boolean).pop() ?? rule.project;
+      const remove = h("button", { class: "danger", text: "Remove" });
+      remove.addEventListener("click", async () => {
+        remove.disabled = true;
+        try {
+          await Bridge.rulesRemove(rule.id);
+        } catch (err) {
+          remove.disabled = false;
+          list.append(h("div", { class: "notice err", text: `Could not remove: ${String(err)}` }));
+        }
+      });
+      list.append(
+        h("div", { class: "row" },
+          h("span", { style: "flex:1 1 auto;min-width:0;font-size:12.5px", text: rule.label }),
+          h("span", { class: "hint", title: rule.project, text: project }),
+          remove,
+        ),
+      );
+    }
+  }
+
+  draw(initial);
+  void onEvent<Rule[]>("rules-changed", draw);
+  return section;
+}
+
 // ── Claude API section ────────────────────────────────────────────────────────
 
 const MODELS: [string, string][] = [
@@ -529,6 +583,16 @@ function generalSection(): HTMLElement {
       h("label", { text: "Launch at startup" }),
       toggle(settings.autostart, (v) => { settings.autostart = v; void save(); }),
     ),
+    h("div", { class: "row" },
+      h("label", { text: "Windows notifications" }),
+      toggle(settings.nativeNotifications, (v) => { settings.nativeNotifications = v; void save(); }),
+      h("span", { class: "hint", text: "a toast when Claude needs you or finishes while the island is closed" }),
+    ),
+    h("div", { class: "row" },
+      h("label", { text: "Global shortcuts" }),
+      toggle(settings.globalShortcuts, (v) => { settings.globalShortcuts = v; void save(); }),
+      h("span", { class: "hint", text: "Ctrl+Alt+Y allow · Ctrl+Alt+N deny (only while a request is up) · Ctrl+Alt+C open or close" }),
+    ),
   );
 }
 
@@ -559,6 +623,7 @@ async function main() {
     h("h1", {}, h("span", { text: "Coucou" }), h("span", { class: "version", text: version })),
     claudeSection(status),
     planSection(status),
+    rulesSection((await Bridge.rulesList()) ?? []),
     apiSection(hasKey),
     integrationsSection(present),
     generalSection(),

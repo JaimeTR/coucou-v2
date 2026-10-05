@@ -9,5 +9,5 @@
     "isolatedModules": false
   },
   "include": [],
-  "files": ["src/island/diff.ts"]
+  "files": ["src/island/diff.ts", "src/island/rules.ts"]
 }

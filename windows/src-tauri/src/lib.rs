@@ -8,6 +8,7 @@ mod island;
 mod log;
 mod pipe;
 mod platform;
+mod rules;
 mod secrets;
 mod settings;
 mod tray;
@@ -19,6 +20,8 @@ use std::sync::{Arc, Mutex};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_autostart::{ManagerExt, MacosLauncher};
+use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
+use tauri_plugin_notification::NotificationExt;
 
 use claude::{Chat, ChatContext, ChatReply};
 use files::DroppedFile;
@@ -59,15 +62,107 @@ fn boot(app: AppHandle, shared: State<Shared>) -> BootInfo {
     }
 }
 
+// ── Global shortcuts ──────────────────────────────────────────────────────────
+//
+// Ctrl+Alt+Y / Ctrl+Alt+N approve or deny the permission card that is up, from
+// whatever window has the keyboard. They are only registered while such a card
+// exists, so the rest of the time no other program loses those keys. Ctrl+Alt+C
+// opens or closes the island and stays registered.
+
+fn allow_shortcut() -> Shortcut {
+    Shortcut::new(Some(Modifiers::CONTROL | Modifiers::ALT), Code::KeyY)
+}
+
+fn deny_shortcut() -> Shortcut {
+    Shortcut::new(Some(Modifiers::CONTROL | Modifiers::ALT), Code::KeyN)
+}
+
+fn toggle_shortcut() -> Shortcut {
+    Shortcut::new(Some(Modifiers::CONTROL | Modifiers::ALT), Code::KeyC)
+}
+
+fn register_shortcut(app: &AppHandle, shortcut: Shortcut, label: &str) {
+    let keys = app.global_shortcut();
+    if keys.is_registered(shortcut) {
+        return;
+    }
+    // Another program may already own the combination: say so and carry on.
+    if let Err(err) = keys.register(shortcut) {
+        log::line(format!("global shortcut {label} unavailable: {err}"));
+    }
+}
+
+fn unregister_shortcut(app: &AppHandle, shortcut: Shortcut) {
+    let keys = app.global_shortcut();
+    if keys.is_registered(shortcut) {
+        let _ = keys.unregister(shortcut);
+    }
+}
+
+/// The island shows a permission card (`active`) or has just let it go.
+#[tauri::command]
+fn set_decision_shortcuts(app: AppHandle, shared: State<Shared>, active: bool) {
+    let enabled = shared.settings.lock().unwrap().global_shortcuts;
+    if active && enabled {
+        register_shortcut(&app, allow_shortcut(), "Ctrl+Alt+Y");
+        register_shortcut(&app, deny_shortcut(), "Ctrl+Alt+N");
+    } else {
+        unregister_shortcut(&app, allow_shortcut());
+        unregister_shortcut(&app, deny_shortcut());
+    }
+}
+
+/// The permanent one follows the setting; the other two only ever follow a card.
+fn apply_shortcut_setting(app: &AppHandle, enabled: bool) {
+    if enabled {
+        register_shortcut(app, toggle_shortcut(), "Ctrl+Alt+C");
+    } else {
+        unregister_shortcut(app, toggle_shortcut());
+        unregister_shortcut(app, allow_shortcut());
+        unregister_shortcut(app, deny_shortcut());
+    }
+}
+
+// ── Native notifications ──────────────────────────────────────────────────────
+
+/// A Windows toast for something that needs a person. Kept short on purpose:
+/// the notification centre remembers what it was given.
+#[tauri::command]
+fn notify(app: AppHandle, shared: State<Shared>, title: String, body: String) {
+    if !shared.settings.lock().unwrap().native_notifications {
+        return;
+    }
+    let cut = |s: String, max: usize| -> String {
+        if s.chars().count() <= max {
+            s
+        } else {
+            s.chars().take(max).collect::<String>() + "…"
+        }
+    };
+    let result = app
+        .notification()
+        .builder()
+        .title(cut(title, 80))
+        .body(cut(body, 160))
+        .show();
+    if let Err(err) = result {
+        log::line(format!("notification failed: {err}"));
+    }
+}
+
 #[tauri::command]
 fn save_settings(app: AppHandle, shared: State<Shared>, settings: Settings) {
-    let (screen_changed, autostart_changed) = {
+    let (screen_changed, autostart_changed, shortcuts_changed) = {
         let mut current = shared.settings.lock().unwrap();
         let screen_changed = current.screen != settings.screen;
         let autostart_changed = current.autostart != settings.autostart;
+        let shortcuts_changed = current.global_shortcuts != settings.global_shortcuts;
         *current = settings.clone();
-        (screen_changed, autostart_changed)
+        (screen_changed, autostart_changed, shortcuts_changed)
     };
+    if shortcuts_changed {
+        apply_shortcut_setting(&app, settings.global_shortcuts);
+    }
     if let Err(err) = settings::save(&settings) {
         eprintln!("[coucou] could not save settings: {err}");
     }
@@ -165,6 +260,18 @@ fn open_in_vscode(path: Option<String>) -> bool {
     false
 }
 
+/// "Open terminal": brings forward the window of the terminal this session runs
+/// in, given the process chain coucou-hook captured. False means "no window
+/// found", and the island falls back to opening the folder in VS Code.
+#[tauri::command]
+fn focus_terminal(pids: Vec<u32>) -> bool {
+    // It arrives in a hook payload: a short list, nothing else.
+    if pids.is_empty() || pids.len() > 16 {
+        return false;
+    }
+    platform::focus_terminal(&pids)
+}
+
 /// The ↗ on the live diff card: one edited file, opened in VS Code.
 ///
 /// The path comes from a hook payload, so it gets the same care as a folder: an
@@ -226,6 +333,37 @@ fn hooks_apply(
     };
     let _ = app.emit("settings-changed", updated);
     Ok(backup)
+}
+
+// ── "Always allow" rules ──────────────────────────────────────────────────────
+
+#[tauri::command]
+fn rules_list(rules: State<rules::Rules>) -> Vec<rules::Rule> {
+    rules.list()
+}
+
+/// Only ever called from the "Always" button on a permission card.
+#[tauri::command]
+fn rules_add(
+    app: AppHandle,
+    rules: State<rules::Rules>,
+    project: String,
+    tool: String,
+    pattern: String,
+    label: String,
+) -> Result<rules::Rule, String> {
+    let rule = rules.add(project, tool, pattern, label)?;
+    log::line(format!("always-allow rule added: {} · {}", rule.tool, rule.label));
+    let _ = app.emit("rules-changed", rules.list());
+    Ok(rule)
+}
+
+#[tauri::command]
+fn rules_remove(app: AppHandle, rules: State<rules::Rules>, id: String) -> Result<(), String> {
+    rules.remove(&id)?;
+    log::line(format!("always-allow rule removed: {id}"));
+    let _ = app.emit("rules-changed", rules.list());
+    Ok(())
 }
 
 /// Same flow for the plan usage relay (statusLine): diff first, write on a click.
@@ -405,11 +543,32 @@ pub fn run() {
             let _ = app.emit_to(island::WINDOW_LABEL, "tray", "open".to_string());
         }))
         .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, None))
+        .plugin(tauri_plugin_notification::init())
+        .plugin(
+            tauri_plugin_global_shortcut::Builder::new()
+                .with_handler(|app, shortcut, event| {
+                    if event.state() != ShortcutState::Pressed {
+                        return;
+                    }
+                    let name = if shortcut == &allow_shortcut() {
+                        "allow"
+                    } else if shortcut == &deny_shortcut() {
+                        "deny"
+                    } else if shortcut == &toggle_shortcut() {
+                        "toggle"
+                    } else {
+                        return;
+                    };
+                    let _ = app.emit_to(island::WINDOW_LABEL, "shortcut", name);
+                })
+                .build(),
+        )
         .manage(Shared {
             settings: Mutex::new(loaded.clone()),
             gate: gate.clone(),
         })
         .manage(Pending::default())
+        .manage(rules::load())
         .manage(Chat::default())
         .invoke_handler(tauri::generate_handler![
             boot,
@@ -421,10 +580,16 @@ pub fn run() {
             open_url,
             open_in_vscode,
             open_file_in_vscode,
+            focus_terminal,
             quit_app,
             hooks_status,
             hooks_preview,
             hooks_apply,
+            set_decision_shortcuts,
+            notify,
+            rules_list,
+            rules_add,
+            rules_remove,
             statusline_preview,
             statusline_apply,
             question_answer,
@@ -465,6 +630,7 @@ pub fn run() {
 
             log::line(format!("--- Coucou {} started ---", env!("CARGO_PKG_VERSION")));
             hooks::ensure_hook_exe(&handle);
+            apply_shortcut_setting(&handle, loaded.global_shortcuts);
             pipe::start(handle.clone());
             integrations::start(handle.clone());
             Ok(())

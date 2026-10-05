@@ -7,6 +7,7 @@ import { State, type Settings } from "./core/state";
 import { Island } from "./island/island";
 import { registerHookHandlers } from "./island/hooks";
 import { registerIntegrationHandlers, refreshConfigured } from "./island/integrations";
+import type { Rule } from "./island/rules";
 
 async function main() {
   const root = document.getElementById("root");
@@ -53,12 +54,28 @@ async function main() {
 
   await onEvent<null>("screen-changed", () => void Bridge.reposition());
 
+  // Global shortcuts (Ctrl+Alt+Y / N / C), pressed in any other window.
+  await onEvent<string>("shortcut", (name) => {
+    if (name === "allow" || name === "deny") {
+      island.decideApproval(name);
+    } else if (name === "toggle") {
+      setPaused(false);
+      island.toggleFromShortcut();
+    }
+  });
+
   // The settings window writes preferences; apply them here without a restart.
   await onEvent<Settings>("settings-changed", (s) => {
     State.settings = { ...State.settings, ...s };
     island.applySettings();
     State.loadIntegrationTasks();
     void refreshConfigured();
+  });
+
+  // The "Always allow" rules: loaded once, then kept in step with Settings.
+  State.rules = (await Bridge.rulesList()) ?? [];
+  await onEvent<Rule[]>("rules-changed", (rules) => {
+    State.rules = rules;
   });
 
   registerHookHandlers(island);

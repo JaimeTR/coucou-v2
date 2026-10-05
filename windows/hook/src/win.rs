@@ -55,6 +55,49 @@ pub fn connect() -> Option<std::fs::File> {
     }
 }
 
+/// Our parent, our grandparent and so on — nearest first — so the island can
+/// find the window of the terminal this session runs in and bring it forward.
+/// Capped, and cut short at a loop: a process id can be reused, and a chain that
+/// points back at itself would otherwise never end.
+pub fn ancestor_pids() -> Vec<u32> {
+    use std::collections::HashMap;
+    use windows::Win32::System::Diagnostics::ToolHelp::{
+        CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W, TH32CS_SNAPPROCESS,
+    };
+
+    let mut parents: HashMap<u32, u32> = HashMap::new();
+    unsafe {
+        let Ok(snapshot) = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) else {
+            return Vec::new();
+        };
+        let mut entry = PROCESSENTRY32W {
+            dwSize: std::mem::size_of::<PROCESSENTRY32W>() as u32,
+            ..Default::default()
+        };
+        if Process32FirstW(snapshot, &mut entry).is_ok() {
+            loop {
+                parents.insert(entry.th32ProcessID, entry.th32ParentProcessID);
+                if Process32NextW(snapshot, &mut entry).is_err() {
+                    break;
+                }
+            }
+        }
+        let _ = CloseHandle(snapshot);
+    }
+
+    let mut chain = Vec::new();
+    let mut pid = std::process::id();
+    while chain.len() < 16 {
+        let Some(&parent) = parents.get(&pid) else { break };
+        if parent == 0 || chain.contains(&parent) {
+            break;
+        }
+        chain.push(parent);
+        pid = parent;
+    }
+    chain
+}
+
 /// The SID of the account this process runs as, as `S-1-5-21-…`.
 pub fn current_user_sid() -> Option<String> {
     unsafe { token_sid(GetCurrentProcess()) }
