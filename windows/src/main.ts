@@ -66,6 +66,11 @@ async function main() {
 
   // The settings window writes preferences; apply them here without a restart.
   await onEvent<Settings>("settings-changed", (s) => {
+    // A different AI answers from here on: the old conversation means nothing to it.
+    if (s.chatProvider !== State.settings.chatProvider) {
+      State.chatHistory = [];
+      void Bridge.chatReset();
+    }
     State.settings = { ...State.settings, ...s };
     island.applySettings();
     State.loadIntegrationTasks();

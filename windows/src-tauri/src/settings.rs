@@ -20,6 +20,14 @@ pub struct Settings {
     /// Defaulted explicitly so a settings.json written by an older build still loads.
     #[serde(default = "default_model")]
     pub model: String,
+    /// Who answers the chat: "anthropic" (Claude) or "devmark" (DEVMARK AI).
+    #[serde(default = "default_provider")]
+    pub chat_provider: String,
+    /// Model asked of DEVMARK AI, and how long its replies may be.
+    #[serde(default = "default_devmark_model")]
+    pub devmark_model: String,
+    #[serde(default = "default_devmark_max_tokens")]
+    pub devmark_max_tokens: u32,
     /// Show the plan usage pill in the island's header.
     #[serde(default)]
     pub plan_gauge: bool,
@@ -34,6 +42,18 @@ pub struct Settings {
 
 fn default_true() -> bool {
     true
+}
+
+fn default_provider() -> String {
+    "anthropic".into()
+}
+
+fn default_devmark_model() -> String {
+    crate::devmark::DEFAULT_MODEL.to_string()
+}
+
+fn default_devmark_max_tokens() -> u32 {
+    crate::devmark::DEFAULT_MAX_TOKENS
 }
 
 fn default_model() -> String {
@@ -57,6 +77,9 @@ impl Default for Settings {
             autostart: false,
             hooks_installed: false,
             model: default_model(),
+            chat_provider: default_provider(),
+            devmark_model: default_devmark_model(),
+            devmark_max_tokens: default_devmark_max_tokens(),
             plan_gauge: false,
             native_notifications: true,
             global_shortcuts: true,

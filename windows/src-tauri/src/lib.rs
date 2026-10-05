@@ -1,6 +1,7 @@
 // Coucou for Windows — app wiring and the commands the island calls.
 
 mod claude;
+mod devmark;
 mod files;
 mod hooks;
 mod integrations;
@@ -413,16 +414,31 @@ fn approval_decline(app: AppHandle, request_id: String) {
 async fn chat_send(
     shared: State<'_, Shared>,
     chat: State<'_, Chat>,
+    devmark_chat: State<'_, devmark::DevmarkChat>,
     query: String,
     context: Option<ChatContext>,
 ) -> Result<ChatReply, String> {
-    let model = shared.settings.lock().unwrap().model.clone();
-    claude::send(&chat, &model, query, context).await
+    let (provider, model, dm_model, dm_tokens) = {
+        let s = shared.settings.lock().unwrap();
+        (s.chat_provider.clone(), s.model.clone(), s.devmark_model.clone(), s.devmark_max_tokens)
+    };
+    match provider.as_str() {
+        "devmark" => devmark::send(&devmark_chat, &dm_model, dm_tokens, query, context).await,
+        _ => claude::send(&chat, &model, query, context).await,
+    }
 }
 
+/// Starts the conversation over, whoever answers it.
 #[tauri::command]
-fn chat_reset(chat: State<Chat>) {
+fn chat_reset(chat: State<Chat>, devmark_chat: State<devmark::DevmarkChat>) {
     chat.reset();
+    devmark_chat.reset();
+}
+
+/// Settings → DEVMARK AI → "Test connection": no text is generated.
+#[tauri::command]
+async fn devmark_test() -> devmark::Check {
+    devmark::check().await
 }
 
 /// Copies a dropped file into the inbox and reports its name back.
@@ -570,6 +586,7 @@ pub fn run() {
         .manage(Pending::default())
         .manage(rules::load())
         .manage(Chat::default())
+        .manage(devmark::DevmarkChat::default())
         .invoke_handler(tauri::generate_handler![
             boot,
             save_settings,
@@ -599,6 +616,7 @@ pub fn run() {
             log_line,
             chat_send,
             chat_reset,
+            devmark_test,
             ingest_file,
             secret_present,
             secret_set,

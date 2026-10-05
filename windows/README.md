@@ -181,3 +181,18 @@ What changes on Linux:
 - What the Windows build leaves out, this one does too: sending a file by
   email, dragging Mochi onto a window, and jumping to a specific terminal
   window — "Open terminal" opens the folder in VS Code.
+
+## DEVMARK AI (chat provider)
+
+**Settings → Chat provider → DEVMARK AI** makes the island's chat talk to the
+company's private model (an OpenAI-compatible API at `https://ai.devmarkpe.com/v1`,
+default model `llama3.2:1b`). The API key (`dmk_…`) is saved in the Windows
+Credential Manager like every other key; setting a `DEVMARK_API_KEY` environment
+variable also works. **Test connection** checks the service and the key without
+generating any text.
+
+It follows the service's limits: one request at a time, no streaming, at most
+48 000 characters and 100 messages (older turns are dropped first), a 150 s
+timeout, and short replies (default 400 tokens). 401, 429 and 503 each get their
+own message, with a retry for 429 and 503. The model reads text only, so a dropped
+PDF or image is refused with an explanation; text and code files work.

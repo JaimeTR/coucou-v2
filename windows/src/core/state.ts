@@ -133,6 +133,11 @@ export interface Settings {
   hooksInstalled: boolean;
   /** Claude model used by the chat. */
   model: string;
+  /** Who answers the chat: Claude, or the company's DEVMARK AI. */
+  chatProvider: "anthropic" | "devmark";
+  /** Model asked of DEVMARK AI, and the longest reply it may write. */
+  devmarkModel: string;
+  devmarkMaxTokens: number;
   /** Show the plan usage pill in the island's header. */
   planGauge: boolean;
   nativeNotifications: boolean;
@@ -151,6 +156,9 @@ export const DEFAULT_SETTINGS: Settings = {
   autostart: false,
   hooksInstalled: false,
   model: "claude-opus-5",
+  chatProvider: "anthropic",
+  devmarkModel: "llama3.2:1b",
+  devmarkMaxTokens: 400,
   planGauge: false,
   nativeNotifications: true,
   globalShortcuts: true,

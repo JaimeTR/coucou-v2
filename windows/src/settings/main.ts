@@ -340,6 +340,145 @@ function rulesSection(initial: Rule[]): HTMLElement {
   return section;
 }
 
+// ── Chat provider + DEVMARK AI ────────────────────────────────────────────────
+
+/** Which AI answers the chat, and the settings of the company's DEVMARK AI. */
+function providerSection(hasKey: boolean): HTMLElement {
+  const provider = h("select", {}) as HTMLSelectElement;
+  provider.append(
+    h("option", { value: "anthropic", text: "Claude (Anthropic)" }),
+    h("option", { value: "devmark", text: "DEVMARK AI (private)" }),
+  );
+  provider.value = settings.chatProvider;
+
+  // ── DEVMARK AI ──
+  const dot = statusDot(hasKey);
+  const state = h("span", { class: "hint" });
+  const field = h("input", {
+    type: "password",
+    placeholder: "dmk_live_…",
+    style: "flex:1 1 auto;min-width:0",
+    autocomplete: "off",
+    spellcheck: "false",
+  }) as HTMLInputElement;
+  const saveBtn = h("button", { class: "primary", text: "Save key" });
+  const clearBtn = h("button", { class: "danger", text: "Remove" });
+  const feedback = h("div", {});
+
+  const model = h("input", {
+    type: "text",
+    value: settings.devmarkModel,
+    placeholder: "llama3.2:1b",
+    style: "flex:1 1 auto;min-width:0",
+    spellcheck: "false",
+  }) as HTMLInputElement;
+  model.addEventListener("change", () => {
+    settings.devmarkModel = model.value.trim() || "llama3.2:1b";
+    model.value = settings.devmarkModel;
+    void save();
+  });
+
+  const tokens = h("input", {
+    type: "number", min: "50", max: "2000", step: "50",
+    value: String(settings.devmarkMaxTokens),
+    style: "width:88px",
+  }) as HTMLInputElement;
+  tokens.addEventListener("change", () => {
+    settings.devmarkMaxTokens = Math.max(50, Math.min(2000, Math.round(Number(tokens.value)) || 400));
+    tokens.value = String(settings.devmarkMaxTokens);
+    void save();
+  });
+
+  async function refresh() {
+    const present = (await Bridge.secretPresent("devmark-api-key")) ?? false;
+    dot.style.background = present ? "#22c55e" : "#f4505e";
+    state.textContent = present
+      ? "Key saved in the Windows Credential Manager."
+      : "No key yet — paste the dmk_… key you were given.";
+    field.placeholder = present ? "••••••••••••  (stored)" : "dmk_live_…";
+    clearBtn.style.display = present ? "" : "none";
+  }
+
+  saveBtn.addEventListener("click", async () => {
+    const value = field.value.trim();
+    if (!value) return;
+    clear(feedback);
+    try {
+      await Bridge.secretSet("devmark-api-key", value);
+      field.value = "";
+      feedback.append(h("div", { class: "notice ok", text: "Saved. It never touches disk or the page." }));
+      await refresh();
+    } catch (err) {
+      feedback.append(h("div", { class: "notice err", text: `Could not save: ${String(err)}` }));
+    }
+  });
+  clearBtn.addEventListener("click", async () => {
+    clear(feedback);
+    try {
+      await Bridge.secretClear("devmark-api-key");
+      feedback.append(h("div", { class: "notice ok", text: "Key removed." }));
+      await refresh();
+    } catch (err) {
+      feedback.append(h("div", { class: "notice err", text: `Could not remove: ${String(err)}` }));
+    }
+  });
+
+  const testBtn = h("button", { text: "Test connection" });
+  testBtn.addEventListener("click", async () => {
+    clear(feedback);
+    testBtn.disabled = true;
+    testBtn.textContent = "Testing…";
+    try {
+      const result = await Bridge.devmarkTest();
+      feedback.append(h("div", { class: result.ok ? "notice ok" : "notice warn", text: result.message }));
+    } catch (err) {
+      feedback.append(h("div", { class: "notice err", text: String(err).replace(/^Error:\s*/, "") }));
+    } finally {
+      testBtn.disabled = false;
+      testBtn.textContent = "Test connection";
+    }
+  });
+
+  const devmark = h(
+    "div",
+    { style: "display:flex;flex-direction:column;gap:12px" },
+    h("div", { class: "hint", text: "Private AI of the company (OpenAI-compatible, https://ai.devmarkpe.com). It reads text only, answers one message at a time, and can take a while on the first reply." }),
+    state,
+    h("div", { class: "row" }, h("label", { text: "API key" }), field, saveBtn, clearBtn),
+    h("div", { class: "row" }, h("label", { text: "Model" }), model),
+    h("div", { class: "row" },
+      h("label", { text: "Max reply" }),
+      tokens,
+      h("span", { class: "hint", text: "tokens — shorter is faster" }),
+    ),
+    h("div", { class: "row" }, testBtn),
+    feedback,
+  );
+
+  const section = h(
+    "section",
+    {},
+    h("h2", {}, dot, h("span", { text: "Chat provider" })),
+    h("div", { class: "hint", text: "Who answers when you ask Mochi something. Changing it starts a new conversation." }),
+    h("div", { class: "row" }, h("label", { text: "Answers with" }), provider),
+    devmark,
+  );
+
+  // The DEVMARK settings only matter while it is the chosen provider.
+  const showDevmark = () => {
+    devmark.style.display = provider.value === "devmark" ? "" : "none";
+    dot.style.display = provider.value === "devmark" ? "" : "none";
+  };
+  provider.addEventListener("change", () => {
+    settings.chatProvider = provider.value as Settings["chatProvider"];
+    showDevmark();
+    void save();
+  });
+  showDevmark();
+  void refresh();
+  return section;
+}
+
 // ── Claude API section ────────────────────────────────────────────────────────
 
 const MODELS: [string, string][] = [
@@ -624,6 +763,7 @@ async function main() {
     claudeSection(status),
     planSection(status),
     rulesSection((await Bridge.rulesList()) ?? []),
+    providerSection((await Bridge.secretPresent("devmark-api-key")) ?? false),
     apiSection(hasKey),
     integrationsSection(present),
     generalSection(),
