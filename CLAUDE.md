@@ -1,5 +1,8 @@
 # Coucou — guide for AI coding agents
 
+## Coucou v2 (this fork)
+This repository is **Coucou v2 by JaimeTR** (`https://github.com/JaimeTR/coucou-v2`), a fork of Louis Raillé's MIT-licensed Coucou. The original is `upstream` and is **read-only for us: never push, open a PR, or comment there.** All work is pushed to `origin` (JaimeTR/coucou-v2). Keep Louis Raillé's copyright in `LICENSE` (MIT requires it) next to JaimeTR's. v2 work lives in `windows/` (Windows and Linux); its notes are in `windows/CHANGELOG.md` and `windows/README.md`.
+
 Coucou is a native macOS app (`NotchBuddy/`); `windows/` is the Tauri version for Windows and Linux. Mochi, a small animated character living in the MacBook notch, shows AI coding agent sessions (Claude Code, Gemini CLI, Antigravity and more) and a few integrations, and lets the user approve, answer, chat and drop files from the notch.
 
 ## Where things are

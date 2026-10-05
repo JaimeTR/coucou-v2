@@ -2,11 +2,13 @@
 
 <img src="src-tauri/icons/128x128.png" width="96" alt="Coucou icon">
 
-# Coucou for Windows
+# Coucou v2 for Windows
 
 **Mochi doesn't get a notch on a PC — so it lives at the top of your screen instead.**
 
 Approve Claude Code permissions, watch your session work, drop a file, chat with Claude, keep an eye on your services — without leaving what you're doing.
+
+*Coucou v2 is [JaimeTR](https://github.com/JaimeTR)'s fork of [Coucou by Louis Raillé](https://github.com/Louis-CFM/coucou) (MIT).*
 
 ![Windows 10/11](https://img.shields.io/badge/Windows-10%2F11-0078D4?logo=windows)
 ![Tauri 2](https://img.shields.io/badge/Tauri-2-FFC131?logo=tauri&logoColor=black)
@@ -18,6 +20,24 @@ Approve Claude Code permissions, watch your session work, drop a file, chat with
 <img src="screenshots/greeting.png" width="640" alt="Mochi waving hello at launch">
 
 ---
+
+## What's new in v2
+
+Coucou v2 turns Mochi into a small personal assistant. Everything below is new on top of the original app; the full list is in [CHANGELOG.md](CHANGELOG.md).
+
+| | |
+|---|---|
+| **Greets you by name** | On start Mochi says *"Hola Jaime Tarazona"* with the time of day and today's date. The name is detected from your Windows account (or git), editable in Settings → Personalization, in Spanish or English. |
+| **Setup checklist** | Settings opens with what is connected and what is left — Claude Code hooks, GitHub, your chat key — plus which tools were found on your PC (VS Code, Git, Docker, Gemini CLI, Codex…). |
+| **Only the pills you use** | A fresh install shows GitHub only; the other pills (n8n, Vercel, Resend…) are opt-in under Settings → Integrations. |
+| **Plan usage gauge** | A pill in the header with how much of your Claude plan is used (5-hour and 7-day), through a statusLine relay that keeps your own status line working. |
+| **Live diff** | Edits show `+N −M` in the ticker; click one to read the diff, ↗ opens the file in VS Code. |
+| **Answer Claude's questions** | `AskUserQuestion` prompts show their options in the island (keys 1–4, "Other…", or reply in the terminal). |
+| **Always allow** | The **Always** button on a permission card remembers a narrow, per-project rule (exact command or a read-only subcommand, files under one folder, one host). Never for `.git`, `.claude`, `.ssh`, `.env`. Listed and removable in Settings. |
+| **Jump to the right terminal** | "Open terminal" brings forward the window of the terminal or VS Code that session runs in. |
+| **Global shortcuts** | `Ctrl+Alt+Y` allow · `Ctrl+Alt+N` deny (only while a request is up) · `Ctrl+Alt+C` open or close the island. |
+| **Windows notifications** | A toast when Claude needs permission, asks something, or finishes while the island is closed. |
+| **DEVMARK AI** | The company's private model as the chat provider (see [below](#devmark-ai-chat-provider)). |
 
 ## Install
 
@@ -142,9 +162,10 @@ problems. It stays on your machine.
   the top edge instead of hiding in a notch.
 - Permission approval works from **any** terminal; the Mac build only listens to
   VS Code sessions.
-- Not in this version: sending a file by email, dragging Mochi onto a window to
-  attach it as context, and jumping to a specific terminal window — "Open
-  terminal" opens the working folder in VS Code when `code` is on your `PATH`.
+- Not in this version: sending a file by email and dragging Mochi onto a window to
+  attach it as context. "Open terminal" brings the session's terminal window
+  forward on Windows, and falls back to opening the working folder in VS Code
+  (when `code` is on your `PATH`) if that window can't be found.
 - Cal.com shows the next bookings as a list rather than the Mac's calendar.
 
 ## Linux

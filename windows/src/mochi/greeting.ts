@@ -3,6 +3,7 @@
 
 import { Sound } from "../core/sound";
 import { COMPACT_W, NOTCH_H, NOTCH_W } from "../core/layout";
+import type { GreetingLines } from "../island/greetingText";
 
 // ── Timing (mirrors greeting-v2.html `T`) ─────────────────────────────────────
 
@@ -24,8 +25,11 @@ const T = {
   blink2: 3.8,
   tint0: 3.85,
   tint1: 4.15,
+  text0: 2.5,
   end: 4.6,
   autoLeave: 4.9,
+  /** Words need a moment to be read: a greeting that speaks stays this much longer. */
+  readTime: 1.0,
   COLLAPSE: 0.34,
 };
 
@@ -478,6 +482,44 @@ function drawMinis(x: CanvasRenderingContext2D, alpha: number) {
   });
 }
 
+// ── The words ─────────────────────────────────────────────────────────────────
+
+const FONT = '"Segoe UI Variable Text","Segoe UI",system-ui,sans-serif';
+/** Right of Mochi's waving hand, inside the card. */
+const TEXT_X = 396;
+const TEXT_W = 214;
+
+/** `text`, shortened with an ellipsis until it fits `maxW` in the current font. */
+function fitEllipsis(x: CanvasRenderingContext2D, text: string, maxW: number): string {
+  if (x.measureText(text).width <= maxW) return text;
+  let s = text;
+  while (s.length > 1 && x.measureText(`${s}…`).width > maxW) s = s.slice(0, -1);
+  return `${s.trimEnd()}…`;
+}
+
+function drawWords(x: CanvasRenderingContext2D, lines: GreetingLines, alpha: number) {
+  x.save();
+  x.globalAlpha = alpha;
+  x.textAlign = "left";
+  x.textBaseline = "alphabetic";
+  const rise = (1 - alpha) * 6;
+
+  // The name is the point: as large as fits, never below 13 px.
+  let size = 20;
+  x.font = `600 ${size}px ${FONT}`;
+  while (size > 13 && x.measureText(lines.title).width > TEXT_W) {
+    size -= 1;
+    x.font = `600 ${size}px ${FONT}`;
+  }
+  x.fillStyle = "#F5F6F8";
+  x.fillText(fitEllipsis(x, lines.title, TEXT_W), TEXT_X, 86 + rise);
+
+  x.font = `400 12.5px ${FONT}`;
+  x.fillStyle = "#9398A1";
+  x.fillText(fitEllipsis(x, lines.sub, TEXT_W), TEXT_X, 108 + rise);
+  x.restore();
+}
+
 // ── Controller ────────────────────────────────────────────────────────────────
 
 /**
@@ -489,8 +531,24 @@ export class Greeting {
   private tc = Number.POSITIVE_INFINITY;
   private fired = false;
   private timers: number[] = [];
+  /** What Mochi says; null leaves the greeting as a wordless wave. */
+  private lines: GreetingLines | null = null;
 
   onComplete: (() => void) | null = null;
+
+  /** Set before `start()`: the words to show once Mochi has finished waving. */
+  setLines(lines: GreetingLines | null) {
+    this.lines = lines;
+  }
+
+  /** When the greeting ends by itself, and the last moment hovering can keep it. */
+  private get endAt(): number {
+    return T.end + (this.lines ? T.readTime : 0);
+  }
+
+  private get leaveAt(): number {
+    return T.autoLeave + (this.lines ? T.readTime : 0);
+  }
 
   start() {
     this.startMs = performance.now();
@@ -500,13 +558,13 @@ export class Greeting {
     this.timers.push(
       window.setTimeout(() => Sound.play("greet"), T.pop0 * 1000),
       window.setTimeout(() => Sound.play("blip"), T.badge * 1000),
-      window.setTimeout(() => this.fire(), (T.end + 0.05) * 1000),
+      window.setTimeout(() => this.fire(), (this.endAt + 0.05) * 1000),
     );
   }
 
   /** Mouse entered the island during the greeting — hold it open. */
   hover() {
-    if (this.tc >= T.autoLeave) this.tc = Number.POSITIVE_INFINITY;
+    if (this.tc >= this.leaveAt) this.tc = Number.POSITIVE_INFINITY;
   }
 
   /** Mouse left — collapse from now. */
@@ -538,7 +596,7 @@ export class Greeting {
 
   draw(x: CanvasRenderingContext2D) {
     const t = this.elapsed;
-    if (!this.fired && t >= T.end && this.tc >= T.autoLeave) this.fire();
+    if (!this.fired && t >= this.endAt && this.tc >= this.leaveAt) this.fire();
 
     const p = pose(t, this.tc);
     x.clearRect(0, 0, 640, 150);
@@ -558,6 +616,12 @@ export class Greeting {
       x.restore();
     } else if (Number.isFinite(this.tc) && t >= this.tc) {
       drawParticles(x, t, p);
+    }
+
+    // Under Mochi, so a hand that swings over the words is in front of them.
+    if (this.lines && p.card > 0) {
+      const a = seg(t, T.text0, T.text0 + 0.3) * p.card;
+      if (a > 0.01) drawWords(x, this.lines, a);
     }
 
     drawMinis(x, p.minis);

@@ -134,6 +134,20 @@ pub fn reveal_folder(path: &str) {
     let _ = Command::new("xdg-open").arg(path).spawn();
 }
 
+/// The account's full name from the passwd entry's GECOS field ("Jaime Tarazona,,,").
+pub fn display_name() -> Option<String> {
+    use std::ffi::CStr;
+    unsafe {
+        let pw = libc::getpwuid(libc::getuid());
+        if pw.is_null() || (*pw).pw_gecos.is_null() {
+            return None;
+        }
+        let gecos = CStr::from_ptr((*pw).pw_gecos).to_string_lossy().to_string();
+        let name = gecos.split(',').next().unwrap_or("").trim().to_string();
+        (!name.is_empty()).then_some(name)
+    }
+}
+
 /// Wayland gives no app the right to raise another one's window, and X11
 /// compositors differ: the island falls back to opening the folder in VS Code.
 pub fn focus_terminal(_pids: &[u32]) -> bool {

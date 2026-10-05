@@ -20,6 +20,7 @@ async function main() {
   const boot = await Bridge.boot();
   if (boot) {
     State.settings = { ...State.settings, ...boot.settings };
+    State.detectedName = boot.detectedName ?? "";
   }
   island.applySettings();
   State.loadIntegrationTasks();

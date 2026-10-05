@@ -4,6 +4,7 @@ mod claude;
 mod devmark;
 mod files;
 mod hooks;
+mod identity;
 mod integrations;
 mod island;
 mod log;
@@ -46,6 +47,8 @@ pub struct BootInfo {
     /// False where the OS has no global cursor (Wayland): the page then reports
     /// the cursor from its own mouse events.
     cursor_poll: bool,
+    /// The name found for this account, used when the settings hold none.
+    detected_name: String,
 }
 
 #[tauri::command]
@@ -60,7 +63,14 @@ fn boot(app: AppHandle, shared: State<Shared>) -> BootInfo {
         version: env!("CARGO_PKG_VERSION").to_string(),
         hook_path: settings::hook_exe_path().to_string_lossy().to_string(),
         cursor_poll: platform::CURSOR_POLL,
+        detected_name: identity::detect_user_name(),
     }
+}
+
+/// Settings → Setup checklist: which of the tools Coucou knows are installed.
+#[tauri::command]
+fn detect_tools() -> Vec<identity::Tool> {
+    identity::detect_tools()
 }
 
 // ── Global shortcuts ──────────────────────────────────────────────────────────
@@ -589,6 +599,7 @@ pub fn run() {
         .manage(devmark::DevmarkChat::default())
         .invoke_handler(tauri::generate_handler![
             boot,
+            detect_tools,
             save_settings,
             set_collapsed,
             set_island_rect,

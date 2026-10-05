@@ -3,13 +3,15 @@
 // integrations land here too in a later stage.
 
 import "./settings.css";
-import { Bridge, onEvent, type HookStatus } from "../core/bridge";
+import { Bridge, onEvent, type DetectedTool, type HookStatus } from "../core/bridge";
+import { greetingLines } from "../island/greetingText";
 import { DEFAULT_SETTINGS, type Settings } from "../core/state";
 import { h, clear } from "../views/dom";
 import type { Rule } from "../island/rules";
 
 let settings: Settings = { ...DEFAULT_SETTINGS };
 let version = "";
+let detectedName = "";
 
 const root = document.getElementById("settings-root")!;
 
@@ -40,6 +42,189 @@ function renderDiff(text: string): HTMLElement {
     box.append(h("div", { class: cls, text: line }));
   }
   return box;
+}
+
+// ── Setup checklist ───────────────────────────────────────────────────────────
+
+/**
+ * The first thing in the window: what is connected, what is not, and what to do
+ * about it — for the programs that are really installed on this computer.
+ */
+function setupSection(
+  status: HookStatus,
+  present: Record<string, boolean>,
+  hasProviderKey: boolean,
+  tools: DetectedTool[],
+  detectedName: string,
+): HTMLElement {
+  const list = h("div", { style: "display:flex;flex-direction:column;gap:9px" });
+  const found = (id: string) => tools.some((t) => t.id === id && t.found);
+
+  const item = (ok: boolean, title: string, hint: string, action?: HTMLElement) =>
+    h("div", { class: "row", style: "align-items:flex-start;gap:9px" },
+      statusDot(ok),
+      h("div", { style: "flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:2px" },
+        h("span", { style: "font-size:12.5px", text: title }),
+        h("span", { class: "hint", text: hint }),
+      ),
+      action ?? "",
+    );
+
+  const claudeFound = found("claude");
+  list.append(
+    item(
+      status.installed && !status.outdated,
+      "Claude Code connected",
+      status.installed
+        ? status.outdated
+          ? "Hooks from an older version — update them in the Claude Code section below."
+          : "Sessions, permissions and questions show up in the island."
+        : claudeFound
+          ? "Claude Code is on this PC but Coucou isn't hooked in yet: use “Install hooks…” in the Claude Code section below."
+          : "Install the hooks (Claude Code section below) to see your sessions in the island.",
+    ),
+    item(
+      present["github-token"] ?? false,
+      "GitHub",
+      present["github-token"]
+        ? "Token saved — your pull requests and CI show up in the GitHub pill."
+        : "Create a token (read access to pull requests and commit statuses), then paste it under Integrations → GitHub.",
+      present["github-token"]
+        ? undefined
+        : h("button", {
+            text: "Create token",
+            onclick: () => void Bridge.openUrl("https://github.com/settings/personal-access-tokens/new"),
+          }),
+    ),
+    item(
+      hasProviderKey,
+      settings.chatProvider === "devmark" ? "Chat with DEVMARK AI" : "Chat with Claude",
+      hasProviderKey
+        ? "Key saved in the Windows Credential Manager."
+        : settings.chatProvider === "devmark"
+          ? "Paste your dmk_… key under Chat provider."
+          : "Paste your Anthropic API key under Claude, or pick DEVMARK AI under Chat provider.",
+    ),
+    item(
+      !!(settings.userName.trim() || detectedName),
+      "Your name",
+      settings.userName.trim()
+        ? `Mochi greets you as “${settings.userName.trim()}”.`
+        : detectedName
+          ? `Detected “${detectedName}”. You can change it under Personalization.`
+          : "Set it under Personalization so Mochi can greet you.",
+    ),
+    item(
+      status.statuslineInstalled,
+      "Plan usage (optional)",
+      status.statuslineInstalled
+        ? "The relay is installed."
+        : "Install the relay under Plan usage to see how much of your Claude plan is left.",
+    ),
+  );
+
+  const chips = h("div", { style: "display:flex;flex-wrap:wrap;gap:6px" });
+  for (const tool of tools) {
+    chips.append(h("span", {
+      class: "hint",
+      style: `padding:3px 9px;border-radius:999px;border:1px solid rgba(255,255,255,0.12);${tool.found ? "color:#d8dbe0" : "opacity:0.45;text-decoration:line-through"}`,
+      text: tool.name,
+    }));
+  }
+
+  return h(
+    "section",
+    {},
+    h("h2", {}, h("span", { text: "Setup" })),
+    h("div", { class: "hint", text: "What is ready and what is left, for the programs on this computer." }),
+    list,
+    h("div", { class: "hint", text: "Detected on this PC" }),
+    chips,
+  );
+}
+
+// ── Personalization ───────────────────────────────────────────────────────────
+
+function personalSection(detectedName: string): HTMLElement {
+  const preview = h("div", { class: "notice ok" });
+  const refresh = () => {
+    const lines = greetingLines({
+      name: settings.userName.trim() || detectedName,
+      template: settings.greetingTemplate,
+      language: settings.greetingLanguage,
+      now: new Date(),
+      systemLanguage: navigator.language || "en",
+    });
+    preview.textContent = `${lines.title} — ${lines.sub}`;
+  };
+
+  const name = h("input", {
+    type: "text",
+    value: settings.userName,
+    placeholder: detectedName || "Your name",
+    style: "flex:1 1 auto;min-width:0",
+    spellcheck: "false",
+  }) as HTMLInputElement;
+  name.addEventListener("change", () => {
+    settings.userName = name.value.trim();
+    void save();
+    refresh();
+  });
+  const useDetected = h("button", {
+    text: "Use detected",
+    title: detectedName ? `“${detectedName}”` : "No name could be detected",
+    onclick: () => {
+      name.value = "";
+      settings.userName = "";
+      void save();
+      refresh();
+    },
+  });
+  if (!detectedName) (useDetected as HTMLButtonElement).disabled = true;
+
+  const template = h("input", {
+    type: "text",
+    value: settings.greetingTemplate,
+    placeholder: "Hola {name}",
+    style: "flex:1 1 auto;min-width:0",
+    spellcheck: "false",
+  }) as HTMLInputElement;
+  template.addEventListener("change", () => {
+    settings.greetingTemplate = template.value.trim() || "Hola {name}";
+    template.value = settings.greetingTemplate;
+    void save();
+    refresh();
+  });
+
+  const language = h("select", {}) as HTMLSelectElement;
+  language.append(
+    h("option", { value: "auto", text: "Automatic (system language)" }),
+    h("option", { value: "es", text: "Español" }),
+    h("option", { value: "en", text: "English" }),
+  );
+  language.value = settings.greetingLanguage;
+  language.addEventListener("change", () => {
+    settings.greetingLanguage = language.value as Settings["greetingLanguage"];
+    void save();
+    refresh();
+  });
+
+  refresh();
+  return h(
+    "section",
+    {},
+    h("h2", {}, h("span", { text: "Personalization" })),
+    h("div", { class: "hint", text: "When Coucou starts, Mochi says hello by name, with the time of day and today's date." }),
+    h("div", { class: "row" },
+      h("label", { text: "Say hello" }),
+      toggle(settings.greetingEnabled, (v) => { settings.greetingEnabled = v; void save(); refresh(); }),
+    ),
+    h("div", { class: "row" }, h("label", { text: "Your name" }), name, useDetected),
+    h("div", { class: "row" }, h("label", { text: "Greeting" }), template),
+    h("div", { class: "hint", text: "{name} is replaced by your name. Example: ¡Hola {name}, bienvenido!" }),
+    h("div", { class: "row" }, h("label", { text: "Language" }), language),
+    preview,
+  );
 }
 
 // ── Claude Code section ───────────────────────────────────────────────────────
@@ -742,6 +927,7 @@ async function main() {
   if (boot) {
     settings = { ...settings, ...boot.settings };
     version = boot.version;
+    detectedName = boot.detectedName ?? "";
   }
   const status = (await Bridge.hooksStatus()) ?? {
     installed: false, outdated: false, statuslineInstalled: false,
@@ -757,9 +943,15 @@ async function main() {
   const present: Record<string, boolean> = {};
   for (const k of keys) present[k] = (await Bridge.secretPresent(k)) ?? false;
 
+  const tools = (await Bridge.detectTools()) ?? [];
+  const providerKey = settings.chatProvider === "devmark" ? "devmark-api-key" : "anthropic-api-key";
+  const hasProviderKey = (await Bridge.secretPresent(providerKey)) ?? false;
+
   clear(root);
   root.append(
     h("h1", {}, h("span", { text: "Coucou" }), h("span", { class: "version", text: version })),
+    setupSection(status, present, hasProviderKey, tools, detectedName),
+    personalSection(detectedName),
     claudeSection(status),
     planSection(status),
     rulesSection((await Bridge.rulesList()) ?? []),

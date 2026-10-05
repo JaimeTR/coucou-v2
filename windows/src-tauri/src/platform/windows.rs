@@ -106,6 +106,29 @@ pub fn find_on_path(stem: &str) -> Option<PathBuf> {
     None
 }
 
+// ── Who is at the keyboard ────────────────────────────────────────────────────
+
+/// The account's display name ("Jaime Tarazona"), as Windows shows it on the
+/// sign-in screen. None when the account has no full name set.
+pub fn display_name() -> Option<String> {
+    use ::windows::Win32::Security::Authentication::Identity::{GetUserNameExW, NameDisplay};
+    unsafe {
+        // The first call only reports how many characters are needed.
+        let mut size = 0u32;
+        let _ = GetUserNameExW(NameDisplay, None, &mut size);
+        if size == 0 {
+            return None;
+        }
+        let mut buf = vec![0u16; size as usize];
+        if !GetUserNameExW(NameDisplay, Some(PWSTR(buf.as_mut_ptr())), &mut size) {
+            return None;
+        }
+        // On success `size` is the length without the terminating null.
+        let name = String::from_utf16_lossy(&buf[..(size as usize).min(buf.len())]);
+        (!name.trim().is_empty()).then_some(name)
+    }
+}
+
 // ── Terminal windows ──────────────────────────────────────────────────────────
 
 /// Brings forward the window of the terminal a Claude Code session runs in.

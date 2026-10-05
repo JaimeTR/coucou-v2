@@ -133,6 +133,13 @@ export interface Settings {
   hooksInstalled: boolean;
   /** Claude model used by the chat. */
   model: string;
+  /** The name Mochi greets you by; empty means the one detected on this PC. */
+  userName: string;
+  /** Say hello (with your name) when Coucou starts. */
+  greetingEnabled: boolean;
+  /** `{name}` is replaced by your name. */
+  greetingTemplate: string;
+  greetingLanguage: "auto" | "es" | "en";
   /** Who answers the chat: Claude, or the company's DEVMARK AI. */
   chatProvider: "anthropic" | "devmark";
   /** Model asked of DEVMARK AI, and the longest reply it may write. */
@@ -149,13 +156,15 @@ export const DEFAULT_SETTINGS: Settings = {
   soundVolume: 0.12,
   autoCloseInterval: 15,
   absenceInterval: 180,
-  activeIntegrations: [
-    "integration_resend", "integration_n8n", "integration_vercel", "integration_github",
-  ],
+  activeIntegrations: ["integration_github"],
   screen: "primary",
   autostart: false,
   hooksInstalled: false,
   model: "claude-opus-5",
+  userName: "",
+  greetingEnabled: true,
+  greetingTemplate: "Hola {name}",
+  greetingLanguage: "auto",
   chatProvider: "anthropic",
   devmarkModel: "llama3.2:1b",
   devmarkMaxTokens: 400,
@@ -199,6 +208,9 @@ class AppState {
   plan: PlanUsage | null = null;
   /** The header pill was clicked: the plan card replaces the current one. */
   showingPlanDetail = false;
+
+  /** The account's name as detected by Rust, used when no name is set. */
+  detectedName = "";
 
   /** The "Always allow" rules, as stored by Rust. */
   rules: Rule[] = [];

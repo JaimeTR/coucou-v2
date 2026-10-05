@@ -20,6 +20,18 @@ pub struct Settings {
     /// Defaulted explicitly so a settings.json written by an older build still loads.
     #[serde(default = "default_model")]
     pub model: String,
+    /// The name Mochi greets you by. Empty means "use the detected one".
+    #[serde(default)]
+    pub user_name: String,
+    /// Say hello (with your name) when Coucou starts.
+    #[serde(default = "default_true")]
+    pub greeting_enabled: bool,
+    /// What the greeting says; `{name}` is replaced by your name.
+    #[serde(default = "default_greeting_template")]
+    pub greeting_template: String,
+    /// "auto" follows the system language; otherwise "es" or "en".
+    #[serde(default = "default_greeting_language")]
+    pub greeting_language: String,
     /// Who answers the chat: "anthropic" (Claude) or "devmark" (DEVMARK AI).
     #[serde(default = "default_provider")]
     pub chat_provider: String,
@@ -42,6 +54,14 @@ pub struct Settings {
 
 fn default_true() -> bool {
     true
+}
+
+fn default_greeting_template() -> String {
+    "Hola {name}".into()
+}
+
+fn default_greeting_language() -> String {
+    "auto".into()
 }
 
 fn default_provider() -> String {
@@ -67,16 +87,17 @@ impl Default for Settings {
             sound_volume: 0.12,
             auto_close_interval: 15.0,
             absence_interval: 180.0,
-            active_integrations: vec![
-                "integration_resend".into(),
-                "integration_n8n".into(),
-                "integration_vercel".into(),
-                "integration_github".into(),
-            ],
+            // Only GitHub out of the box: the other pills show "not connected"
+            // until you add a key, so they are opt-in in Settings → Integrations.
+            active_integrations: vec!["integration_github".into()],
             screen: "primary".into(),
             autostart: false,
             hooks_installed: false,
             model: default_model(),
+            user_name: String::new(),
+            greeting_enabled: true,
+            greeting_template: default_greeting_template(),
+            greeting_language: default_greeting_language(),
             chat_provider: default_provider(),
             devmark_model: default_devmark_model(),
             devmark_max_tokens: default_devmark_max_tokens(),

@@ -20,6 +20,7 @@ import { buildHeader, buildViews, type ViewActions, type ViewHost } from "../vie
 import { h } from "../views/dom";
 import { IslandStateMachine } from "./fsm";
 import { endQuestion } from "./hooks";
+import { greetingLines } from "./greetingText";
 
 const BOT_OVERHANG = 40;
 /** Same margin as the Rust hit test (src-tauri/src/island.rs). */
@@ -291,10 +292,24 @@ export class Island {
           this.expand(State.defaultView());
           if (!this.wasInIsland) this.fsm.mouseLeft();
           break;
-        case "coucou":
+        case "coucou": {
           this.expand("greeting");
+          // A personal touch: Mochi says your name, the time of day and the date.
+          const s = State.settings;
+          this.greeting.setLines(
+            s.greetingEnabled
+              ? greetingLines({
+                  name: s.userName.trim() || State.detectedName,
+                  template: s.greetingTemplate,
+                  language: s.greetingLanguage,
+                  now: new Date(),
+                  systemLanguage: navigator.language || "en",
+                })
+              : null,
+          );
           this.greeting.start();
           break;
+        }
       }
       State.notify();
     };

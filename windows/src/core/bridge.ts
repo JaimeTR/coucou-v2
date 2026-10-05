@@ -29,10 +29,21 @@ export interface BootInfo {
   hookPath: string;
   /** False where the OS has no global cursor (Wayland): see Island.followPageCursor. */
   cursorPoll: boolean;
+  /** The name found for this account (display name, else git identity). */
+  detectedName: string;
+}
+
+export interface DetectedTool {
+  id: string;
+  name: string;
+  found: boolean;
 }
 
 export const Bridge = {
   boot: () => call<BootInfo>("boot"),
+
+  /** Which of the tools Coucou knows are installed on this computer. */
+  detectTools: () => call<DetectedTool[]>("detect_tools"),
 
   saveSettings: (settings: Settings) => call<void>("save_settings", { settings }),
 
