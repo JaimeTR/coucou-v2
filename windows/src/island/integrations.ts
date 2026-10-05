@@ -22,6 +22,8 @@ const clearTimers = new Map<string, number>();
 
 export function registerIntegrationHandlers(island: Island) {
   void onEvent<IntegrationUpdate>("integration", (update) => handle(island, update));
+  // Connecting or disconnecting an agent in Settings changes what its pill says.
+  void onEvent<null>("agents-changed", () => void refreshConfigured());
   void refreshConfigured();
 }
 
@@ -37,6 +39,13 @@ export async function refreshConfigured() {
     data: {}, error: null, loaded: false, configured: false,
   };
   State.integrations.integration_claude = { ...claude, configured: hooks };
+
+  // The other agents are "configured" when Coucou's part is in their settings.
+  for (const agent of (await Bridge.agentsStatus()) ?? []) {
+    const id = `agent_${agent.id}`;
+    const info = State.integrations[id] ?? { data: {}, error: null, loaded: false, configured: false };
+    State.integrations[id] = { ...info, configured: agent.installed };
+  }
   State.notify();
 }
 

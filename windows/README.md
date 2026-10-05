@@ -30,6 +30,7 @@ Coucou v2 turns Mochi into a small personal assistant. Everything below is new o
 | **Greets you by name** | On start Mochi says *"Hola Jaime Tarazona"* with the time of day and today's date. The name is detected from your Windows account (or git), editable in Settings → Personalization, in Spanish or English. |
 | **Setup checklist** | Settings opens with what is connected and what is left — Claude Code hooks, GitHub, your chat key — plus which tools were found on your PC (VS Code, Git, Docker, Gemini CLI, Codex…). |
 | **Only the pills you use** | A fresh install shows GitHub only; the other pills (n8n, Vercel, Resend…) are opt-in under Settings → Integrations. |
+| **More agents** | **Gemini CLI**, **OpenCode** and your **PowerShell terminal** each get a pill (Settings → Agents). The terminal one tells you when a command that took 10 s or more finishes, and whether it worked. Connecting shows the exact change first. |
 | **Plan usage gauge** | A pill in the header with how much of your Claude plan is used (5-hour and 7-day), through a statusLine relay that keeps your own status line working. |
 | **Live diff** | Edits show `+N −M` in the ticker; click one to read the diff, ↗ opens the file in VS Code. |
 | **Answer Claude's questions** | `AskUserQuestion` prompts show their options in the island (keys 1–4, "Other…", or reply in the terminal). |

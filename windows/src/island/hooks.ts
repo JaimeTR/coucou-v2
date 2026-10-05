@@ -278,11 +278,12 @@ function handleHook(island: Island, payload: HookPayload) {
 
   const focused = State.focusId === agentId;
 
-  // Remember where this session's terminal is (Claude Code's own pill only).
+  // Remember where this session's terminal is, so "Open terminal" can bring the
+  // right window forward (for Claude Code and for the other agents alike).
   const pids = validPids(payload.ancestor_pids);
-  if (pids && !isExternalAgent) {
-    const claude = State.tasks.find((x) => x.id === CLAUDE_ID);
-    if (claude) claude.sessionPids = pids;
+  if (pids) {
+    const owner = State.tasks.find((x) => x.id === agentId);
+    if (owner) owner.sessionPids = pids;
   }
 
   /** Alerts force the island open; work events only reveal the compact island. */
@@ -300,9 +301,21 @@ function handleHook(island: Island, payload: HookPayload) {
   const ensurePill = () => {
     if (isExternalAgent) {
       State.upsertExternalAgent(agentId, validAgent!, agentColor(validAgent!));
+      const t = State.tasks.find((x) => x.id === agentId);
+      if (t && cwd) t.sessionCwd = cwd;
     } else {
       upsert(projectName, cwd);
     }
+  };
+
+  /** The pill goes back to rest: it stays for a pinned agent, goes for the rest. */
+  const settle = () => {
+    if (isExternalAgent && !State.isPinnedAgent(agentId)) {
+      State.removeTask(agentId);
+      return;
+    }
+    State.updateTask(agentId, "idle");
+    State.setPillBadge(agentId, null);
   };
 
   switch (name) {
@@ -366,38 +379,61 @@ function handleHook(island: Island, payload: HookPayload) {
     }
 
     case "Stop":
+      // An agent may report a single "finished" with no session before it (the
+      // terminal does): make sure it has a pill to show it on.
+      if (isExternalAgent) ensurePill();
       // A toast only when the island is not already open to say it.
       if (State.mode !== "expanded") {
-        toast(`${isExternalAgent ? validAgent : "Claude Code"} finished`, projectName);
+        toast(
+          `${isExternalAgent ? State.tasks.find((t) => t.id === agentId)?.name ?? validAgent : "Claude Code"} finished`,
+          payload.message ?? projectName,
+        );
       }
       State.updateTask(agentId, "finished");
       if (payload.message) State.appendStep(agentId, payload.message.slice(0, 60));
       Sound.play("finish");
-      if (focused) surface("finished", true);
+      if (State.focusId === agentId) surface("finished", true);
       else State.setPillBadge(agentId, "finished");
-      window.setTimeout(() => {
-        if (isExternalAgent) {
-          State.removeTask(agentId);
-        } else {
-          State.updateTask(agentId, "idle");
-          State.setPillBadge(agentId, null);
-        }
-      }, 5200);
+      window.setTimeout(settle, 5200);
       break;
 
     case "StopFailure":
+      if (isExternalAgent) ensurePill();
       if (State.mode !== "expanded") {
-        toast(`${isExternalAgent ? validAgent : "Claude Code"} stopped on an error`, projectName);
+        toast(
+          `${isExternalAgent ? State.tasks.find((t) => t.id === agentId)?.name ?? validAgent : "Claude Code"} stopped on an error`,
+          payload.message ?? projectName,
+        );
       }
       State.updateTask(agentId, "error");
+      if (payload.message) State.appendStep(agentId, payload.message.slice(0, 60));
       Sound.play("error");
-      if (focused) surface("error", true);
+      if (State.focusId === agentId) surface("error", true);
       else State.setPillBadge(agentId, "error");
+      // An agent's failure is about one run: it does not stay red for ever.
+      if (isExternalAgent) {
+        window.setTimeout(() => {
+          const t = State.tasks.find((x) => x.id === agentId);
+          if (t?.state === "error") settle();
+        }, 60_000);
+      }
       break;
 
     case "SessionEnd":
       if (isExternalAgent) {
-        State.removeTask(agentId);
+        if (State.isPinnedAgent(agentId)) {
+          State.updateTask(agentId, "idle");
+          const t = State.tasks.find((x) => x.id === agentId);
+          if (t) {
+            t.steps = [];
+            t.stepDiffs = [];
+            t.seq = 0;
+            t.stepIndex = 0;
+            t.pillBadge = null;
+          }
+        } else {
+          State.removeTask(agentId);
+        }
       } else {
         State.updateTask(agentId, "idle");
         clearSession();

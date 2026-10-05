@@ -18,6 +18,12 @@ Coucou v2 is [JaimeTR](https://github.com/JaimeTR)'s fork of [Coucou by Louis Ra
 - Global shortcuts: `Ctrl+Alt+Y` allow and `Ctrl+Alt+N` deny (registered only while a request is up), `Ctrl+Alt+C` opens or closes the island. Each can be switched off.
 - Windows notifications when Claude needs permission, asks a question, or finishes or fails while the island is closed.
 
+**More agents, each with its own pill** (Settings → Agents)
+- **Gemini CLI**: Coucou's hooks are merged into `~/.gemini/settings.json`. Gemini's events and tool names are translated by the relay (`BeforeTool` → `PreToolUse`, `replace` → Edit…), so a Gemini session reads like any other — steps, live diff, finished and error states.
+- **OpenCode**: a small plugin, `~/.config/opencode/plugins/coucou.js`, reports sessions, prompts and tool calls. It is Coucou's own file and never overwrites one that isn't.
+- **Terminal (PowerShell)**: a marked block in your PowerShell profile(s) reports commands that took 10 seconds or more, with their result and duration, so you can look away from a long build. Works in PowerShell 7 and Windows PowerShell 5.1.
+- Connecting or disconnecting follows the same rule as Claude Code's `settings.json`: the exact diff first, a dated backup, a write only after a click, and a refusal if the file changed since the preview. Disconnecting removes only Coucou's part. A pill you switch on stays between sessions; the setup checklist lists the agents found on the PC.
+
 **Chat**
 - DEVMARK AI as a chat provider (OpenAI-compatible, `llama3.2:1b`): key in the Credential Manager (or `DEVMARK_API_KEY`), one request at a time, history trimmed to the 48 000-character limit, 150 s timeout, retries and clear messages for 401 / 429 / 503, and a **Test connection** button that generates nothing.
 
@@ -25,4 +31,5 @@ Coucou v2 is [JaimeTR](https://github.com/JaimeTR)'s fork of [Coucou by Louis Ra
 - The ticker froze after 20 steps in a long session.
 
 **Under the hood**
-- 22 Rust tests and 23 TypeScript tests (`npm test`) cover the hooks and statusLine merge, the question protocol, the live diff, the "Always allow" rules, DEVMARK AI and the greeting.
+- 27 Rust tests, 9 relay tests and 23 TypeScript tests (`npm test`) cover the hooks and statusLine merge, the question protocol, the live diff, the "Always allow" rules, DEVMARK AI, the greeting, and the Gemini / OpenCode / PowerShell installers (including the generated PowerShell block, which was also run in PowerShell 7 and 5.1).
+- `cargo test -p coucou show_real_previews -- --ignored --nocapture` prints what connecting each agent would change on your computer, reading real files and writing nothing.

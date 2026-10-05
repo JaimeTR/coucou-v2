@@ -244,7 +244,8 @@ function buildOverview(actions: ViewActions): ViewHost {
       // VS Code with a live Claude Code session keeps the ticker; every other
       // pill shows its own card, exactly like IntegrationCardView.
       const sessionActive =
-        task?.id === "integration_claude" && (task.state !== "idle" || task.steps.length > 0);
+        (task?.id === "integration_claude" || task?.source === "agent") &&
+        (task.state !== "idle" || task.steps.length > 0);
 
       if (task && sessionActive) {
         if (mode !== "ticker") {
@@ -257,7 +258,7 @@ function buildOverview(actions: ViewActions): ViewHost {
         who.append(
           dot(task.color, 7),
           h("span", { class: "name", text: task.name }),
-          h("span", { class: "tool", text: task.source === "claudeCode" ? "Claude Code" : "n8n" }),
+          h("span", { class: "tool", text: task.source === "claudeCode" ? "Claude Code" : task.source === "agent" ? "Agent" : "n8n" }),
         );
         if (task.steps.length > 1) {
           who.append(h("span", {
@@ -413,8 +414,8 @@ function buildError(actions: ViewActions): ViewHost {
     sync() {
       const task = State.focusTask;
       clear(who);
-      who.append(agentWho(task, task?.source === "n8n" ? "n8n" : "Claude Code"));
-      title.textContent = task?.source === "n8n" ? "Workflow stopped." : "Session stopped on an error.";
+      who.append(agentWho(task, task?.source === "n8n" ? "n8n" : task?.source === "agent" ? "Agent" : "Claude Code"));
+      title.textContent = task?.source === "n8n" ? "Workflow stopped." : task?.source === "agent" ? "Stopped on an error." : "Session stopped on an error.";
       detail.textContent = task?.steps.at(-1) ?? "No detail available.";
     },
   };
@@ -434,7 +435,8 @@ function buildFinished(actions: ViewActions): ViewHost {
     el,
     sync() {
       clear(who);
-      who.append(agentWho(State.focusTask, "Claude Code finished"));
+      const task = State.focusTask;
+      who.append(agentWho(task, task?.source === "agent" ? "finished" : "Claude Code finished"));
       title.textContent = State.focusTask?.steps.at(-1) ?? "Session finished";
     },
   };

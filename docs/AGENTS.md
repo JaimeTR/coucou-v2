@@ -162,3 +162,15 @@ echo '{"hook_event_name":"UserPromptSubmit","session_id":"t1","prompt":"hello","
 ```
 
 A "demo" pill should appear in the island.
+
+## Coucou v2 on Windows: built-in agent pills
+
+Coucou v2 ships ready-made pills for **Gemini CLI** (`agent_gemini`), **OpenCode** (`agent_opencode`) and a **PowerShell terminal** (`agent_terminal`). Settings → Agents connects each one by writing the right file for that tool, after showing the exact diff:
+
+| Agent | What is written | How events reach Coucou |
+|---|---|---|
+| Gemini CLI | hooks in `~/.gemini/settings.json` | `coucou-hook --agent gemini --stdout-json <Event>`; the relay renames `BeforeAgent`/`AfterAgent`/`BeforeTool`/`AfterTool` and Gemini's tool names (`replace`, `write_file`, `run_shell_command`…) to the Claude Code ones |
+| OpenCode | `~/.config/opencode/plugins/coucou.js` | the plugin calls `coucou-hook --agent opencode <Event>` with the JSON on stdin |
+| Terminal | a `# >>> coucou >>>` block in the PowerShell profile | the wrapped `prompt` function sends `Stop` / `StopFailure` for commands that took 10 s or more |
+
+`--stdout-json` makes the relay print `{}` when it has nothing else to say, which Gemini CLI requires.

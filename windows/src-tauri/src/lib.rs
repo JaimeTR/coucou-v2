@@ -1,5 +1,6 @@
 // Coucou for Windows — app wiring and the commands the island calls.
 
+mod agents;
 mod claude;
 mod devmark;
 mod files;
@@ -377,6 +378,28 @@ fn rules_remove(app: AppHandle, rules: State<rules::Rules>, id: String) -> Resul
     Ok(())
 }
 
+// ── Other agents: Gemini CLI, OpenCode, your terminal ─────────────────────────
+
+#[tauri::command]
+fn agents_status() -> Vec<agents::AgentStatus> {
+    agents::status()
+}
+
+/// The diff to look at before anything is written. `install: false` previews removal.
+#[tauri::command]
+fn agents_preview(id: String, install: bool) -> Result<HookPreview, String> {
+    agents::preview(&id, install)
+}
+
+/// Only ever called from an explicit click in the settings window.
+#[tauri::command]
+fn agents_apply(app: AppHandle, id: String, install: bool, fingerprint: String) -> Result<String, String> {
+    let backup = agents::write(&id, install, &fingerprint)?;
+    log::line(format!("agent {id} {}", if install { "connected" } else { "disconnected" }));
+    let _ = app.emit("agents-changed", ());
+    Ok(backup)
+}
+
 /// Same flow for the plan usage relay (statusLine): diff first, write on a click.
 #[tauri::command]
 fn statusline_preview(install: bool) -> Result<HookPreview, String> {
@@ -618,6 +641,9 @@ pub fn run() {
             rules_list,
             rules_add,
             rules_remove,
+            agents_status,
+            agents_preview,
+            agents_apply,
             statusline_preview,
             statusline_apply,
             question_answer,

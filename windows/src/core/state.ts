@@ -107,12 +107,21 @@ export const INTEGRATION_AGENTS: AgentTask[] = [
   task("integration_notion", "Notion", "#8C8C8C", "n8n"),
   task("integration_calcom", "Cal.com", "#C9956A", "n8n"),
   task("integration_stripe", "Stripe", "#0570DE", "n8n"),
+  // Other agents next to Claude Code. Their ids are the contract the relay's
+  // `--agent <name>` produces (agent_<name>); the colours follow the Mac catalog.
+  task("agent_gemini", "Gemini CLI", "#8AB4F8", "agent"),
+  task("agent_opencode", "OpenCode", "#FACC15", "agent"),
+  task("agent_terminal", "Terminal", "#F472B6", "agent"),
 ];
 
 export const TOGGLEABLE_INTEGRATION_IDS = [
   "integration_resend", "integration_n8n", "integration_vercel", "integration_github",
   "integration_notion", "integration_calcom", "integration_stripe",
+  "agent_gemini", "agent_opencode", "agent_terminal",
 ];
+
+/** The agents that have a pill of their own to switch on in Settings. */
+export const KNOWN_AGENT_IDS = ["agent_gemini", "agent_opencode", "agent_terminal"];
 
 /** What an integration poller last reported. */
 export interface IntegrationInfo {
@@ -358,6 +367,15 @@ class AppState {
     this.tasks.splice(idx, 1);
     if (this.focusId === id) this.focusId = this.tasks[0]?.id ?? "integration_claude";
     this.notify();
+  }
+
+  /**
+   * An agent pill the person switched on stays for good, idle between sessions;
+   * any other agent (an unknown name, or one switched off) comes and goes with
+   * its session.
+   */
+  isPinnedAgent(id: string): boolean {
+    return KNOWN_AGENT_IDS.includes(id) && this.settings.activeIntegrations.includes(id);
   }
 
   /** Creates a dynamic agent_ pill on first event; no-ops if it already exists.

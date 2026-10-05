@@ -3,7 +3,7 @@
 // integrations land here too in a later stage.
 
 import "./settings.css";
-import { Bridge, onEvent, type DetectedTool, type HookStatus } from "../core/bridge";
+import { Bridge, onEvent, type AgentStatus, type DetectedTool, type HookStatus } from "../core/bridge";
 import { greetingLines } from "../island/greetingText";
 import { DEFAULT_SETTINGS, type Settings } from "../core/state";
 import { h, clear } from "../views/dom";
@@ -56,6 +56,7 @@ function setupSection(
   hasProviderKey: boolean,
   tools: DetectedTool[],
   detectedName: string,
+  agents: AgentStatus[],
 ): HTMLElement {
   const list = h("div", { style: "display:flex;flex-direction:column;gap:9px" });
   const found = (id: string) => tools.some((t) => t.id === id && t.found);
@@ -83,6 +84,18 @@ function setupSection(
           ? "Claude Code is on this PC but Coucou isn't hooked in yet: use “Install hooks…” in the Claude Code section below."
           : "Install the hooks (Claude Code section below) to see your sessions in the island.",
     ),
+    // The other agents: only the ones that are on this PC (the terminal always is).
+    ...agents
+      .filter((a) => a.detected || a.installed)
+      .map((a) =>
+        item(
+          a.installed,
+          a.name,
+          a.installed
+            ? "Connected — it has its own pill."
+            : `Found on this PC but not connected: use “Connect…” under Agents below.`,
+        ),
+      ),
     item(
       present["github-token"] ?? false,
       "GitHub",
@@ -141,6 +154,157 @@ function setupSection(
     h("div", { class: "hint", text: "Detected on this PC" }),
     chips,
   );
+}
+
+// ── Agents: Gemini CLI, OpenCode, your terminal ───────────────────────────────
+
+interface AgentDef {
+  /** The id the app uses ("gemini"); its pill is `agent_<id>`. */
+  id: string;
+  color: string;
+  /** What connecting it changes, in plain words. */
+  what: string;
+  /** Said when the tool itself is not on this PC. */
+  missing: string;
+}
+
+const AGENTS: AgentDef[] = [
+  {
+    id: "gemini", color: "#8AB4F8",
+    what: "Adds Coucou's hooks to ~/.gemini/settings.json, so Gemini CLI sessions show up in its pill.",
+    missing: "Gemini CLI wasn't found on this PC. You can still connect it for when you install it.",
+  },
+  {
+    id: "opencode", color: "#FACC15",
+    what: "Adds a small plugin (coucou.js) to ~/.config/opencode/plugins. It needs nothing else.",
+    missing: "OpenCode wasn't found on this PC. You can still connect it for when you install it.",
+  },
+  {
+    id: "terminal", color: "#F472B6",
+    what: "Adds a block to your PowerShell profile. When a command that took 10 seconds or more finishes, the Terminal pill (and a notification) tells you whether it worked.",
+    missing: "",
+  },
+];
+
+/**
+ * Connecting an agent writes to a file of that tool, so it follows the rule used
+ * for Claude Code's settings.json: the exact diff, a dated backup, and a write
+ * only after a click. Disconnecting removes Coucou's part and nothing else.
+ */
+function agentsSection(initial: AgentStatus[]): HTMLElement {
+  const note = h("div", { class: "hint" });
+  const list = h("div", { style: "display:flex;flex-direction:column;gap:18px" });
+  const statuses = new Map(initial.map((s) => [s.id, s]));
+
+  function updateNote() {
+    const used = settings.activeIntegrations.length;
+    note.textContent = `Each agent gets its own pill next to Mochi (${used}/${MAX_ACTIVE} pills in use). Connecting one changes a file of that tool, with a preview first.`;
+  }
+
+  function drawAgent(def: AgentDef, box: HTMLElement) {
+    const status = statuses.get(def.id);
+    const pillId = `agent_${def.id}`;
+    clear(box);
+
+    const sw = h("button", { class: settings.activeIntegrations.includes(pillId) ? "switch on" : "switch" });
+    sw.addEventListener("click", () => {
+      const on = settings.activeIntegrations.includes(pillId);
+      if (on) {
+        settings.activeIntegrations = settings.activeIntegrations.filter((x) => x !== pillId);
+      } else {
+        if (settings.activeIntegrations.length >= MAX_ACTIVE) return;
+        settings.activeIntegrations = [...settings.activeIntegrations, pillId];
+      }
+      sw.classList.toggle("on", !on);
+      updateNote();
+      void save();
+    });
+
+    const connected = status?.installed ?? false;
+    box.append(
+      h("div", { class: "row" },
+        sw,
+        h("i", { class: "dot", style: `background:${def.color}` }),
+        h("span", { style: "font-size:12.5px;min-width:140px", text: status?.name ?? def.id }),
+        statusDot(connected),
+        h("span", { class: "hint", text: connected ? "Connected" : "Not connected" }),
+      ),
+      h("div", { class: "hint", text: def.what }),
+    );
+    if (status && !status.detected && def.missing) box.append(h("div", { class: "hint", text: def.missing }));
+
+    const actions = h("div", { class: "row" });
+    actions.append(h("button", {
+      class: "primary",
+      text: connected ? "Reconnect…" : "Connect…",
+      onclick: () => preview(def, box, true),
+    }));
+    if (connected) {
+      actions.append(h("button", { class: "danger", text: "Disconnect…", onclick: () => preview(def, box, false) }));
+    }
+    box.append(actions);
+  }
+
+  async function preview(def: AgentDef, box: HTMLElement, install: boolean) {
+    let plan;
+    try {
+      plan = await Bridge.agentsPreview(def.id, install);
+    } catch (err) {
+      // A file we cannot read, or one that is not ours, stops here untouched.
+      clear(box);
+      box.append(
+        h("div", { class: "notice err", text: String(err).replace(/^Error:\s*/, "") }),
+        h("div", { class: "row" }, h("button", { text: "Back", onclick: () => drawAgent(def, box) })),
+      );
+      return;
+    }
+    clear(box);
+    box.append(
+      h("div", {
+        class: "hint",
+        text: install
+          ? "This is exactly what will change. Everything else in those files is left untouched."
+          : "This removes Coucou's part only. Everything else in those files is left untouched.",
+      }),
+      renderDiff(plan.diff),
+      h("div", { class: "row" }, h("span", { class: "path", text: `Backup → ${plan.backup}` })),
+    );
+    const confirm = h("button", {
+      class: install ? "primary" : "danger",
+      text: install ? "Back up and write" : "Back up and remove",
+    });
+    confirm.addEventListener("click", async () => {
+      confirm.disabled = true;
+      try {
+        await Bridge.agentsApply(def.id, install, plan.fingerprint);
+        const fresh = await Bridge.agentsStatus();
+        for (const s of fresh ?? []) statuses.set(s.id, s);
+        clear(box);
+        box.append(h("div", {
+          class: "notice ok",
+          text: install
+            ? "Connected. Start a new session in that tool to see it in its pill."
+            : "Disconnected.",
+        }));
+        window.setTimeout(() => drawAgent(def, box), 2600);
+      } catch (err) {
+        confirm.disabled = false;
+        box.append(h("div", { class: "notice err", text: `Could not write: ${String(err).replace(/^Error:\s*/, "")}` }));
+      }
+    });
+    box.append(h("div", { class: "row" }, confirm, h("button", {
+      text: "Cancel",
+      onclick: () => drawAgent(def, box),
+    })));
+  }
+
+  for (const def of AGENTS) {
+    const box = h("div", { style: "display:flex;flex-direction:column;gap:8px" });
+    list.append(box);
+    drawAgent(def, box);
+  }
+  updateNote();
+  return h("section", {}, h("h2", {}, h("span", { text: "Agents" })), note, list);
 }
 
 // ── Personalization ───────────────────────────────────────────────────────────
@@ -944,15 +1108,17 @@ async function main() {
   for (const k of keys) present[k] = (await Bridge.secretPresent(k)) ?? false;
 
   const tools = (await Bridge.detectTools()) ?? [];
+  const agents = (await Bridge.agentsStatus()) ?? [];
   const providerKey = settings.chatProvider === "devmark" ? "devmark-api-key" : "anthropic-api-key";
   const hasProviderKey = (await Bridge.secretPresent(providerKey)) ?? false;
 
   clear(root);
   root.append(
     h("h1", {}, h("span", { text: "Coucou" }), h("span", { class: "version", text: version })),
-    setupSection(status, present, hasProviderKey, tools, detectedName),
+    setupSection(status, present, hasProviderKey, tools, detectedName, agents),
     personalSection(detectedName),
     claudeSection(status),
+    agentsSection(agents),
     planSection(status),
     rulesSection((await Bridge.rulesList()) ?? []),
     providerSection((await Bridge.secretPresent("devmark-api-key")) ?? false),

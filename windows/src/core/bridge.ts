@@ -33,6 +33,18 @@ export interface BootInfo {
   detectedName: string;
 }
 
+export interface AgentStatus {
+  /** "gemini", "opencode" or "terminal". */
+  id: string;
+  name: string;
+  /** The tool is on this computer. */
+  detected: boolean;
+  /** Coucou's part is in place. */
+  installed: boolean;
+  /** What would be changed. */
+  target: string;
+}
+
 export interface DetectedTool {
   id: string;
   name: string;
@@ -72,6 +84,14 @@ export const Bridge = {
   /** Only from the "Always" button: the person's own, explicit click. */
   rulesAdd: (draft: RuleDraft) => callOrThrow<Rule>("rules_add", { ...draft }),
   rulesRemove: (id: string) => callOrThrow<void>("rules_remove", { id }),
+
+  // ── Other agents (Gemini CLI, OpenCode, your terminal) ────────────────────
+  agentsStatus: () => call<AgentStatus[]>("agents_status"),
+  /** The diff to look at before anything is written; `install: false` previews removal. */
+  agentsPreview: (id: string, install: boolean) => callOrThrow<HookPreview>("agents_preview", { id, install }),
+  /** Writes it — only after an explicit click, and only if nothing changed since the preview. */
+  agentsApply: (id: string, install: boolean, fingerprint: string) =>
+    callOrThrow<string>("agents_apply", { id, install, fingerprint }),
 
   /** Ctrl+Alt+Y / N are registered only while a permission card is up. */
   setDecisionShortcuts: (active: boolean) => call<void>("set_decision_shortcuts", { active }),

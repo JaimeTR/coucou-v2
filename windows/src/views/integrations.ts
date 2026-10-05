@@ -59,8 +59,11 @@ function idleCard(task: AgentTask, openSettings: () => void): HTMLElement {
   const error = info?.error ?? null;
   // The Claude Code pill is about hooks, not a key — the macOS wording would be
   // misleading here.
-  const missing = task.id === "integration_claude" ? "Hooks not installed" : "Key not configured";
-  const label = error ?? (configured ? "Connected · loading…" : missing);
+  // Other agents are connected from Settings → Agents, not with a key.
+  const isAgent = task.source === "agent";
+  const missing =
+    task.id === "integration_claude" ? "Hooks not installed" : isAgent ? "Not connected" : "Key not configured";
+  const label = error ?? (configured ? (isAgent ? "Connected · waiting for activity" : "Connected · loading…") : missing);
   const statusColor = error || !configured ? "#F4505E" : "#22C55E";
 
   const actions = h("div", { class: "int-actions" });
@@ -92,7 +95,9 @@ function idleCard(task: AgentTask, openSettings: () => void): HTMLElement {
       }),
     );
   }
-  if (configured) {
+  if (configured && isAgent) {
+    // Nothing to refresh: an agent speaks when it has something to say.
+  } else if (configured) {
     actions.append(
       h("button", {
         class: "link-btn",
@@ -110,7 +115,7 @@ function idleCard(task: AgentTask, openSettings: () => void): HTMLElement {
   return h(
     "div",
     { class: "int-card" },
-    header(task.color, task.id === "integration_claude" ? "VS Code" : task.name, "Integration"),
+    header(task.color, task.id === "integration_claude" ? "VS Code" : task.name, isAgent ? "Agent" : "Integration"),
     h("div", { class: "int-status" }, dot(statusColor, 5), h("span", { text: label })),
     actions,
   );

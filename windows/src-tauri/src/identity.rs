@@ -78,6 +78,7 @@ pub fn detect_tools() -> Vec<Tool> {
         Tool { id: "docker", name: "Docker", found: on_path("docker") },
         Tool { id: "node", name: "Node.js", found: on_path("node") },
         Tool { id: "gemini", name: "Gemini CLI", found: has_dir(".gemini") || on_path("gemini") },
+        Tool { id: "opencode", name: "OpenCode", found: home.join(".config").join("opencode").is_dir() || on_path("opencode") },
         Tool { id: "codex", name: "Codex", found: has_dir(".codex") || on_path("codex") },
         Tool { id: "cursor", name: "Cursor", found: has_dir(".cursor") || on_path("cursor") },
     ]
@@ -105,6 +106,6 @@ mod tests {
     #[test]
     fn the_tool_list_is_stable() {
         let ids: Vec<_> = detect_tools().iter().map(|t| t.id).collect();
-        assert_eq!(ids, ["vscode", "claude", "git", "docker", "node", "gemini", "codex", "cursor"]);
+        assert_eq!(ids, ["vscode", "claude", "git", "docker", "node", "gemini", "opencode", "codex", "cursor"]);
     }
 }

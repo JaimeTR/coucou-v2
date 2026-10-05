@@ -63,8 +63,17 @@ fn main() {
         std::process::exit(0);
     }
 
-    let Some(Event { payload, name: event, ask_questions }) = read_event() else {
+    // Gemini CLI wants JSON on stdout and nothing else: "{}" says "nothing to add".
+    let stdout_json = std::env::args().skip(1).any(|a| a == "--stdout-json");
+    let finish = move |printed: bool| -> ! {
+        if stdout_json && !printed {
+            println!("{{}}");
+        }
         std::process::exit(0)
+    };
+
+    let Some(Event { payload, name: event, ask_questions }) = read_event() else {
+        finish(false)
     };
 
     let is_ask = ask_questions.is_some();
@@ -86,6 +95,7 @@ fn main() {
         let _ = tx.send(talk(&payload, waits_for_answer));
     });
 
+    let mut printed = false;
     if let Ok(Some(decision)) = rx.recv_timeout(budget) {
         let json = match &ask_questions {
             Some(questions) => answer_json(&decision, questions),
@@ -95,10 +105,70 @@ fn main() {
             let mut out = std::io::stdout();
             let _ = writeln!(out, "{json}");
             let _ = out.flush();
+            printed = true;
         }
     }
     // Nothing printed: Claude Code asks in the terminal, as if we were not here.
-    std::process::exit(0);
+    finish(printed)
+}
+
+/// Other agents speak their own dialect. Gemini CLI's hook events and tool names
+/// are renamed to the ones the island already understands, so a Gemini session
+/// reads like any other: BeforeAgent → UserPromptSubmit, AfterAgent → Stop,
+/// BeforeTool → PreToolUse, AfterTool → PostToolUse; `replace` → Edit,
+/// `write_file` → Write, `run_shell_command` → Bash and so on, with the path
+/// arguments under the names the live diff expects.
+fn normalize_agent(agent: &str, map: &mut serde_json::Map<String, serde_json::Value>) {
+    use serde_json::Value;
+    if agent != "gemini" {
+        return;
+    }
+
+    let original = map.get("hook_event_name").and_then(|v| v.as_str()).unwrap_or("").to_string();
+    let renamed = match original.as_str() {
+        "BeforeAgent" => "UserPromptSubmit",
+        "AfterAgent" => "Stop",
+        "BeforeTool" => "PreToolUse",
+        "AfterTool" => "PostToolUse",
+        _ => "",
+    };
+    if !renamed.is_empty() {
+        map.insert("hook_event_name".into(), Value::String(renamed.into()));
+    }
+    // What the model answered is the closing line of a Stop.
+    if original == "AfterAgent" {
+        if let Some(answer) = map.get("prompt_response").and_then(|v| v.as_str()) {
+            let line: String = answer.split_whitespace().collect::<Vec<_>>().join(" ").chars().take(80).collect();
+            if !line.is_empty() {
+                map.insert("message".into(), Value::String(line));
+            }
+        }
+    }
+
+    let tool = match map.get("tool_name").and_then(|v| v.as_str()).unwrap_or("") {
+        "replace" => "Edit",
+        "write_file" => "Write",
+        "run_shell_command" => "Bash",
+        "read_file" | "read_many_files" => "Read",
+        "glob" => "Glob",
+        "search_file_content" | "grep_search" => "Grep",
+        "list_directory" => "LS",
+        "google_web_search" => "WebSearch",
+        "web_fetch" => "WebFetch",
+        other => other,
+    }
+    .to_string();
+    if !tool.is_empty() {
+        map.insert("tool_name".into(), Value::String(tool));
+    }
+    if let Some(input) = map.get_mut("tool_input").and_then(|i| i.as_object_mut()) {
+        if !input.contains_key("file_path") {
+            let path = ["absolute_path", "path", "file"].iter().find_map(|k| input.get(*k).cloned());
+            if let Some(path) = path {
+                input.insert("file_path".into(), path);
+            }
+        }
+    }
 }
 
 /// The documented PermissionRequest output. Anything we do not recognise prints
@@ -184,7 +254,7 @@ fn read_event() -> Option<Event> {
     // Which agent this hook was installed for. Absent means Claude Code,
     // so existing hook commands keep working unchanged.
     if !agent.is_empty() {
-        map.insert("coucou_agent".into(), serde_json::Value::String(agent));
+        map.insert("coucou_agent".into(), serde_json::Value::String(agent.clone()));
     }
     let event = map
         .get("hook_event_name")
@@ -192,7 +262,14 @@ fn read_event() -> Option<Event> {
         .map(str::to_string)
         .filter(|s| !s.is_empty())
         .unwrap_or(arg_event);
-    map.insert("hook_event_name".into(), serde_json::Value::String(event.clone()));
+    map.insert("hook_event_name".into(), serde_json::Value::String(event));
+    normalize_agent(&agent, map);
+    // After the renaming: the island and the rules below see the normal names.
+    let event = map
+        .get("hook_event_name")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .to_string();
 
     for field in DROPPED_FIELDS {
         map.remove(*field);
@@ -474,6 +551,48 @@ mod tests {
         let s = v["tool_input"]["content"].as_str().unwrap();
         assert!(s.len() <= MAX_FIELD_LEN + 4);
         assert!(s.ends_with('…'));
+    }
+
+    fn gemini(json: serde_json::Value) -> serde_json::Value {
+        let mut v = json;
+        normalize_agent("gemini", v.as_object_mut().unwrap());
+        v
+    }
+
+    #[test]
+    fn gemini_events_and_tools_get_the_names_the_island_knows() {
+        let v = gemini(serde_json::json!({ "hook_event_name": "BeforeTool", "tool_name": "replace",
+            "tool_input": { "absolute_path": "C:/p/a.ts", "old_string": "a", "new_string": "b" } }));
+        assert_eq!(v["hook_event_name"], "PreToolUse");
+        assert_eq!(v["tool_name"], "Edit");
+        assert_eq!(v["tool_input"]["file_path"], "C:/p/a.ts", "the live diff reads file_path");
+
+        let v = gemini(serde_json::json!({ "hook_event_name": "AfterTool", "tool_name": "run_shell_command",
+            "tool_input": { "command": "npm test" } }));
+        assert_eq!(v["hook_event_name"], "PostToolUse");
+        assert_eq!(v["tool_name"], "Bash");
+
+        let v = gemini(serde_json::json!({ "hook_event_name": "BeforeAgent", "prompt": "hi" }));
+        assert_eq!(v["hook_event_name"], "UserPromptSubmit");
+    }
+
+    #[test]
+    fn a_finished_gemini_turn_closes_with_its_answer() {
+        let v = gemini(serde_json::json!({ "hook_event_name": "AfterAgent",
+            "prompt_response": "  Done.\n\nThe tests   pass now. " }));
+        assert_eq!(v["hook_event_name"], "Stop");
+        assert_eq!(v["message"], "Done. The tests pass now.");
+    }
+
+    #[test]
+    fn other_agents_and_unknown_gemini_events_pass_through_untouched() {
+        let original = serde_json::json!({ "hook_event_name": "BeforeTool", "tool_name": "replace" });
+        let mut other = original.clone();
+        normalize_agent("opencode", other.as_object_mut().unwrap());
+        assert_eq!(other, original);
+        let v = gemini(serde_json::json!({ "hook_event_name": "SessionStart", "tool_name": "mcp_x_do" }));
+        assert_eq!(v["hook_event_name"], "SessionStart");
+        assert_eq!(v["tool_name"], "mcp_x_do");
     }
 
     #[test]

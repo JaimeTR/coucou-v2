@@ -89,7 +89,7 @@ fn read_settings() -> Result<Value, String> {
 
 /// The parsing half of `read_settings`, split out so it can be tested without a
 /// home directory.
-fn parse_settings(bytes: &[u8], path: &str) -> Result<Value, String> {
+pub(crate) fn parse_settings(bytes: &[u8], path: &str) -> Result<Value, String> {
     // PowerShell writes a UTF-8 BOM with `Set-Content -Encoding utf8`, and
     // serde_json refuses it. Stripping it is safe and well defined; guessing at
     // anything else is not.
@@ -146,7 +146,7 @@ fn sh_quote(s: &str) -> String {
     format!("'{}'", s.replace('\'', r"'\''"))
 }
 
-fn entry_is_ours(entry: &Value) -> bool {
+pub(crate) fn entry_is_ours(entry: &Value) -> bool {
     entry
         .get("hooks")
         .and_then(Value::as_array)
@@ -202,7 +202,7 @@ fn merged(existing: &Value) -> Value {
 }
 
 /// Settings with every Coucou entry removed, and nothing else changed.
-fn without_ours(existing: &Value) -> Value {
+pub(crate) fn without_ours(existing: &Value) -> Value {
     let mut root = existing.as_object().cloned().unwrap_or_default();
     let Some(hooks) = root.get("hooks").and_then(Value::as_object).cloned() else {
         return Value::Object(root);
@@ -318,13 +318,13 @@ fn remember_previous_statusline(current: &Value) -> Result<(), String> {
     }
 }
 
-fn pretty(v: &Value) -> String {
+pub(crate) fn pretty(v: &Value) -> String {
     serde_json::to_string_pretty(v).unwrap_or_default()
 }
 
 /// Down to the second: installing then uninstalling in the same minute must not
 /// quietly overwrite the first backup.
-fn stamp() -> String {
+pub(crate) fn stamp() -> String {
     let t = platform::local_time();
     format!(
         "{:04}{:02}{:02}-{:02}{:02}{:02}",
@@ -339,7 +339,7 @@ fn backup_path() -> PathBuf {
 
 /// Identifies the exact bytes a preview was computed from. FNV-1a is plenty:
 /// the question is only "is this still the file I showed the user?".
-fn fingerprint(bytes: &[u8]) -> String {
+pub(crate) fn fingerprint(bytes: &[u8]) -> String {
     let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
     for b in bytes {
         hash ^= *b as u64;
@@ -592,7 +592,7 @@ fn install_relay(src: &Path, dest: &Path) {
 // ── Minimal unified diff (LCS) ────────────────────────────────────────────────
 
 /// settings.json is short, so a plain O(n·m) LCS is the simplest honest diff.
-fn unified_diff(before: &str, after: &str) -> String {
+pub(crate) fn unified_diff(before: &str, after: &str) -> String {
     let a: Vec<&str> = before.lines().collect();
     let b: Vec<&str> = after.lines().collect();
     let (n, m) = (a.len(), b.len());
