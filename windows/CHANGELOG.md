@@ -18,10 +18,18 @@ Coucou v2 is [JaimeTR](https://github.com/JaimeTR)'s fork of [Coucou by Louis Ra
 - Global shortcuts: `Ctrl+Alt+Y` allow and `Ctrl+Alt+N` deny (registered only while a request is up), `Ctrl+Alt+C` opens or closes the island. Each can be switched off.
 - Windows notifications when Claude needs permission, asks a question, or finishes or fails while the island is closed.
 
+**GitHub and Copilot in one pill**
+- The GitHub pill now shows what needs you: **review requests**, **your open pull requests with their CI** (green, amber, red), and **GitHub Copilot** — the pull requests Copilot's coding agent opened for you, and how many of yours Copilot reviewed. Click a row to list the pull requests (three at a time, "N more on GitHub" for the rest); each opens on GitHub. Stars and repositories stay in the header. One GraphQL request, the same token.
+- Badges and sounds for what is new: CI failing on one of your PRs, a review asked of you, Copilot opening a PR or reviewing yours — one badge per cycle (the most important), the rest stays in the card.
+
+**Claude Code and VS Code, each with its own pill**
+- **Claude Code** (orange) is only about Claude Code, whether it runs in a terminal or inside VS Code: connection state, plan usage (5h and 7d) and your recent Claude Code projects (click one to open it in VS Code). A live session still shows the ticker, diffs and approvals.
+- **VS Code** (blue) is its own pill and replaces the Terminal pill: your recent VS Code projects, "Claude Code running here" when a session runs inside it, an Open VS Code link, and — once connected — alerts for long commands in VS Code's integrated terminal (other terminals are untouched). Whoever had the Terminal pill switched on gets the VS Code pill instead.
+
 **More agents, each with its own pill** (Settings → Agents)
 - **Gemini CLI**: Coucou's hooks are merged into `~/.gemini/settings.json`. Gemini's events and tool names are translated by the relay (`BeforeTool` → `PreToolUse`, `replace` → Edit…), so a Gemini session reads like any other — steps, live diff, finished and error states.
 - **OpenCode**: a small plugin, `~/.config/opencode/plugins/coucou.js`, reports sessions, prompts and tool calls. It is Coucou's own file and never overwrites one that isn't.
-- **Terminal (PowerShell)**: a marked block in your PowerShell profile(s) reports commands that took 10 seconds or more, with their result and duration, so you can look away from a long build. Works in PowerShell 7 and Windows PowerShell 5.1.
+- **VS Code terminal (PowerShell)**: a marked block in your PowerShell profile(s) reports, inside VS Code's integrated terminal only, commands that took 10 seconds or more, with their result and duration, so you can look away from a long build. Works in PowerShell 7 and Windows PowerShell 5.1.
 - Connecting or disconnecting follows the same rule as Claude Code's `settings.json`: the exact diff first, a dated backup, a write only after a click, and a refusal if the file changed since the preview. Disconnecting removes only Coucou's part. A pill you switch on stays between sessions; the setup checklist lists the agents found on the PC.
 
 **Chat**
@@ -30,7 +38,8 @@ Coucou v2 is [JaimeTR](https://github.com/JaimeTR)'s fork of [Coucou by Louis Ra
 **Fixes**
 - The ticker froze after 20 steps in a long session.
 - The pill for Claude Code sessions is now labelled "Claude Code" (the original app calls it "VS Code", which hid what it was). Its id is unchanged.
+- An agent whose long command or session ends no longer leaves its pill stuck on the last message.
 
 **Under the hood**
-- 27 Rust tests, 9 relay tests and 23 TypeScript tests (`npm test`) cover the hooks and statusLine merge, the question protocol, the live diff, the "Always allow" rules, DEVMARK AI, the greeting, and the Gemini / OpenCode / PowerShell installers (including the generated PowerShell block, which was also run in PowerShell 7 and 5.1).
-- `cargo test -p coucou show_real_previews -- --ignored --nocapture` prints what connecting each agent would change on your computer, reading real files and writing nothing.
+- 34 Rust tests, 9 relay tests and 23 TypeScript tests (`npm test`) cover the hooks and statusLine merge, the question protocol, the live diff, the "Always allow" rules, DEVMARK AI, the greeting, the GitHub / Copilot pulse, the project readers and the Gemini / OpenCode / PowerShell installers (including the generated PowerShell block, which was also run in PowerShell 7 and 5.1).
+- `cargo test -p coucou show_real_previews -- --ignored --nocapture` prints what connecting each agent would change on your computer, and `show_real_projects` lists the projects found for the Claude Code and VS Code pills. Both read real files and write nothing.

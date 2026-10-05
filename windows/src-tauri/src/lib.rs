@@ -15,6 +15,7 @@ mod rules;
 mod secrets;
 mod settings;
 mod tray;
+mod workspaces;
 
 use std::process::Command;
 use std::sync::atomic::Ordering;
@@ -66,6 +67,17 @@ fn boot(app: AppHandle, shared: State<Shared>) -> BootInfo {
         cursor_poll: platform::CURSOR_POLL,
         detected_name: identity::detect_user_name(),
     }
+}
+
+/// Recent projects for the Claude Code and VS Code cards (paths only, read-only).
+#[tauri::command]
+fn claude_projects() -> Vec<workspaces::Project> {
+    workspaces::claude_projects(5)
+}
+
+#[tauri::command]
+fn vscode_projects() -> Vec<workspaces::Project> {
+    workspaces::vscode_projects(5)
 }
 
 /// Settings → Setup checklist: which of the tools Coucou knows are installed.
@@ -623,6 +635,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             boot,
             detect_tools,
+            claude_projects,
+            vscode_projects,
             save_settings,
             set_collapsed,
             set_island_rect,

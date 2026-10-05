@@ -100,8 +100,8 @@ function setupSection(
       present["github-token"] ?? false,
       "GitHub",
       present["github-token"]
-        ? "Token saved — your pull requests and CI show up in the GitHub pill."
-        : "Create a token (read access to pull requests and commit statuses), then paste it under Integrations → GitHub.",
+        ? "Token saved — your pull requests, review requests, CI and GitHub Copilot's work show up in the GitHub pill."
+        : "Create a token (a classic one with “repo”, or a fine-grained one with read access to pull requests, commit statuses and metadata), then paste it under Integrations → GitHub. The same token covers Copilot.",
       present["github-token"]
         ? undefined
         : h("button", {
@@ -156,7 +156,7 @@ function setupSection(
   );
 }
 
-// ── Agents: Gemini CLI, OpenCode, your terminal ───────────────────────────────
+// ── Agents: Gemini CLI, OpenCode, VS Code ─────────────────────────────────────
 
 interface AgentDef {
   /** The id the app uses ("gemini"); its pill is `agent_<id>`. */
@@ -180,9 +180,9 @@ const AGENTS: AgentDef[] = [
     missing: "OpenCode wasn't found on this PC. You can still connect it for when you install it.",
   },
   {
-    id: "terminal", color: "#F472B6",
-    what: "Adds a block to your PowerShell profile. When a command that took 10 seconds or more finishes, the Terminal pill (and a notification) tells you whether it worked.",
-    missing: "",
+    id: "vscode", color: "#2DA8F5",
+    what: "Its pill lists your recent projects and works without connecting anything. Connecting adds a block to your PowerShell profile that acts only inside VS Code's terminal: when a command that took 10 seconds or more finishes, the pill (and a notification) tells you whether it worked. Other terminals are left exactly as they are.",
+    missing: "VS Code wasn't found on this PC.",
   },
 ];
 

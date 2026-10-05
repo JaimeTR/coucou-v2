@@ -134,6 +134,14 @@ pub fn reveal_folder(path: &str) {
     let _ = Command::new("xdg-open").arg(path).spawn();
 }
 
+/// Where VS Code remembers its windows and workspaces.
+pub fn vscode_storage_path() -> PathBuf {
+    let base = std::env::var_os("XDG_CONFIG_HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| super::home_dir().join(".config"));
+    base.join("Code").join("User").join("globalStorage").join("storage.json")
+}
+
 /// The account's full name from the passwd entry's GECOS field ("Jaime Tarazona,,,").
 pub fn display_name() -> Option<String> {
     use std::ffi::CStr;

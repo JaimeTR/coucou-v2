@@ -1,4 +1,4 @@
-// Other agents next to Claude Code: Gemini CLI, OpenCode and your own terminal.
+// Other agents next to Claude Code: Gemini CLI, OpenCode and VS Code's terminal.
 //
 // Each one reports through the same relay (`coucou-hook --agent <name>`), which
 // is how its pill learns what it is doing. What differs is how each tool is told
@@ -6,8 +6,8 @@
 //
 //   Gemini CLI   hooks merged into ~/.gemini/settings.json
 //   OpenCode     a plugin of ours, ~/.config/opencode/plugins/coucou.js
-//   Terminal     a marked block in the PowerShell profile(s) that reports
-//                commands that took a while (the prompt function wraps itself)
+//   VS Code      a marked block in the PowerShell profile(s) that, inside VS Code's
+//                integrated terminal only, reports commands that took a while
 //
 // The rule is the one for ~/.claude/settings.json, to the letter: read the file,
 // show the exact diff, take a dated backup, write only after a click, and refuse
@@ -25,7 +25,7 @@ use crate::{platform, settings};
 
 pub const GEMINI: &str = "gemini";
 pub const OPENCODE: &str = "opencode";
-pub const TERMINAL: &str = "terminal";
+pub const VSCODE: &str = "vscode";
 
 /// Markers for the files and blocks that are ours. (Gemini's hook entries are
 /// recognised the same way as Claude's: by the relay's name in the command.)
@@ -123,7 +123,7 @@ fn targets(id: &str) -> Result<Vec<Target>, String> {
             path: home().join(".config").join("opencode").join("plugins").join("coucou.js"),
             kind: Kind::OpenCodePlugin,
         }]),
-        TERMINAL => {
+        VSCODE => {
             let profiles = powershell_profiles();
             if profiles.is_empty() {
                 return Err("No PowerShell was found, so there is no profile to add Coucou to.".into());
@@ -264,16 +264,18 @@ export const CoucouPlugin = async ({{ directory }}) => {{
 /// The PowerShell profile block. ASCII only, so Windows PowerShell 5.1 reads it
 /// the same as PowerShell 7 whatever the file's encoding. It wraps the prompt
 /// function: when a command that took `CoucouMinSeconds` or more has finished,
-/// the relay is told, and the Terminal pill (and a toast) says so.
+/// the relay is told, and the VS Code pill (and a toast) says so. It only wraps
+/// the prompt inside VS Code's own terminal (`TERM_PROGRAM=vscode`): every other
+/// terminal keeps its prompt exactly as it was.
 fn profile_block(eol: &str) -> String {
     let hook = exe().replace('\'', "''");
     let body = format!(
         r#"{PROFILE_START}
-# Managed by Coucou (Settings > Agents). It tells Coucou when a long command finishes.
+# Managed by Coucou (Settings > Agents). In the VS Code terminal only: tells Coucou when a long command finishes.
 # Use Disconnect there, or delete this block, to undo it.
 $global:CoucouHook = '{hook}'
 $global:CoucouMinSeconds = 10
-if ((Test-Path -LiteralPath $global:CoucouHook) -and -not $global:CoucouWrapped) {{
+if ($env:TERM_PROGRAM -eq 'vscode' -and (Test-Path -LiteralPath $global:CoucouHook) -and -not $global:CoucouWrapped) {{
   $global:CoucouWrapped = $true
   $global:CoucouLastId = -1
   $global:CoucouPrompt = $function:prompt
@@ -291,7 +293,7 @@ if ((Test-Path -LiteralPath $global:CoucouHook) -and -not $global:CoucouWrapped)
           if ($text.Length -gt 60) {{ $text = $text.Substring(0, 60) + '...' }}
           @{{ hook_event_name = $name; session_id = "pwsh-$PID"; cwd = (Get-Location).Path
              message = "$text - $state ($([int]$secs)s)" }} | ConvertTo-Json -Compress |
-            & $global:CoucouHook --agent terminal $name | Out-Null
+            & $global:CoucouHook --agent vscode $name | Out-Null
         }}
       }}
     }} catch {{ }}
@@ -410,11 +412,11 @@ pub fn status() -> Vec<AgentStatus> {
             target: home.join(".config").join("opencode").join("plugins").join("coucou.js").to_string_lossy().to_string(),
         },
         AgentStatus {
-            id: TERMINAL,
-            name: "Terminal (PowerShell)",
-            detected: on_path("pwsh") || cfg!(windows),
-            installed: installed(TERMINAL),
-            target: "your PowerShell profile".into(),
+            id: VSCODE,
+            name: "VS Code",
+            detected: on_path("code") || platform::vscode_storage_path().exists(),
+            installed: installed(VSCODE),
+            target: "your PowerShell profile (VS Code's terminal only)".into(),
         },
     ]
 }
@@ -556,6 +558,10 @@ mod tests {
         assert!(installed.contains(PROFILE_START) && installed.contains(PROFILE_END));
         assert!(installed.contains("\r\n"), "the file's line endings are kept");
         assert!(installed.is_ascii(), "5.1 must read the block the same as 7");
+        // It acts inside VS Code's terminal only, and reports to the VS Code pill.
+        assert!(installed.contains("$env:TERM_PROGRAM -eq 'vscode'"));
+        assert!(installed.contains("--agent vscode"));
+        assert!(!installed.contains("--agent terminal"));
 
         // Again: still one block.
         let twice = render(Kind::PowerShellProfile, true, path, &existing(&installed)).unwrap().unwrap();

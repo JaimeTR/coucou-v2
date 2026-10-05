@@ -29,6 +29,8 @@ export interface AgentTask {
   sessionCwd?: string | null;
   /** Process chain of the session (nearest first), to find its terminal window. */
   sessionPids?: number[] | null;
+  /** The session runs inside VS Code (its integrated terminal). */
+  viaVscode?: boolean;
 }
 
 export interface ApprovalInfo {
@@ -101,7 +103,7 @@ const task = (
 export const INTEGRATION_AGENTS: AgentTask[] = [
   // The pill for Claude Code sessions. (The original app labels it "VS Code";
   // v2 says what it is. The id is a stable contract and does not change.)
-  task("integration_claude", "Claude Code", "#F5F6F8", "claudeCode"),
+  task("integration_claude", "Claude Code", "#D97757", "claudeCode"),
   task("integration_resend", "Resend", "#22C55E", "n8n"),
   task("integration_n8n", "n8n", "#F29B38", "n8n"),
   task("integration_vercel", "Vercel", "#7C5CFF", "n8n"),
@@ -113,17 +115,26 @@ export const INTEGRATION_AGENTS: AgentTask[] = [
   // `--agent <name>` produces (agent_<name>); the colours follow the Mac catalog.
   task("agent_gemini", "Gemini CLI", "#8AB4F8", "agent"),
   task("agent_opencode", "OpenCode", "#FACC15", "agent"),
-  task("agent_terminal", "Terminal", "#F472B6", "agent"),
+  // VS Code has its own pill: its projects, and the long commands of its terminal.
+  task("agent_vscode", "VS Code", "#2DA8F5", "agent"),
 ];
 
 export const TOGGLEABLE_INTEGRATION_IDS = [
   "integration_resend", "integration_n8n", "integration_vercel", "integration_github",
   "integration_notion", "integration_calcom", "integration_stripe",
-  "agent_gemini", "agent_opencode", "agent_terminal",
+  "agent_gemini", "agent_opencode", "agent_vscode",
 ];
 
 /** The agents that have a pill of their own to switch on in Settings. */
-export const KNOWN_AGENT_IDS = ["agent_gemini", "agent_opencode", "agent_terminal"];
+export const KNOWN_AGENT_IDS = ["agent_gemini", "agent_opencode", "agent_vscode"];
+
+/** A project folder, as listed on the Claude Code and VS Code cards. */
+export interface ProjectInfo {
+  name: string;
+  path: string;
+  /** Unix seconds; 0 when unknown. */
+  lastActive: number;
+}
 
 /** What an integration poller last reported. */
 export interface IntegrationInfo {
@@ -222,6 +233,10 @@ class AppState {
 
   /** The account's name as detected by Rust, used when no name is set. */
   detectedName = "";
+
+  /** Recent projects for the Claude Code and VS Code cards, newest first. */
+  claudeProjects: ProjectInfo[] = [];
+  vscodeProjects: ProjectInfo[] = [];
 
   /** The "Always allow" rules, as stored by Rust. */
   rules: Rule[] = [];

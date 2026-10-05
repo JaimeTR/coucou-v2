@@ -65,6 +65,22 @@ function windowRow(label: { short: string; long: string }, w: PlanWindow | null)
   );
 }
 
+/** Both windows on one line, for the Claude Code card: `5h ▮▮▯ 63%   7d ▮▯▯ 21%`. */
+export function miniUsage(plan: PlanUsage): HTMLElement {
+  const group = (label: string, w: PlanWindow | null) => {
+    const percent = planNow(w);
+    const color = planColor(percent);
+    return h(
+      "span",
+      { class: "plan-mini-group", title: w?.resetsAt != null ? `Resets in ${untilReset(w.resetsAt)}` : "" },
+      h("span", { class: "plan-mini-label", text: label }),
+      h("span", { class: "plan-bar mini" }, h("i", { style: `width:${percent ?? 0}%;background:${color}` })),
+      h("span", { class: "plan-mini-pct", style: `color:${color}`, text: percent == null ? "—" : `${Math.round(percent)}%` }),
+    );
+  };
+  return h("div", { class: "plan-mini" }, group("5h", plan.fiveHour), group("7d", plan.sevenDay));
+}
+
 /** The card that replaces the current one when the header pill is clicked. */
 export function renderPlanCard(plan: PlanUsage, onBack: () => void): HTMLElement {
   const color = planColor(primaryPercent(plan));

@@ -6,8 +6,9 @@
 
 import { h, svg, clear, dot } from "./dom";
 import { ICONS } from "./icons";
-import { State, type AgentTask } from "../core/state";
+import { State, type AgentTask, type ProjectInfo } from "../core/state";
 import { Bridge } from "../core/bridge";
+import { miniUsage } from "./plan";
 
 /** Same shape as the Swift `timeAgo` computed properties. */
 export function timeAgo(value: unknown): string {
@@ -121,6 +122,102 @@ function idleCard(task: AgentTask, openSettings: () => void): HTMLElement {
   );
 }
 
+// ── Claude Code and VS Code: their own cards ──────────────────────────────────
+
+/** "3h", "2d" — how long ago a project was last used. */
+function projectAgo(unixSeconds: number): string {
+  if (!unixSeconds) return "";
+  return timeAgo(unixSeconds * 1000);
+}
+
+/** Up to `max` projects as links; a click opens the folder in VS Code. */
+function projectLinks(projects: ProjectInfo[], color: string, max = 3): HTMLElement {
+  const row = h("div", { class: "proj-row" });
+  for (const p of projects.slice(0, max)) {
+    row.append(
+      h("button", {
+        class: "link-btn proj-link",
+        style: `color:${color}d9`,
+        title: `${p.path}${p.lastActive ? ` · ${projectAgo(p.lastActive)}` : ""}`,
+        text: p.name,
+        onclick: () => void Bridge.openInVSCode(p.path),
+      }),
+    );
+  }
+  return row;
+}
+
+/**
+ * Claude Code on its own: whether it is connected, what is left of the plan, and
+ * the projects you used it in lately. (A live session shows the ticker instead.)
+ */
+function claudeCard(task: AgentTask, openSettings: () => void): HTMLElement {
+  const connected = State.integrations[task.id]?.configured ?? false;
+  const card = h("div", { class: "int-card" }, header(task.color, "Claude Code", connected ? "Connected" : "Not connected"));
+
+  if (!connected) {
+    card.append(
+      h("div", { class: "int-status" }, dot("#F4505E", 5), h("span", { text: "Hooks not installed" })),
+      h("div", { class: "int-actions" },
+        h("button", { class: "link-btn", style: "color:#8e939c", text: "Settings…", onclick: openSettings }),
+      ),
+    );
+    return card;
+  }
+
+  if (State.plan) {
+    card.append(miniUsage(State.plan));
+  } else {
+    card.append(
+      h("div", { class: "int-sub", text: "Usage appears after the plan relay is installed" }),
+    );
+  }
+  if (State.claudeProjects.length > 0) {
+    card.append(projectLinks(State.claudeProjects, task.color));
+  } else {
+    card.append(h("div", { class: "int-sub", text: "No projects yet" }));
+  }
+  return card;
+}
+
+/**
+ * VS Code on its own: your projects, whether Claude Code is running inside it,
+ * and whether its terminal reports long commands.
+ */
+function vscodeCard(task: AgentTask, openSettings: () => void): HTMLElement {
+  const connected = State.integrations[task.id]?.configured ?? false;
+  const claude = State.tasks.find((t) => t.id === "integration_claude");
+  const claudeHere = !!claude?.viaVscode && claude.state !== "idle";
+  const card = h(
+    "div",
+    { class: "int-card" },
+    header(task.color, "VS Code", claudeHere ? "Claude Code running here" : connected ? "Terminal alerts on" : "Projects"),
+  );
+
+  if (State.vscodeProjects.length > 0) {
+    card.append(projectLinks(State.vscodeProjects, task.color));
+  } else {
+    card.append(h("div", { class: "int-sub", text: "No recent projects found" }));
+  }
+
+  const actions = h("div", { class: "int-actions" });
+  actions.append(
+    h("button", {
+      class: "link-btn",
+      style: `color:${task.color}d9`,
+      text: "Open VS Code",
+      onclick: () => void Bridge.openInVSCode(null),
+    }),
+  );
+  if (!connected) {
+    actions.append(
+      h("button", { class: "link-btn", style: "color:#8e939c", text: "Terminal alerts…", onclick: openSettings }),
+    );
+  }
+  card.append(actions);
+  return card;
+}
+
 // ── Vercel ────────────────────────────────────────────────────────────────────
 
 function vercelCard(onDetail: () => void): HTMLElement {
@@ -216,21 +313,177 @@ function statRow(icon: string, color: string, label: string, value: string): HTM
   );
 }
 
-function githubCard(): HTMLElement {
+/** One pull request, as the Rust poller boils it down (integrations.rs, parse_pulse). */
+interface PrItem {
+  number: number;
+  title: string;
+  url: string;
+  repo: string;
+  isDraft: boolean;
+  reviewDecision: string;
+  ci: "success" | "failure" | "pending" | "unknown";
+  author: string;
+  isCopilot: boolean;
+  copilotReviewed: boolean;
+}
+
+interface Pulse {
+  mine: PrItem[];
+  toReview: PrItem[];
+  copilot: PrItem[];
+  copilotReviewedMine: number;
+}
+
+type GithubSection = "review" | "mine" | "copilot";
+
+/** Which list the detail view shows; set by the row that was clicked. */
+let githubSection: GithubSection = "review";
+
+const COPILOT_COLOR = "#C084FC";
+const GITHUB_RED = "#F4505E";
+
+function pulseOf(): Pulse | null {
+  const p = get("integration_github").pulse;
+  return p && typeof p === "object" ? (p as Pulse) : null;
+}
+
+function ciColor(ci: PrItem["ci"]): string {
+  switch (ci) {
+    case "success": return "#22C55E";
+    case "failure": return "#F4505E";
+    case "pending": return "#F5A524";
+    default: return "#6B7079";
+  }
+}
+
+/** The colour of a list of PRs at a glance: red if any CI fails, amber if one runs. */
+function worstCi(prs: PrItem[]): string {
+  if (prs.some((p) => p.ci === "failure")) return ciColor("failure");
+  if (prs.some((p) => p.ci === "pending")) return ciColor("pending");
+  if (prs.length > 0) return ciColor("success");
+  return "#4B5563";
+}
+
+const GITHUB_SECTIONS: Record<GithubSection, { title: string; color: (p: Pulse) => string; url: string }> = {
+  review: {
+    title: "Review requested",
+    color: (p) => (p.toReview.length > 0 ? "#F5A524" : "#4B5563"),
+    url: "https://github.com/pulls/review-requested",
+  },
+  mine: { title: "My pull requests", color: (p) => worstCi(p.mine), url: "https://github.com/pulls" },
+  copilot: {
+    title: "Copilot",
+    color: (p) => (p.copilot.length > 0 || p.copilotReviewedMine > 0 ? COPILOT_COLOR : "#4B5563"),
+    url: "https://github.com/pulls/assigned",
+  },
+};
+
+function listOf(p: Pulse, section: GithubSection): PrItem[] {
+  return section === "review" ? p.toReview : section === "mine" ? p.mine : p.copilot;
+}
+
+function githubCard(onDetail: () => void): HTMLElement {
   const d = get("integration_github");
   const stars = Number(d.totalStars ?? 0);
   const repos = Number(d.totalRepos ?? 0);
   const fmt = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n));
+  const pulse = pulseOf();
+  const kind = `& Copilot · ★ ${fmt(stars)}`;
+
+  if (!pulse) {
+    // Repository stats still work without pull request access: say why the rest is missing.
+    const why = typeof d.pulseError === "string" ? d.pulseError : "Loading pull requests…";
+    return h(
+      "div",
+      { class: "int-card" },
+      header(GITHUB_RED, "GitHub", kind),
+      h("div", { class: "int-stats" }, statRow(ICONS.stack, "#6B7079", "Repositories", String(repos))),
+      h("div", { class: "int-sub", text: why }),
+    );
+  }
+
+  const row = (section: GithubSection, label: string, count: number) =>
+    h(
+      "button",
+      {
+        class: "int-row gh-row",
+        title: GITHUB_SECTIONS[section].title,
+        onclick: () => {
+          githubSection = section;
+          onDetail();
+        },
+      },
+      dot(GITHUB_SECTIONS[section].color(pulse), 5),
+      h("span", { class: "int-name", text: label }),
+      h("span", { class: "int-amount", style: count > 0 ? "color:#e8e9ec" : "color:#6B7079", text: String(count) }),
+    );
+
+  const copilotLabel =
+    pulse.copilotReviewedMine > 0 ? `Copilot · reviewed ${pulse.copilotReviewedMine} of yours` : "Copilot pull requests";
   return h(
     "div",
     { class: "int-card" },
-    header("#F4505E", "GitHub", "Overview"),
+    header(GITHUB_RED, "GitHub", kind),
     h(
       "div",
-      { class: "int-stats" },
-      statRow(ICONS.star, "#F5A524", "Total stars", fmt(stars)),
-      statRow(ICONS.stack, "#6B7079", "Repositories", String(repos)),
+      { class: "int-rows tight" },
+      row("review", "Review requested", pulse.toReview.length),
+      row("mine", "My pull requests", pulse.mine.length),
+      row("copilot", copilotLabel, pulse.copilot.length),
     ),
+  );
+}
+
+/** The list behind a row: up to three pull requests, each opening on GitHub. */
+function githubDetail(onBack: () => void): HTMLElement {
+  const pulse = pulseOf();
+  const section = GITHUB_SECTIONS[githubSection];
+  const prs = pulse ? listOf(pulse, githubSection) : [];
+  const color = pulse ? section.color(pulse) : "#4B5563";
+
+  const rows = h("div", { class: "int-rows tight" });
+  for (const p of prs.slice(0, 3)) {
+    const repo = p.repo.split("/").pop() ?? p.repo;
+    rows.append(
+      h(
+        "button",
+        {
+          class: "int-row gh-pr",
+          title: `${p.repo}#${p.number} · ${p.title}${p.isDraft ? " (draft)" : ""}`,
+          onclick: () => void Bridge.openUrl(p.url),
+        },
+        dot(ciColor(p.ci), 5),
+        h("span", { class: "int-name", text: p.isDraft ? `Draft · ${p.title}` : p.title }),
+        // Copilot's own work, and mine that Copilot reviewed, carry its colour.
+        p.isCopilot || p.copilotReviewed ? dot(COPILOT_COLOR, 4) : "",
+        h("span", { class: "int-ago", text: repo }),
+      ),
+    );
+  }
+  if (prs.length === 0) rows.append(h("div", { class: "int-empty", text: "Nothing here" }));
+  else if (prs.length > 3) {
+    rows.append(
+      h("button", {
+        class: "link-btn",
+        style: `color:${color}d9;text-align:left;padding:2px 8px`,
+        text: `${prs.length - 3} more on GitHub`,
+        onclick: () => void Bridge.openUrl(section.url),
+      }),
+    );
+  }
+
+  return h(
+    "div",
+    { class: "int-card detail" },
+    h(
+      "div",
+      { class: "int-detail-head" },
+      h("button", { class: "int-back", onclick: onBack }, svg(ICONS.chevronLeft, 10, { stroke: 2.4 })),
+      dot(color, 6),
+      h("b", { text: section.title }),
+      h("span", { class: "int-badge", style: `color:${color};background:${color}24`, text: String(prs.length) }),
+    ),
+    rows,
   );
 }
 
@@ -409,11 +662,17 @@ export function hasIntegrationData(id: string): boolean {
 }
 
 export function renderIntegrationCard(task: AgentTask, hooks: IntegrationCardHooks): HTMLElement {
+  // Claude Code and VS Code each have a card of their own, whatever their state.
+  if (task.id === "integration_claude") return claudeCard(task, hooks.openSettings);
+  if (task.id === "agent_vscode") return vscodeCard(task, hooks.openSettings);
   if (task.id === "integration_n8n") {
     const hasActivity = task.steps.length > 0 && (task.state === "finished" || task.state === "error");
     return hooks.detailOpen && hasActivity
       ? n8nDetail(task, hooks.closeDetail)
       : n8nCard(task, hooks.openDetail, hooks.openSettings);
+  }
+  if (task.id === "integration_github" && hasIntegrationData(task.id)) {
+    return hooks.detailOpen ? githubDetail(hooks.closeDetail) : githubCard(hooks.openDetail);
   }
   if (task.id === "integration_vercel" && hasIntegrationData(task.id)) {
     return hooks.detailOpen ? vercelDetail(hooks.closeDetail) : vercelCard(hooks.openDetail);
@@ -423,8 +682,6 @@ export function renderIntegrationCard(task: AgentTask, hooks: IntegrationCardHoo
   switch (task.id) {
     case "integration_resend":
       return resendCard();
-    case "integration_github":
-      return githubCard();
     case "integration_stripe":
       return stripeCard();
     case "integration_notion":

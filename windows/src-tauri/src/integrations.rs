@@ -262,7 +262,157 @@ async fn poll_stripe(app: AppHandle) {
     });
 }
 
-// ── GitHub ────────────────────────────────────────────────────────────────────
+// ── GitHub (and Copilot) ──────────────────────────────────────────────────────
+
+/// One request for everything the card needs: my open PRs (with their CI), the
+/// reviews I was asked for, and the PRs assigned to me — which is where
+/// Copilot's coding agent puts its work.
+const GITHUB_PULSE_QUERY: &str = r#"
+query {
+  mine: search(query: "is:pr is:open author:@me sort:updated-desc", type: ISSUE, first: 10) { nodes { ...pr } }
+  review: search(query: "is:pr is:open review-requested:@me sort:updated-desc", type: ISSUE, first: 10) { nodes { ...pr } }
+  assigned: search(query: "is:pr is:open assignee:@me sort:updated-desc", type: ISSUE, first: 10) { nodes { ...pr } }
+}
+fragment pr on PullRequest {
+  number title url isDraft reviewDecision updatedAt
+  author { login __typename }
+  repository { nameWithOwner }
+  commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }
+  reviews(last: 30) { nodes { state author { login __typename } } }
+}"#;
+
+fn is_copilot(login: &str) -> bool {
+    login.to_lowercase().contains("copilot")
+}
+
+fn ci_of(node: &Value) -> &'static str {
+    match node
+        .pointer("/commits/nodes/0/commit/statusCheckRollup/state")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+    {
+        "SUCCESS" => "success",
+        "FAILURE" | "ERROR" => "failure",
+        "PENDING" | "EXPECTED" => "pending",
+        _ => "unknown",
+    }
+}
+
+/// One pull request as the card needs it.
+fn pr_item(node: &Value) -> Option<Value> {
+    let url = node.get("url").and_then(Value::as_str)?;
+    let author = node.pointer("/author/login").and_then(Value::as_str).unwrap_or("");
+    let reviewed_by_copilot = node
+        .pointer("/reviews/nodes")
+        .and_then(Value::as_array)
+        .map(|reviews| {
+            reviews.iter().any(|r| {
+                r.pointer("/author/login").and_then(Value::as_str).map(is_copilot).unwrap_or(false)
+            })
+        })
+        .unwrap_or(false);
+    Some(json!({
+        "number": node.get("number").and_then(Value::as_i64).unwrap_or(0),
+        "title": node.get("title").and_then(Value::as_str).unwrap_or("(untitled)"),
+        "url": url,
+        "repo": node.pointer("/repository/nameWithOwner").and_then(Value::as_str).unwrap_or(""),
+        "isDraft": node.get("isDraft").and_then(Value::as_bool).unwrap_or(false),
+        "reviewDecision": node.get("reviewDecision").and_then(Value::as_str).unwrap_or(""),
+        "ci": ci_of(node),
+        "author": author,
+        "isCopilot": is_copilot(author),
+        "copilotReviewed": reviewed_by_copilot,
+        "updatedAt": node.get("updatedAt").and_then(Value::as_str).unwrap_or(""),
+    }))
+}
+
+fn nodes_of<'a>(data: &'a Value, alias: &str) -> Vec<&'a Value> {
+    data.pointer(&format!("/data/{alias}/nodes"))
+        .and_then(Value::as_array)
+        .map(|list| list.iter().filter(|n| n.is_object()).collect())
+        .unwrap_or_default()
+}
+
+/// The GraphQL answer boiled down to what the card shows:
+///   mine      my open PRs, with CI and whether Copilot reviewed them
+///   toReview  reviews I was asked for (Copilot's own PRs are listed apart)
+///   copilot   PRs Copilot's coding agent opened for me
+fn parse_pulse(response: &Value) -> Value {
+    let items = |alias: &str| -> Vec<Value> { nodes_of(response, alias).into_iter().filter_map(pr_item).collect() };
+    let mine = items("mine");
+    let review = items("review");
+    let assigned = items("assigned");
+
+    let is_cop = |v: &Value| v.get("isCopilot").and_then(Value::as_bool).unwrap_or(false);
+    let to_review: Vec<Value> = review.iter().filter(|p| !is_cop(p)).cloned().collect();
+
+    // Copilot's PRs reach you as an assignment or a review request: merge, once each.
+    let mut copilot: Vec<Value> = Vec::new();
+    for p in review.iter().chain(assigned.iter()).filter(|p| is_cop(p)) {
+        let url = p.get("url").and_then(Value::as_str).unwrap_or("");
+        if !copilot.iter().any(|c| c.get("url").and_then(Value::as_str) == Some(url)) {
+            copilot.push(p.clone());
+        }
+    }
+    let reviewed_mine = mine
+        .iter()
+        .filter(|p| p.get("copilotReviewed").and_then(Value::as_bool).unwrap_or(false))
+        .count();
+    json!({
+        "mine": mine,
+        "toReview": to_review,
+        "copilot": copilot,
+        "copilotReviewedMine": reviewed_mine,
+    })
+}
+
+fn urls_where(list: &Value, pred: impl Fn(&Value) -> bool) -> String {
+    let mut urls: Vec<String> = list
+        .as_array()
+        .map(|a| a.iter().filter(|p| pred(p)).filter_map(|p| p.get("url").and_then(Value::as_str).map(str::to_string)).collect())
+        .unwrap_or_default();
+    urls.sort();
+    urls.join(" ")
+}
+
+/// What changed since the last poll worth a badge, most important first: a CI
+/// failure on one of my PRs, a review asked of me, then anything from Copilot.
+/// The first poll after launch only fills the card.
+fn pulse_event(pulse: &Value) -> Option<IntegrationEvent> {
+    let first = |key: &str| pulse.get(key).and_then(|v| v.get(0)).cloned();
+    let title = |p: &Option<Value>| p.as_ref().and_then(|p| p.get("title")).and_then(Value::as_str).map(str::to_string);
+
+    // Always asks (so the memory follows the list down to empty and back), but
+    // only an actual set of items can be news.
+    let fresh = |key: &'static str, ids: &str| is_new(key, ids) && !ids.is_empty();
+
+    let failing = urls_where(&pulse["mine"], |p| p.get("ci").and_then(Value::as_str) == Some("failure"));
+    let fresh_failure = fresh("github_ci_failed", &failing);
+    let review_id = urls_where(&pulse["toReview"], |_| true);
+    let fresh_review = fresh("github_review", &review_id);
+    let copilot_prs = urls_where(&pulse["copilot"], |_| true);
+    let fresh_copilot_pr = fresh("github_copilot_pr", &copilot_prs);
+    let copilot_reviews = urls_where(&pulse["mine"], |p| p.get("copilotReviewed").and_then(Value::as_bool).unwrap_or(false));
+    let fresh_copilot_review = fresh("github_copilot_review", &copilot_reviews);
+
+    if fresh_failure {
+        let p = pulse["mine"].as_array()?.iter().find(|p| p.get("ci").and_then(Value::as_str) == Some("failure")).cloned();
+        return Some(IntegrationEvent { success: false, label: "CI failed".into(), detail: title(&p) });
+    }
+    if fresh_review {
+        let p = first("toReview");
+        return Some(IntegrationEvent { success: true, label: "Review requested".into(), detail: title(&p) });
+    }
+    if fresh_copilot_pr {
+        let p = first("copilot");
+        return Some(IntegrationEvent { success: true, label: "Copilot opened a pull request".into(), detail: title(&p) });
+    }
+    if fresh_copilot_review {
+        let p = pulse["mine"].as_array()?.iter().find(|p| p.get("copilotReviewed").and_then(Value::as_bool) == Some(true)).cloned();
+        return Some(IntegrationEvent { success: true, label: "Copilot reviewed your PR".into(), detail: title(&p) });
+    }
+    None
+}
 
 async fn poll_github(app: AppHandle) {
     let Some(token) = secrets::get("github-token") else { return };
@@ -315,11 +465,48 @@ async fn poll_github(app: AppHandle) {
         _ => 0,
     };
 
+    let login = json.get("login").and_then(Value::as_str).unwrap_or("").to_string();
+
+    // Pull requests, CI and Copilot — one GraphQL request. Failing here (a token
+    // without access to pull requests) leaves the repository stats intact.
+    let mut pulse = Value::Null;
+    let mut pulse_error = Value::Null;
+    let answer = http
+        .post("https://api.github.com/graphql")
+        .header("Authorization", format!("Bearer {token}"))
+        .header("User-Agent", "Coucou")
+        .json(&json!({ "query": GITHUB_PULSE_QUERY }))
+        .send()
+        .await;
+    match answer {
+        Ok(r) if r.status().is_success() => {
+            let body: Value = r.json().await.unwrap_or(Value::Null);
+            if body.get("data").map(|d| d.is_object()).unwrap_or(false) {
+                pulse = parse_pulse(&body);
+            } else {
+                let why = body
+                    .pointer("/errors/0/message")
+                    .and_then(Value::as_str)
+                    .unwrap_or("GitHub refused the pull request query");
+                pulse_error = json!(why);
+            }
+        }
+        Ok(r) => pulse_error = json!(status_error(r.status().as_u16(), "Token can't read pull requests")),
+        Err(_) => {}
+    }
+    let event = if pulse.is_object() { pulse_event(&pulse) } else { None };
+
     emit(&app, IntegrationUpdate {
         id: "integration_github",
-        data: json!({ "totalRepos": public + private, "totalStars": stars }),
+        data: json!({
+            "totalRepos": public + private,
+            "totalStars": stars,
+            "login": login,
+            "pulse": pulse,
+            "pulseError": pulse_error,
+        }),
         error: None,
-        event: None,
+        event,
     });
 }
 
@@ -761,5 +948,90 @@ fn fmt_value(v: &Value) -> String {
         Value::Array(a) => format!("[{}]", a.len()),
         Value::Object(_) => "{…}".into(),
         other => other.to_string(),
+    }
+}
+
+#[cfg(test)]
+mod github_tests {
+    use super::*;
+
+    fn pr(number: i64, author: &str, ci: &str, reviewers: &[&str]) -> Value {
+        json!({
+            "number": number, "title": format!("PR {number}"), "url": format!("https://github.com/o/r/pull/{number}"),
+            "isDraft": false, "reviewDecision": null, "updatedAt": "2026-10-05T10:00:00Z",
+            "author": { "login": author, "__typename": "User" },
+            "repository": { "nameWithOwner": "o/r" },
+            "commits": { "nodes": [{ "commit": { "statusCheckRollup": { "state": ci } } }] },
+            "reviews": { "nodes": reviewers.iter().map(|r| json!({ "state": "COMMENTED", "author": { "login": r } })).collect::<Vec<_>>() },
+        })
+    }
+
+    fn answer(mine: Vec<Value>, review: Vec<Value>, assigned: Vec<Value>) -> Value {
+        json!({ "data": {
+            "mine": { "nodes": mine }, "review": { "nodes": review }, "assigned": { "nodes": assigned },
+        } })
+    }
+
+    #[test]
+    fn copilot_work_is_listed_apart_from_reviews_asked_of_you() {
+        let r = answer(
+            vec![pr(1, "jaime", "SUCCESS", &["copilot-pull-request-reviewer"]), pr(2, "jaime", "FAILURE", &[])],
+            vec![pr(10, "colleague", "PENDING", &[]), pr(11, "Copilot", "SUCCESS", &[])],
+            vec![pr(11, "Copilot", "SUCCESS", &[]), pr(12, "copilot-swe-agent", "FAILURE", &[])],
+        );
+        let p = parse_pulse(&r);
+        // A colleague's PR is a review for you; Copilot's are not.
+        assert_eq!(p["toReview"].as_array().unwrap().len(), 1);
+        assert_eq!(p["toReview"][0]["number"], 10);
+        // Copilot's PRs reach you twice (review request and assignment): listed once.
+        let copilot: Vec<i64> = p["copilot"].as_array().unwrap().iter().map(|x| x["number"].as_i64().unwrap()).collect();
+        assert_eq!(copilot, vec![11, 12]);
+        // Copilot reviewed one of mine, and CI is read per PR.
+        assert_eq!(p["copilotReviewedMine"], 1);
+        assert_eq!(p["mine"][0]["copilotReviewed"], true);
+        assert_eq!(p["mine"][0]["ci"], "success");
+        assert_eq!(p["mine"][1]["ci"], "failure");
+        assert_eq!(p["toReview"][0]["ci"], "pending");
+    }
+
+    #[test]
+    fn a_pr_with_no_checks_or_reviews_still_parses() {
+        let node = json!({ "url": "https://github.com/o/r/pull/3", "number": 3, "title": "Bare", "commits": { "nodes": [] }, "reviews": { "nodes": [] } });
+        let item = pr_item(&node).unwrap();
+        assert_eq!(item["ci"], "unknown");
+        assert_eq!(item["copilotReviewed"], false);
+        assert_eq!(item["isCopilot"], false);
+        // Something that is not a PR (no url) is skipped.
+        assert!(pr_item(&json!({ "number": 4 })).is_none());
+        // An answer with errors and no data parses to nothing, never panics.
+        let empty = parse_pulse(&json!({ "errors": [{ "message": "nope" }] }));
+        assert_eq!(empty["mine"].as_array().unwrap().len(), 0);
+    }
+
+    #[test]
+    fn the_first_poll_is_silent_and_then_each_kind_of_news_fires_once() {
+        let first = parse_pulse(&answer(vec![pr(1, "me", "SUCCESS", &[])], vec![pr(10, "colleague", "PENDING", &[])], vec![]));
+        assert!(pulse_event(&first).is_none(), "the first poll only fills the card");
+        assert!(pulse_event(&first).is_none(), "nothing changed");
+
+        // A new review request.
+        let review = parse_pulse(&answer(vec![pr(1, "me", "SUCCESS", &[])], vec![pr(10, "colleague", "PENDING", &[]), pr(13, "other", "PENDING", &[])], vec![]));
+        let e = pulse_event(&review).expect("a new review request is news");
+        assert_eq!(e.label, "Review requested");
+        assert!(e.success);
+        assert!(pulse_event(&review).is_none(), "and only once");
+
+        // CI failing on mine outranks everything.
+        let failing = parse_pulse(&answer(vec![pr(1, "me", "FAILURE", &[])], vec![pr(10, "colleague", "PENDING", &[]), pr(13, "other", "PENDING", &[]), pr(14, "x", "PENDING", &[])], vec![pr(20, "Copilot", "SUCCESS", &[])]));
+        let e = pulse_event(&failing).unwrap();
+        assert_eq!(e.label, "CI failed");
+        assert!(!e.success);
+        // One badge per cycle: the most important. The rest of what arrived with
+        // it (a review request, a Copilot PR) stays in the card, not a second badge.
+        assert!(pulse_event(&failing).is_none());
+
+        // A Copilot PR on its own is news.
+        let copilot = parse_pulse(&answer(vec![pr(1, "me", "SUCCESS", &[])], vec![pr(10, "colleague", "PENDING", &[]), pr(13, "other", "PENDING", &[]), pr(14, "x", "PENDING", &[])], vec![pr(20, "Copilot", "SUCCESS", &[]), pr(21, "Copilot", "PENDING", &[])]));
+        assert_eq!(pulse_event(&copilot).unwrap().label, "Copilot opened a pull request");
     }
 }

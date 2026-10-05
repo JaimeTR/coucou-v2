@@ -37,6 +37,12 @@ const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 // ── Files ─────────────────────────────────────────────────────────────────────
 
+/// Where VS Code remembers its windows and workspaces.
+pub fn vscode_storage_path() -> PathBuf {
+    let base = std::env::var_os("APPDATA").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("."));
+    base.join("Code").join("User").join("globalStorage").join("storage.json")
+}
+
 /// %APPDATA%\Coucou — preferences.
 pub fn config_dir() -> PathBuf {
     let base = std::env::var_os("APPDATA")

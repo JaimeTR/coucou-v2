@@ -25,6 +25,15 @@ export function registerIntegrationHandlers(island: Island) {
   // Connecting or disconnecting an agent in Settings changes what its pill says.
   void onEvent<null>("agents-changed", () => void refreshConfigured());
   void refreshConfigured();
+  void refreshProjects();
+}
+
+/** The recent projects shown on the Claude Code and VS Code cards. Cheap, local, read-only. */
+export async function refreshProjects() {
+  const [claude, vscode] = await Promise.all([Bridge.claudeProjects(), Bridge.vscodeProjects()]);
+  State.claudeProjects = claude ?? [];
+  State.vscodeProjects = vscode ?? [];
+  State.notify();
 }
 
 /** Asks Rust which keys exist so the idle cards can say so. */

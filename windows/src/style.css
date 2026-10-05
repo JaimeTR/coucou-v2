@@ -1642,3 +1642,72 @@ input[type="range"]::-webkit-slider-thumb {
   color: #8e939c;
   font-size: 11.5px;
 }
+
+/* ── Claude Code and VS Code cards ──────────────────────────────────────── */
+
+.plan-mini {
+  display: flex;
+  gap: 12px;
+  padding-top: 6px;
+  align-items: center;
+}
+
+.plan-mini-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.plan-mini-label {
+  font: 500 10px var(--font);
+  color: var(--dim-2);
+}
+
+.plan-bar.mini {
+  width: 34px;
+  height: 5px;
+}
+
+.plan-mini-pct {
+  font: 600 10px var(--mono);
+}
+
+.proj-row {
+  display: flex;
+  gap: 10px;
+  padding-top: 7px;
+  min-width: 0;
+}
+
+.proj-link {
+  max-width: 82px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.proj-link:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* ── GitHub rows ────────────────────────────────────────────────────────── */
+
+.gh-row,
+.gh-pr {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: default;
+  font: inherit;
+}
+
+.gh-row:hover,
+.gh-pr:hover {
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.gh-row .int-name {
+  flex: 1 1 auto;
+}

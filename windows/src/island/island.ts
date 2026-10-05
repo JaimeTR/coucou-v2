@@ -21,6 +21,7 @@ import { h } from "../views/dom";
 import { IslandStateMachine } from "./fsm";
 import { endQuestion } from "./hooks";
 import { greetingLines } from "./greetingText";
+import { refreshProjects } from "./integrations";
 
 const BOT_OVERHANG = 40;
 /** Same margin as the Rust hit test (src-tauri/src/island.rs). */
@@ -155,6 +156,8 @@ export class Island {
       setFocus: (id) => {
         State.setFocus(id);
         Sound.play("blip");
+        // Their project lists change as you work: look again when one is opened.
+        if (id === "integration_claude" || id === "agent_vscode") void refreshProjects();
       },
       openTerminal: () => this.openSessionTerminal(),
       // The ↗ button — same targets as openAgentTarget() on macOS.

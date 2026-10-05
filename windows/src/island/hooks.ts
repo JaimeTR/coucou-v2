@@ -36,6 +36,9 @@ interface HookPayload {
   coucou_agent?: string;
   /** The relay's parent chain, nearest first: how to find the terminal window. */
   ancestor_pids?: unknown;
+  /** Set by the relay from the environment: "vscode" inside VS Code's terminal. */
+  term_program?: string;
+  vscode_pid?: string;
 }
 
 /** A short list of process ids, or null. It comes from outside: check it. */
@@ -281,9 +284,11 @@ function handleHook(island: Island, payload: HookPayload) {
   // Remember where this session's terminal is, so "Open terminal" can bring the
   // right window forward (for Claude Code and for the other agents alike).
   const pids = validPids(payload.ancestor_pids);
-  if (pids) {
-    const owner = State.tasks.find((x) => x.id === agentId);
-    if (owner) owner.sessionPids = pids;
+  const owner = State.tasks.find((x) => x.id === agentId);
+  if (pids && owner) owner.sessionPids = pids;
+  // Is this session running inside VS Code? The VS Code pill says so.
+  if (owner && (payload.term_program !== undefined || payload.vscode_pid !== undefined)) {
+    owner.viaVscode = payload.term_program === "vscode" || !!payload.vscode_pid;
   }
 
   /** Alerts force the island open; work events only reveal the compact island. */
@@ -316,6 +321,16 @@ function handleHook(island: Island, payload: HookPayload) {
     }
     State.updateTask(agentId, "idle");
     State.setPillBadge(agentId, null);
+    // VS Code's pill goes back to its projects once a reported command is old news.
+    if (agentId === "agent_vscode") {
+      const t = State.tasks.find((x) => x.id === agentId);
+      if (t) {
+        t.steps = [];
+        t.stepDiffs = [];
+        t.seq = 0;
+        t.stepIndex = 0;
+      }
+    }
   };
 
   switch (name) {

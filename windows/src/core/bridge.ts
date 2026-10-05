@@ -5,7 +5,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
-import type { Settings } from "./state";
+import type { ProjectInfo, Settings } from "./state";
 import type { Rule, RuleDraft } from "../island/rules";
 
 export const IS_TAURI =
@@ -53,6 +53,10 @@ export interface DetectedTool {
 
 export const Bridge = {
   boot: () => call<BootInfo>("boot"),
+
+  /** Recent projects (paths only, read-only) for the Claude Code and VS Code cards. */
+  claudeProjects: () => call<ProjectInfo[]>("claude_projects"),
+  vscodeProjects: () => call<ProjectInfo[]>("vscode_projects"),
 
   /** Which of the tools Coucou knows are installed on this computer. */
   detectTools: () => call<DetectedTool[]>("detect_tools"),

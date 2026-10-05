@@ -119,9 +119,36 @@ fn settings_path() -> PathBuf {
 }
 
 pub fn load() -> Settings {
-    match std::fs::read(settings_path()) {
+    let mut settings: Settings = match std::fs::read(settings_path()) {
         Ok(bytes) => serde_json::from_slice(&bytes).unwrap_or_default(),
         Err(_) => Settings::default(),
+    };
+    migrate(&mut settings);
+    settings
+}
+
+/// Pills that were renamed keep working for people who had them switched on:
+/// the Terminal pill became the VS Code pill (`agent_terminal` → `agent_vscode`).
+fn migrate(settings: &mut Settings) {
+    for id in settings.active_integrations.iter_mut() {
+        if id == "agent_terminal" {
+            *id = "agent_vscode".to_string();
+        }
+    }
+    let mut seen = std::collections::HashSet::new();
+    settings.active_integrations.retain(|id| seen.insert(id.clone()));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_terminal_pill_becomes_the_vscode_pill_without_duplicates() {
+        let mut s = Settings::default();
+        s.active_integrations = vec!["integration_github".into(), "agent_terminal".into(), "agent_vscode".into()];
+        migrate(&mut s);
+        assert_eq!(s.active_integrations, vec!["integration_github", "agent_vscode"]);
     }
 }
 
