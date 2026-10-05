@@ -165,6 +165,23 @@ fn open_in_vscode(path: Option<String>) -> bool {
     false
 }
 
+/// The ↗ on the live diff card: one edited file, opened in VS Code.
+///
+/// The path comes from a hook payload, so it gets the same care as a folder: an
+/// existing file, by its full path, handed over as a separate argument. `-g`
+/// goes first so a file name that starts with `-` is still just a name.
+#[tauri::command]
+fn open_file_in_vscode(path: String) -> bool {
+    let p = std::path::Path::new(&path);
+    if !(p.is_absolute() && p.is_file()) {
+        return false;
+    }
+    let Some(code) = platform::find_on_path("code") else { return false };
+    let mut cmd = Command::new(code);
+    cmd.arg("-g").arg(&path);
+    platform::no_console(&mut cmd).spawn().is_ok()
+}
+
 #[tauri::command]
 fn quit_app(app: AppHandle) {
     app.exit(0);
@@ -209,6 +226,26 @@ fn hooks_apply(
     };
     let _ = app.emit("settings-changed", updated);
     Ok(backup)
+}
+
+/// Same flow for the plan usage relay (statusLine): diff first, write on a click.
+#[tauri::command]
+fn statusline_preview(install: bool) -> Result<HookPreview, String> {
+    hooks::preview_statusline(install)
+}
+
+#[tauri::command]
+fn statusline_apply(app: AppHandle, install: bool, fingerprint: String) -> Result<String, String> {
+    let backup = hooks::write_statusline(install, &fingerprint)?;
+    let _ = app.emit("hooks-changed", ());
+    Ok(backup)
+}
+
+/// The person's answer to a question from Claude, or `ask` for "reply in the
+/// terminal". See pipe::answer_question for what is accepted.
+#[tauri::command]
+fn question_answer(app: AppHandle, request_id: String, reply: String) {
+    pipe::answer_question(&app, &request_id, &reply);
 }
 
 #[tauri::command]
@@ -383,10 +420,14 @@ pub fn run() {
             reposition,
             open_url,
             open_in_vscode,
+            open_file_in_vscode,
             quit_app,
             hooks_status,
             hooks_preview,
             hooks_apply,
+            statusline_preview,
+            statusline_apply,
+            question_answer,
             approval_decision,
             approval_ack,
             approval_decline,

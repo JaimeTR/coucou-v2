@@ -35,6 +35,8 @@ use crate::log;
 
 /// Slightly under coucou-hook's own 110 s wait, so we always answer first.
 const DECISION_TIMEOUT: Duration = Duration::from_secs(108);
+/// A question from Claude gets longer: coucou-hook waits 128 s for it.
+const QUESTION_TIMEOUT: Duration = Duration::from_secs(125);
 /// How long the island gets to say "the card is up". This is the whole of B4:
 /// without it, an island that is paused, hidden behind a crashed webview or
 /// simply not listening would leave Claude Code staring at a prompt nobody can
@@ -189,13 +191,25 @@ async fn handle(app: AppHandle, mut pipe: impl Relay) {
         return;
     }
 
+    // The statusLine relay is not a hook event: it carries the plan usage.
+    if payload.get("coucou_kind").and_then(Value::as_str) == Some("statusline") {
+        let _ = app.emit_to(WINDOW_LABEL, "statusline", payload);
+        pipe.finish();
+        return;
+    }
+
     let event = payload
         .get("hook_event_name")
         .and_then(Value::as_str)
         .unwrap_or_default()
         .to_string();
 
-    if event != "PermissionRequest" {
+    // A question from Claude arrives as a PreToolUse tagged by `--ask`; like a
+    // permission request, it keeps the connection open for the person's answer.
+    let is_question = event == "PreToolUse"
+        && payload.get("coucou_ask").and_then(Value::as_bool) == Some(true);
+
+    if event != "PermissionRequest" && !is_question {
         log::line(format!("hook {event}"));
         let _ = app.emit_to(WINDOW_LABEL, "hook", payload);
         pipe.finish();
@@ -209,10 +223,11 @@ async fn handle(app: AppHandle, mut pipe: impl Relay) {
         pending.0.lock().unwrap().insert(id.clone(), tx);
     }
     payload["request_id"] = json!(id);
-    log::line(format!("hook PermissionRequest id={id}"));
+    log::line(format!("hook {event} id={id}{}", if is_question { " (question)" } else { "" }));
     let _ = app.emit_to(WINDOW_LABEL, "hook", payload);
 
-    let decision = wait_for_decision(&id, &mut rx).await;
+    let patience = if is_question { QUESTION_TIMEOUT } else { DECISION_TIMEOUT };
+    let decision = wait_for_decision(&id, &mut rx, patience).await;
     app.state::<Pending>().0.lock().unwrap().remove(&id);
 
     // No decision: say nothing at all. coucou-hook then writes nothing to stdout
@@ -225,7 +240,11 @@ async fn handle(app: AppHandle, mut pipe: impl Relay) {
 }
 
 /// Two waits: a short one for "the card is up", then the long one for a human.
-async fn wait_for_decision(id: &str, rx: &mut mpsc::Receiver<Reply>) -> Option<String> {
+async fn wait_for_decision(
+    id: &str,
+    rx: &mut mpsc::Receiver<Reply>,
+    patience: Duration,
+) -> Option<String> {
     match tokio::time::timeout(ACK_TIMEOUT, rx.recv()).await {
         Ok(Some(Reply::Ack)) => {}
         // A click that beats the ack is still a click.
@@ -244,7 +263,7 @@ async fn wait_for_decision(id: &str, rx: &mut mpsc::Receiver<Reply>) -> Option<S
         }
     }
 
-    match tokio::time::timeout(DECISION_TIMEOUT, rx.recv()).await {
+    match tokio::time::timeout(patience, rx.recv()).await {
         Ok(Some(Reply::Decision(d))) => {
             log::line(format!("hook id={id} answered {d}"));
             Some(d)
@@ -283,6 +302,28 @@ pub fn acknowledge(app: &AppHandle, request_id: &str) {
 pub fn decline(app: &AppHandle, request_id: &str) {
     log::line(format!("decline id={request_id}"));
     send(app, request_id, Reply::Decline, false);
+}
+
+/// The person's reply to a question from Claude: either
+/// `{"decision":"answer","answers":{…}}` or the word `ask` ("reply in the
+/// terminal"). coucou-hook turns it into Claude Code's JSON; anything else is
+/// refused here so only those two shapes ever reach it.
+pub fn answer_question(app: &AppHandle, request_id: &str, reply: &str) {
+    let word = if reply.trim() == "ask" {
+        "ask".to_string()
+    } else {
+        match serde_json::from_str::<Value>(reply) {
+            Ok(v) if v.get("decision").and_then(Value::as_str) == Some("answer")
+                && v.get("answers").map(Value::is_object) == Some(true) =>
+            {
+                // One line, so the relay's newline framing holds.
+                v.to_string()
+            }
+            _ => "ask".to_string(),
+        }
+    };
+    log::line(format!("question id={request_id} answered"));
+    send(app, request_id, Reply::Decision(word), false);
 }
 
 /// Called by the island's Allow / Deny buttons. Only ever a bare word: turning

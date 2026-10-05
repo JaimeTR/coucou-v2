@@ -5,16 +5,24 @@
 
 import { Bridge, onEvent } from "../core/bridge";
 import { Sound } from "../core/sound";
-import { State } from "../core/state";
+import { State, type AskQuestion, type PlanUsage, type PlanWindow } from "../core/state";
+import { computeDiff, diffStepLabel } from "./diff";
 import type { Island } from "./island";
 
 const CLAUDE_ID = "integration_claude";
 
 /** Clears the approval card if no decision was made before the hook gave up. */
 let pendingTimeout: number | null = null;
+/** Same, for a question from Claude (the relay waits 128 s, the app 125 s). */
+let questionTimeout: number | null = null;
+/** Diffs are forgotten after an hour without activity. */
+let diffExpiry: number | null = null;
+const DIFF_IDLE_MS = 60 * 60 * 1000;
 
 interface HookPayload {
   hook_event_name?: string;
+  /** Set by `coucou-hook --ask` on an AskUserQuestion: the relay is waiting. */
+  coucou_ask?: boolean;
   request_id?: string;
   session_id?: string;
   cwd?: string;
@@ -131,13 +139,95 @@ function clearSession() {
   const t = State.tasks.find((x) => x.id === CLAUDE_ID);
   if (!t) return;
   t.steps = [];
+  t.stepDiffs = [];
+  t.seq = 0;
   t.stepIndex = 0;
   t.name = "VS Code";
   t.pillBadge = null;
+  State.clearDiffs();
+}
+
+/** The edit tools whose PostToolUse carries what changed. */
+const EDIT_TOOLS = new Set(["Edit", "MultiEdit", "Write"]);
+
+/** A PostToolUse for an edit: compute the diff and put its tally on the step. */
+function recordDiff(agentId: string, tool: string, input: Record<string, unknown>) {
+  const diff = computeDiff(tool, input);
+  if (!diff) return;
+  State.addDiff(diff);
+  // The same text PreToolUse announced the step with, so it can be found again.
+  const announced = stepLabel(tool, input);
+  const verb = TOOL_LABELS[tool] ?? tool;
+  State.finishEditStep(agentId, announced, diffStepLabel(verb, diff), diff.id);
+  if (diffExpiry != null) window.clearTimeout(diffExpiry);
+  diffExpiry = window.setTimeout(() => {
+    diffExpiry = null;
+    State.clearDiffs();
+    State.notify();
+  }, DIFF_IDLE_MS);
+}
+
+// ── Plan usage (statusLine relay) ─────────────────────────────────────────────
+
+interface StatuslinePayload {
+  rate_limits?: Record<string, { used_percentage?: unknown; resets_at?: unknown } | undefined>;
+}
+
+/** Out-of-range values are ignored, as the spec says: 0–100 only. */
+function planWindow(raw: { used_percentage?: unknown; resets_at?: unknown } | undefined): PlanWindow | null {
+  if (!raw || typeof raw.used_percentage !== "number") return null;
+  const used = raw.used_percentage;
+  if (!Number.isFinite(used) || used < 0 || used > 100) return null;
+  const resetsAt = typeof raw.resets_at === "number" && Number.isFinite(raw.resets_at) ? raw.resets_at : null;
+  return { used, resetsAt };
+}
+
+function handleStatusline(payload: StatuslinePayload) {
+  const limits = payload.rate_limits;
+  // No `rate_limits` (a plan without limits, or the first reply of a session):
+  // keep what we had rather than blanking the gauge.
+  if (!limits) return;
+  const fiveHour = planWindow(limits.five_hour);
+  const sevenDay = planWindow(limits.seven_day);
+  if (!fiveHour && !sevenDay) return;
+  const next: PlanUsage = { fiveHour, sevenDay, updatedAt: Date.now() };
+  State.plan = next;
+  State.notify();
+}
+
+// ── Questions from Claude (AskUserQuestion) ───────────────────────────────────
+
+/** 1–4 questions, each with 2–4 options; anything else goes back to the terminal. */
+export function parseQuestions(input: Record<string, unknown> | undefined): AskQuestion[] | null {
+  const raw = input?.questions;
+  if (!Array.isArray(raw) || raw.length === 0 || raw.length > 4) return null;
+  const out: AskQuestion[] = [];
+  for (const q of raw) {
+    const o = (q ?? {}) as Record<string, unknown>;
+    if (typeof o.question !== "string" || !o.question.trim()) return null;
+    if (!Array.isArray(o.options) || o.options.length < 1 || o.options.length > 4) return null;
+    const options: AskQuestion["options"] = [];
+    for (const opt of o.options) {
+      const p = (opt ?? {}) as Record<string, unknown>;
+      if (typeof p.label !== "string" || !p.label.trim()) return null;
+      options.push({
+        label: p.label,
+        description: typeof p.description === "string" ? p.description : "",
+      });
+    }
+    out.push({
+      question: o.question,
+      header: typeof o.header === "string" ? o.header : "",
+      options,
+      multiSelect: o.multiSelect === true,
+    });
+  }
+  return out;
 }
 
 export function registerHookHandlers(island: Island) {
   void onEvent<HookPayload>("hook", (payload) => handleHook(island, payload));
+  void onEvent<StatuslinePayload>("statusline", (payload) => handleStatusline(payload));
 }
 
 function handleHook(island: Island, payload: HookPayload) {
@@ -200,9 +290,18 @@ function handleHook(island: Island, payload: HookPayload) {
     }
 
     case "PreToolUse": {
+      const tool = payload.tool_name ?? "Tool";
+      if (tool === "AskUserQuestion") {
+        // The tagged copy is the relay waiting for an answer. The plain copy,
+        // from the general hook, is ignored: a question is not "working".
+        if (payload.coucou_ask) {
+          handleQuestion(island, payload, projectName, cwd, isExternalAgent);
+          return;
+        }
+        break;
+      }
       ensurePill();
       State.updateTask(agentId, "working");
-      const tool = payload.tool_name ?? "Tool";
       State.appendStep(agentId, stepLabel(tool, payload.tool_input ?? {}));
       surface("overview", false);
       break;
@@ -210,6 +309,9 @@ function handleHook(island: Island, payload: HookPayload) {
 
     case "PostToolUse":
       State.updateTask(agentId, "working");
+      if (payload.tool_name && EDIT_TOOLS.has(payload.tool_name)) {
+        recordDiff(agentId, payload.tool_name, payload.tool_input ?? {});
+      }
       break;
 
     case "PostToolUseFailure":
@@ -280,10 +382,19 @@ function handleHook(island: Island, payload: HookPayload) {
       }
 
       const requestId = payload.request_id ?? "";
+      // Older Claude Code sends a question as a permission request. The island
+      // answers questions from the dedicated hook, so this one goes back at once.
+      if (payload.tool_name === "AskUserQuestion") {
+        if (requestId) void Bridge.approvalDecline(requestId);
+        break;
+      }
       // One card, one request. A second one must never quietly replace the first
       // — that would leave a human staring at request B while request A waits for
       // a decision nobody can give. Hand it straight back to the terminal.
-      if (State.pendingApproval && State.pendingApproval.requestId !== requestId) {
+      if (
+        (State.pendingApproval && State.pendingApproval.requestId !== requestId) ||
+        State.pendingQuestion
+      ) {
         if (requestId) void Bridge.approvalDecline(requestId);
         break;
       }
@@ -332,4 +443,58 @@ function handleHook(island: Island, payload: HookPayload) {
       break;
   }
   State.notify();
+}
+
+/**
+ * Claude is asking a question and `coucou-hook --ask` is waiting for the answer.
+ * Same discipline as an approval: one card at a time, the relay told whether a
+ * person can really act on it, and a fall-back to the terminal in every doubt.
+ */
+function handleQuestion(
+  island: Island,
+  payload: HookPayload,
+  projectName: string,
+  cwd: string,
+  isExternalAgent: boolean,
+) {
+  const requestId = payload.request_id ?? "";
+  const questions = parseQuestions(payload.tool_input);
+  // Other agents get no card, as for approvals; unparsable questions and a card
+  // already up go straight back to the terminal.
+  if (isExternalAgent || !questions || !requestId || State.pendingQuestion || State.pendingApproval) {
+    if (requestId) void Bridge.approvalDecline(requestId);
+    return;
+  }
+
+  upsert(projectName, cwd);
+  if (questionTimeout != null) window.clearTimeout(questionTimeout);
+  State.pendingQuestion = { requestId, sessionId: payload.session_id ?? "", questions };
+  void Bridge.approvalAck(requestId);
+  State.updateTask(CLAUDE_ID, "question");
+  State.isPinned = true;
+  Sound.play("question");
+  if (State.focusId === CLAUDE_ID) {
+    island.alert("question");
+  } else {
+    State.setPillBadge(CLAUDE_ID, "approval");
+    island.reveal();
+  }
+  questionTimeout = window.setTimeout(() => {
+    questionTimeout = null;
+    if (!State.pendingQuestion) return;
+    State.pendingQuestion = null;
+    State.isPinned = false;
+    island.dropPin();
+    State.updateTask(CLAUDE_ID, "working");
+    State.setPillBadge(CLAUDE_ID, null);
+    if (State.view === "question") island.setView(State.defaultView());
+    State.notify();
+  }, 125_000);
+  State.notify();
+}
+
+/** The island answered (or the person chose the terminal): stop waiting. */
+export function endQuestion() {
+  if (questionTimeout != null) window.clearTimeout(questionTimeout);
+  questionTimeout = null;
 }

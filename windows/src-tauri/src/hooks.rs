@@ -36,10 +36,20 @@ pub const HOOK_EVENTS: &[(&str, u64)] = &[
 /// Marker that identifies a Coucou entry inside settings.json.
 const MARKER: &str = "coucou-hook";
 
+/// Claude Code 2.1.85+ delivers AskUserQuestion as a PreToolUse. Answering from
+/// the island needs a hook of its own that waits for the person, hence its own
+/// timeout: the relay waits 128 s, the app 125 s, Claude Code gives up at 130 s.
+const ASK_TIMEOUT: u64 = 130;
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HookStatus {
     pub installed: bool,
+    /// The hooks are in but the one that answers Claude's questions is missing
+    /// (they were installed by an older build): offer the update.
+    pub outdated: bool,
+    /// Coucou's statusLine relay (the plan usage gauge) is installed.
+    pub statusline_installed: bool,
     pub settings_path: String,
     pub hook_path: String,
     pub hook_ready: bool,
@@ -109,6 +119,18 @@ fn hook_command(event: &str) -> String {
     format!("\"{exe}\" {event}")
 }
 
+/// `coucou-hook --ask PreToolUse`: the relay that waits for an answer.
+fn ask_command() -> String {
+    let base = hook_command("");
+    format!("{} --ask PreToolUse", base.trim_end())
+}
+
+/// `coucou-hook --statusline`: the statusLine relay.
+fn statusline_command() -> String {
+    let base = hook_command("");
+    format!("{} --statusline", base.trim_end())
+}
+
 /// Claude Code runs the command through `sh`, which still reads `$`, `` ` ``
 /// and `\` inside double quotes. Single quotes keep the path a path, whatever
 /// the home directory is called.
@@ -162,6 +184,16 @@ fn merged(existing: &Value) -> Value {
                 "timeout": timeout,
             }]
         }));
+        if *event == "PreToolUse" {
+            list.push(json!({
+                "matcher": "AskUserQuestion",
+                "hooks": [{
+                    "type": "command",
+                    "command": ask_command(),
+                    "timeout": ASK_TIMEOUT,
+                }]
+            }));
+        }
         hooks.insert((*event).to_string(), Value::Array(list));
     }
 
@@ -196,6 +228,94 @@ fn without_ours(existing: &Value) -> Value {
         root.insert("hooks".into(), Value::Object(out));
     }
     Value::Object(root)
+}
+
+// ── statusLine (plan usage gauge) ────────────────────────────────────────────
+//
+// Claude Code allows a single statusLine. If the person already has one, ours
+// wraps it: the previous object is kept next to the relay, which runs its
+// command after reporting the plan usage, so their status line looks and works
+// exactly as before. Uninstalling puts the original object back untouched.
+
+fn previous_statusline_path() -> PathBuf {
+    settings::hook_exe_path().with_file_name("statusline-previous.json")
+}
+
+fn statusline_is_ours(root: &Value) -> bool {
+    root.get("statusLine")
+        .and_then(|s| s.get("command"))
+        .and_then(Value::as_str)
+        .map(|c| c.contains(MARKER))
+        .unwrap_or(false)
+}
+
+fn ask_is_installed(root: &Value) -> bool {
+    root.get("hooks")
+        .and_then(|h| h.get("PreToolUse"))
+        .and_then(Value::as_array)
+        .map(|list| {
+            list.iter().any(|entry| {
+                entry_is_ours(entry)
+                    && serde_json::to_string(entry).map(|s| s.contains("--ask")).unwrap_or(false)
+            })
+        })
+        .unwrap_or(false)
+}
+
+/// Our relay as the statusLine; every other field of an existing one is kept.
+fn merged_statusline(existing: &Value) -> Value {
+    let mut root = existing.as_object().cloned().unwrap_or_default();
+    let mut line = root
+        .get("statusLine")
+        .and_then(Value::as_object)
+        .cloned()
+        .unwrap_or_default();
+    line.insert("type".into(), json!("command"));
+    line.insert("command".into(), json!(statusline_command()));
+    root.insert("statusLine".into(), Value::Object(line));
+    Value::Object(root)
+}
+
+/// The statusLine the person had before us, or none at all. A statusLine that is
+/// not ours any more (they changed it since) is left alone.
+fn without_statusline(existing: &Value) -> Value {
+    let mut root = existing.as_object().cloned().unwrap_or_default();
+    if !statusline_is_ours(existing) {
+        return Value::Object(root);
+    }
+    let previous = std::fs::read(previous_statusline_path())
+        .ok()
+        .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok())
+        .and_then(|v| v.get("statusLine").cloned())
+        .filter(|s| s.is_object());
+    match previous {
+        Some(line) => {
+            root.insert("statusLine".into(), line);
+        }
+        None => {
+            root.remove("statusLine");
+        }
+    }
+    Value::Object(root)
+}
+
+/// Keeps the person's own statusLine where the relay can find it.
+fn remember_previous_statusline(current: &Value) -> Result<(), String> {
+    let path = previous_statusline_path();
+    if statusline_is_ours(current) {
+        return Ok(()); // a reinstall: what we saved the first time is still right
+    }
+    match current.get("statusLine") {
+        Some(line) => {
+            let saved = json!({ "statusLine": line });
+            std::fs::write(&path, pretty(&saved))
+                .map_err(|e| format!("could not save your current status line: {e}"))
+        }
+        None => {
+            let _ = std::fs::remove_file(&path);
+            Ok(())
+        }
+    }
 }
 
 fn pretty(v: &Value) -> String {
@@ -253,6 +373,8 @@ pub fn status() -> HookStatus {
     let hook_path = settings::hook_exe_path();
     HookStatus {
         installed,
+        outdated: installed && !ask_is_installed(&current),
+        statusline_installed: statusline_is_ours(&current),
         settings_path: settings_path().to_string_lossy().to_string(),
         hook_ready: hook_path.exists(),
         hook_path: hook_path.to_string_lossy().to_string(),
@@ -260,8 +382,19 @@ pub fn status() -> HookStatus {
 }
 
 pub fn preview(install: bool) -> Result<HookPreview, String> {
+    preview_with(|current| if install { merged(current) } else { without_ours(current) })
+}
+
+/// The same flow for the plan usage relay: its own diff, its own click.
+pub fn preview_statusline(install: bool) -> Result<HookPreview, String> {
+    preview_with(|current| {
+        if install { merged_statusline(current) } else { without_statusline(current) }
+    })
+}
+
+fn preview_with(change: impl Fn(&Value) -> Value) -> Result<HookPreview, String> {
     let current = read_settings()?;
-    let next = if install { merged(&current) } else { without_ours(&current) };
+    let next = change(&current);
     Ok(HookPreview {
         diff: unified_diff(&pretty(&current), &pretty(&next)),
         backup: backup_path().to_string_lossy().to_string(),
@@ -277,6 +410,33 @@ pub fn preview(install: bool) -> Result<HookPreview, String> {
 /// and make them look at a fresh diff, because the only thing worse than not
 /// installing the hooks is silently reverting somebody else's edit.
 pub fn write(install: bool, fingerprint: &str) -> Result<String, String> {
+    write_with(fingerprint, |current| {
+        Ok(if install { merged(current) } else { without_ours(current) })
+    })
+}
+
+/// Writes the plan usage relay in (or the person's own statusLine back).
+pub fn write_statusline(install: bool, fingerprint: &str) -> Result<String, String> {
+    let backup = write_with(fingerprint, |current| {
+        if install {
+            // Before the write, so the relay finds the previous command the first
+            // time Claude Code runs it.
+            remember_previous_statusline(current)?;
+            Ok(merged_statusline(current))
+        } else {
+            Ok(without_statusline(current))
+        }
+    })?;
+    if !install {
+        let _ = std::fs::remove_file(previous_statusline_path());
+    }
+    Ok(backup)
+}
+
+fn write_with(
+    fingerprint: &str,
+    change: impl Fn(&Value) -> Result<Value, String>,
+) -> Result<String, String> {
     let path = settings_path();
     let dir = path.parent().unwrap_or(Path::new("."));
     std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
@@ -296,7 +456,7 @@ pub fn write(install: bool, fingerprint: &str) -> Result<String, String> {
         std::fs::copy(&path, &backup).map_err(|e| format!("backup failed: {e}"))?;
     }
 
-    let next = if install { merged(&current) } else { without_ours(&current) };
+    let next = change(&current)?;
     let mut text = pretty(&next);
     text.push('\n');
 
@@ -572,6 +732,38 @@ mod tests {
         // And removing ours puts it back exactly as it was.
         let cleaned = without_ours(&after);
         assert_eq!(cleaned, existing);
+    }
+
+    #[test]
+    fn the_question_hook_has_its_own_matcher_and_goes_with_the_rest() {
+        let after = merged(&json!({}));
+        let pre = after["hooks"]["PreToolUse"].as_array().unwrap();
+        let ask = pre
+            .iter()
+            .find(|e| e["matcher"] == "AskUserQuestion")
+            .expect("the AskUserQuestion hook was not added");
+        assert_eq!(ask["hooks"][0]["timeout"], ASK_TIMEOUT);
+        assert!(ask["hooks"][0]["command"].as_str().unwrap().contains("--ask PreToolUse"));
+        assert!(ask_is_installed(&after));
+        // Hooks installed by the previous build have no such entry.
+        assert!(!ask_is_installed(&json!({ "hooks": { "PreToolUse": [
+            { "hooks": [{ "type": "command", "command": "\"x/coucou-hook.exe\" PreToolUse" }] }
+        ] } })));
+        assert_eq!(without_ours(&after), json!({}));
+    }
+
+    #[test]
+    fn the_statusline_keeps_its_other_fields_and_never_touches_a_foreign_one() {
+        let existing = json!({ "statusLine": { "type": "command", "command": "my-line.sh", "padding": 2 } });
+        let after = merged_statusline(&existing);
+        assert_eq!(after["statusLine"]["padding"], 2);
+        assert!(after["statusLine"]["command"].as_str().unwrap().contains("--statusline"));
+        assert!(statusline_is_ours(&after));
+        assert!(!statusline_is_ours(&existing));
+        // The person's own status line is left alone by an uninstall.
+        assert_eq!(without_statusline(&existing), existing);
+        // Hooks and statusLine are independent: removing the hooks keeps the gauge.
+        assert!(statusline_is_ours(&without_ours(&merged(&after))));
     }
 
     #[test]

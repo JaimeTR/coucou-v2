@@ -20,6 +20,20 @@ pub struct Settings {
     /// Defaulted explicitly so a settings.json written by an older build still loads.
     #[serde(default = "default_model")]
     pub model: String,
+    /// Show the plan usage pill in the island's header.
+    #[serde(default)]
+    pub plan_gauge: bool,
+    /// Pop a native Windows notification when a request needs a person and the
+    /// island is hidden.
+    #[serde(default = "default_true")]
+    pub native_notifications: bool,
+    /// Global keyboard shortcuts to approve / deny without focusing anything.
+    #[serde(default = "default_true")]
+    pub global_shortcuts: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 fn default_model() -> String {
@@ -43,6 +57,9 @@ impl Default for Settings {
             autostart: false,
             hooks_installed: false,
             model: default_model(),
+            plan_gauge: false,
+            native_notifications: true,
+            global_shortcuts: true,
         }
     }
 }

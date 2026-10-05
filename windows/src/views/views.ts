@@ -11,6 +11,9 @@ import { createMiniBot, pruneMiniBots } from "../mochi/minibots";
 import { buildPrompt } from "./chat";
 import { buildChoose, buildUpload, buildUploading } from "./upload";
 import { renderIntegrationCard, type IntegrationCardHooks } from "./integrations";
+import { buildQuestion } from "./question";
+import { buildDiff } from "./diff";
+import { planColor, primaryPercent, renderPlanCard } from "./plan";
 
 export interface ViewActions {
   setView(v: IslandViewName): void;
@@ -21,6 +24,13 @@ export interface ViewActions {
   openTarget(): void;
   openUrl(url: string): void;
   decide(d: "allow" | "deny"): void;
+  /** Answers to Claude's question, or null to reply in the terminal instead. */
+  answerQuestion(answers: Record<string, string | string[]> | null): void;
+  /** Opens the live diff behind a ticker step. */
+  openDiff(id: string): void;
+  closeDiff(): void;
+  /** The ↗ on the diff card: the edited file in VS Code. */
+  openFile(path: string): void;
   toggleSound(): void;
   setVolume(v: number): void;
   setAutoClose(seconds: number): void;
@@ -90,10 +100,31 @@ export function buildHeader(actions: ViewActions): ViewHost {
     actions.setView(v);
   }
 
+  // Plan usage: a small coloured pill on the home view, once Claude Code has
+  // reported it and the person has switched it on.
+  const planDot = h("i", { class: "dot", style: "width:7px;height:7px" });
+  const planText = h("span", {});
+  const planPill = h(
+    "button",
+    {
+      class: "plan-pill",
+      title: "Claude plan usage",
+      onclick: () => {
+        actions.blip();
+        State.showingPlanDetail = !State.showingPlanDetail;
+        State.notify();
+      },
+    },
+    planDot,
+    planText,
+  );
+  planPill.style.display = "none";
+
   const el = h(
     "div",
     { id: "header" },
     h("div", { class: "tabs" }, tabHome, tabChat, tabDrop),
+    planPill,
     h("div", { class: "header-actions" }, gearBtn, soundBtn),
   );
 
@@ -101,6 +132,17 @@ export function buildHeader(actions: ViewActions): ViewHost {
     el,
     sync() {
       const v = State.view;
+      const home = v === "overview" || v === "empty";
+      const percent = primaryPercent(State.plan);
+      const showPlan = home && State.settings.planGauge && State.plan != null;
+      planPill.style.display = showPlan ? "" : "none";
+      if (showPlan) {
+        planDot.style.background = planColor(percent);
+        planText.textContent = percent == null ? "—" : `${Math.round(percent)}%`;
+        planPill.classList.toggle("on", State.showingPlanDetail);
+      }
+      // The plan card belongs to the home view; leaving it closes the card.
+      if (!home) State.showingPlanDetail = false;
       tabHome.classList.toggle("on", v === "overview" || v === "empty");
       tabChat.classList.toggle("on", v === "prompt");
       tabDrop.classList.toggle("on", v === "upload");
@@ -117,7 +159,7 @@ export function buildHeader(actions: ViewActions): ViewHost {
 // ── Overview ──────────────────────────────────────────────────────────────────
 
 function buildOverview(actions: ViewActions): ViewHost {
-  const ticker = new Ticker();
+  const ticker = new Ticker((id) => actions.openDiff(id));
   const who = h("div", { class: "who" });
   const tickerBody = h("div", { class: "card-body" }, who, ticker.el);
   const leftBody = h("div", { class: "left-body" });
@@ -138,7 +180,7 @@ function buildOverview(actions: ViewActions): ViewHost {
   let pillIds = "";
   let detailOpen = false;
   let lastFocus: string | null = null;
-  let mode: "ticker" | "card" | null = null;
+  let mode: "ticker" | "card" | "plan" | null = null;
   let cardKey = "";
 
   const hooks: IntegrationCardHooks = {
@@ -170,6 +212,32 @@ function buildOverview(actions: ViewActions): ViewHost {
         detailOpen = false;
         cardKey = "";
         mode = null;
+        // Switching pill closes the plan card, as the spec says.
+        State.showingPlanDetail = false;
+      }
+
+      // The plan card, opened from the header pill, replaces whatever was here.
+      if (State.showingPlanDetail && State.plan) {
+        const key = `plan~${State.plan.updatedAt}`;
+        if (mode !== "plan" || key !== cardKey) {
+          mode = "plan";
+          cardKey = key;
+          clear(leftBody);
+          leftBody.append(
+            renderPlanCard(State.plan, () => {
+              State.showingPlanDetail = false;
+              State.notify();
+            }),
+          );
+        }
+        jump.style.display = "none";
+        syncPills();
+        return;
+      }
+      if (mode === "plan") {
+        // Closed again: rebuild the card that was underneath.
+        mode = null;
+        cardKey = "";
       }
 
       // VS Code with a live Claude Code session keeps the ticker; every other
@@ -213,17 +281,20 @@ function buildOverview(actions: ViewActions): ViewHost {
       }
 
       jump.style.display = detailOpen ? "none" : "";
-
-      const others = State.otherTasks.slice(0, 4);
-      const pillKey = others.map((t) => `${t.id}:${t.pillBadge ?? ""}`).join("|");
-      if (pillKey !== pillIds) {
-        pillIds = pillKey;
-        clear(pills);
-        for (const t of others) pills.append(buildPill(t, actions));
-        pruneMiniBots();
-      }
+      syncPills();
     },
   };
+
+  function syncPills() {
+    const others = State.otherTasks.slice(0, 4);
+    const pillKey = others.map((t) => `${t.id}:${t.pillBadge ?? ""}`).join("|");
+    if (pillKey !== pillIds) {
+      pillIds = pillKey;
+      clear(pills);
+      for (const t of others) pills.append(buildPill(t, actions));
+      pruneMiniBots();
+    }
+  }
 }
 
 function buildPill(task: AgentTask, actions: ViewActions): HTMLElement {
@@ -313,26 +384,6 @@ function buildApproval(actions: ViewActions): ViewHost {
         btn("Deny", "secondary", () => actions.decide("deny"), "N"),
         btn("Allow", "primary", () => actions.decide("allow"), "Y"),
       );
-    },
-  };
-}
-
-// ── Question ──────────────────────────────────────────────────────────────────
-
-function buildQuestion(): ViewHost {
-  const who = h("div");
-  const title = h("div", { class: "title" });
-  const row = h("div", { class: "actions" });
-  const el = h("div", { class: "view" }, card("cyan", stack(116, 16, who, title, row)));
-  return {
-    el,
-    sync() {
-      clear(who);
-      who.append(agentWho(State.focusTask, "Claude Code is asking a question"));
-      const task = State.focusTask;
-      title.textContent = task?.steps.at(-1) ?? "Claude needs an answer.";
-      clear(row);
-      row.append(h("div", { class: "sub", text: "Answer in your terminal — Coucou can't reply for you yet." }));
     },
   };
 }
@@ -491,7 +542,8 @@ export function buildViews(
   map.set("overview", buildOverview(actions));
   map.set("empty", buildEmpty(actions));
   map.set("approval", buildApproval(actions));
-  map.set("question", buildQuestion());
+  map.set("question", buildQuestion(actions));
+  map.set("diff", buildDiff(actions));
   map.set("error", buildError(actions));
   map.set("finished", buildFinished(actions));
   map.set("confused", buildConfused());

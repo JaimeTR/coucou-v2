@@ -19,6 +19,7 @@ import { USC, UploadSeq } from "../upload/sequence";
 import { buildHeader, buildViews, type ViewActions, type ViewHost } from "../views/views";
 import { h } from "../views/dom";
 import { IslandStateMachine } from "./fsm";
+import { endQuestion } from "./hooks";
 
 const BOT_OVERHANG = 40;
 /** Same margin as the Rust hit test (src-tauri/src/island.rs). */
@@ -147,6 +148,27 @@ export class Island {
         State.setPillBadge("integration_claude", null);
         this.setView(State.defaultView());
       },
+      answerQuestion: (answers) => {
+        const q = State.pendingQuestion;
+        void Bridge.log(`question ${answers ? "answered" : "left to the terminal"} req=${q?.requestId ?? "none"}`);
+        if (!q) return;
+        endQuestion();
+        Sound.play(answers ? "approve" : "blip");
+        void Bridge.questionAnswer(q.requestId, answers);
+        State.pendingQuestion = null;
+        State.isPinned = false;
+        this.fsm.pinned = false;
+        State.updateTask("integration_claude", "working");
+        State.setPillBadge("integration_claude", null);
+        this.setView(State.defaultView());
+      },
+      openDiff: (id) => {
+        State.openDiffId = id;
+        Sound.play("blip");
+        this.setView("diff");
+      },
+      closeDiff: () => this.setView(State.defaultView()),
+      openFile: (path) => void Bridge.openFile(path),
       toggleSound: () => {
         State.settings.soundEnabled = !State.settings.soundEnabled;
         Sound.setEnabled(State.settings.soundEnabled);
@@ -545,7 +567,12 @@ export class Island {
     });
 
     window.addEventListener("keydown", (e) => {
-      if (e.key === "Escape" && State.mode === "expanded" && !State.isPinned) this.collapse();
+      // On the diff card Esc goes back to the ticker first, as on the Mac.
+      if (e.key === "Escape" && State.mode === "expanded" && State.view === "diff") {
+        this.setView(State.defaultView());
+      } else if (e.key === "Escape" && State.mode === "expanded" && !State.isPinned) {
+        this.collapse();
+      }
       State.lastActivity = performance.now();
     });
 

@@ -55,6 +55,9 @@ export const Bridge = {
   /** "Open terminal" → opens the folder in VS Code when `code` is on PATH. */
   openInVSCode: (path: string | null) => call<boolean>("open_in_vscode", { path }),
 
+  /** The ↗ on the diff card: opens one edited file in VS Code, at its path. */
+  openFile: (path: string) => call<boolean>("open_file_in_vscode", { path }),
+
   quit: () => call<void>("quit_app"),
 
   openSettingsWindow: () => call<void>("open_settings_window"),
@@ -72,6 +75,19 @@ export const Bridge = {
    */
   hooksApply: (install: boolean, fingerprint: string) =>
     callOrThrow<string>("hooks_apply", { install, fingerprint }),
+
+  /** Plan usage relay (statusLine): same diff-then-click flow as the hooks. */
+  statuslinePreview: (install: boolean) =>
+    callOrThrow<HookPreview>("statusline_preview", { install }),
+  statuslineApply: (install: boolean, fingerprint: string) =>
+    callOrThrow<string>("statusline_apply", { install, fingerprint }),
+
+  /** Answer to a question from Claude: the answers, or null for "reply in the terminal". */
+  questionAnswer: (requestId: string, answers: Record<string, string | string[]> | null) =>
+    call<void>("question_answer", {
+      requestId,
+      reply: answers ? JSON.stringify({ decision: "answer", answers }) : "ask",
+    }),
 
   approvalDecision: (requestId: string, decision: "allow" | "deny") =>
     call<void>("approval_decision", { requestId, decision }),
@@ -120,6 +136,9 @@ export interface DroppedFile {
 
 export interface HookStatus {
   installed: boolean;
+  /** Hooks from an older build: the one that answers Claude's questions is missing. */
+  outdated: boolean;
+  statuslineInstalled: boolean;
   settingsPath: string;
   hookPath: string;
   hookReady: boolean;

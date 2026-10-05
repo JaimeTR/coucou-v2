@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": ".test-build",
+    "module": "ES2022",
+    "types": [],
+    "verbatimModuleSyntax": false,
+    "isolatedModules": false
+  },
+  "include": [],
+  "files": ["src/island/diff.ts"]
+}

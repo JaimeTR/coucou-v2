@@ -27,7 +27,18 @@ interface Row {
   shimmer: HTMLElement;
   dim: HTMLElement;
   text: string;
+  /** The live diff behind this step, when it is an edit. */
+  diffId: string | null;
 }
+
+/** One step waiting its turn to scroll in. */
+interface QueuedStep {
+  text: string;
+  diffId: string | null;
+}
+
+/** `Modifie · app.ts  +3 −1`: the tally at the end is what gets its colours. */
+const TALLY = /^(.*?)\s+\+(\d+)\s+−(\d+)$/;
 
 function makeRow(): Row {
   const chevron = svg(ICONS.chevronRight, 9, { stroke: 2.4 });
@@ -46,14 +57,31 @@ function makeRow(): Row {
     h("span", { class: "tick-icon", style: "position:relative" }, chevron, check),
     h("span", { style: "position:relative;flex:1 1 auto;min-width:0" }, shimmer, dim),
   );
-  return { el, chevron, check, shimmer, dim, text: "" };
+  return { el, chevron, check, shimmer, dim, text: "", diffId: null };
 }
 
-function setText(row: Row, text: string) {
-  if (row.text === text) return;
+/** The text of a step, with the tally of an edit in green and red. */
+function paint(target: HTMLElement, text: string) {
+  const m = TALLY.exec(text);
+  if (!m) {
+    target.textContent = text;
+    return;
+  }
+  target.replaceChildren(
+    document.createTextNode(`${m[1]} `),
+    h("span", { class: "d-add", text: `+${m[2]}` }),
+    document.createTextNode(" "),
+    h("span", { class: "d-del", text: `−${m[3]}` }),
+  );
+}
+
+function setText(row: Row, text: string, diffId: string | null = null) {
+  if (row.text === text && row.diffId === diffId) return;
   row.text = text;
-  row.shimmer.textContent = text;
-  row.dim.textContent = text;
+  row.diffId = diffId;
+  paint(row.shimmer, text);
+  paint(row.dim, text);
+  row.el.classList.toggle("has-diff", diffId != null);
 }
 
 /**
@@ -75,12 +103,19 @@ export class Ticker {
   private a = makeRow(); // completed
   private b = makeRow(); // current
   private c = makeRow(); // incoming
-  private queue: string[] = [];
+  private queue: QueuedStep[] = [];
   private startMs: number | null = null;
+  /** Absolute index (steps appended so far) of the step on the current row. */
   private displayIndex = -1;
 
-  constructor() {
+  /** `onOpenDiff` runs when an edit's row is clicked. */
+  constructor(private onOpenDiff?: (diffId: string) => void) {
     this.el = h("div", { class: "ticker" }, this.a.el, this.b.el, this.c.el);
+    for (const row of [this.a, this.b, this.c]) {
+      row.el.addEventListener("click", () => {
+        if (row.diffId) this.onOpenDiff?.(row.diffId);
+      });
+    }
     this.rest();
   }
 
@@ -96,15 +131,22 @@ export class Ticker {
   }
 
   sync(task: AgentTask | null) {
-    const steps = task && task.steps.length > 0 ? task.steps : ["…"];
-    const idx = task ? Math.min(task.stepIndex, steps.length - 1) : -1;
+    const real = task != null && task.steps.length > 0;
+    const steps = real ? task.steps : ["…"];
+    const metas = (real && task.stepDiffs) || [];
+    // Steps are addressed by how many the session has appended in total, not by
+    // their place in the 20 kept: once the list starts dropping its oldest, the
+    // place of the newest never changes and the ticker would stop moving.
+    const seq = real ? Math.max(task.seq ?? steps.length, steps.length) : 1;
+    const base = seq - steps.length; // absolute index of steps[0]
+    const idx = task ? (real ? seq - 1 : 0) : -1;
+    const textAt = (abs: number) => steps[abs - base] ?? "…";
+    const diffAt = (abs: number) => metas[abs - base] ?? null;
 
     // First render: drop straight into place, no animation.
     if (this.displayIndex < 0) {
       this.displayIndex = idx;
-      setText(this.a, idx > 0 ? steps[idx - 1] : "…");
-      setText(this.b, steps[Math.max(idx, 0)]);
-      this.rest();
+      this.seed(textAt, diffAt, idx);
       return;
     }
 
@@ -113,24 +155,51 @@ export class Ticker {
       this.queue = [];
       this.startMs = null;
       this.displayIndex = idx;
-      setText(this.a, idx > 0 ? steps[idx - 1] : "…");
-      setText(this.b, steps[Math.max(idx, 0)]);
-      this.rest();
+      this.seed(textAt, diffAt, idx);
       return;
     }
 
-    for (let i = this.displayIndex + 1; i <= idx; i++) this.queue.push(steps[i]);
+    for (let i = Math.max(this.displayIndex + 1, base); i <= idx; i++) {
+      this.queue.push({ text: textAt(i), diffId: diffAt(i) });
+    }
     this.displayIndex = idx;
     if (this.queue.length > MAX_QUEUE) {
       this.queue = this.queue.slice(-MAX_QUEUE);
     }
+
+    // A step already on screen can change under us: an edit announced as
+    // "Modifie · app.ts" becomes "Modifie · app.ts  +3 −1" once it has run.
+    for (let i = 0; i < this.queue.length; i++) {
+      const abs = idx - (this.queue.length - 1 - i);
+      this.queue[i] = { text: textAt(abs), diffId: diffAt(abs) };
+    }
+    if (this.startMs != null && this.queue.length > 0) {
+      setText(this.c, this.queue[0].text, this.queue[0].diffId);
+    }
+    const current = idx - this.queue.length; // the step on the middle row
+    if (current >= 0) {
+      setText(this.b, textAt(current), diffAt(current));
+      if (current > 0) setText(this.a, textAt(current - 1), diffAt(current - 1));
+    }
+  }
+
+  private seed(
+    textAt: (abs: number) => string,
+    diffAt: (abs: number) => string | null,
+    idx: number,
+  ) {
+    const at = Math.max(idx, 0);
+    if (idx > 0) setText(this.a, textAt(idx - 1), diffAt(idx - 1));
+    else setText(this.a, "…");
+    setText(this.b, textAt(at), diffAt(at));
+    this.rest();
   }
 
   /** Called every frame by the island while the overview is on screen. */
   tick(nowMs: number) {
     if (this.startMs == null) {
       if (this.queue.length === 0) return;
-      setText(this.c, this.queue[0]);
+      setText(this.c, this.queue[0].text, this.queue[0].diffId);
       place(this.c, ROW_H * 2, 0, 0);
       this.startMs = nowMs;
     }
@@ -147,8 +216,8 @@ export class Ticker {
 
     // Commit: the current row becomes the completed one, the incoming row the
     // current one. Texts move, elements stay put — no reordering, no overlap.
-    setText(this.a, this.b.text);
-    setText(this.b, this.c.text);
+    setText(this.a, this.b.text, this.b.diffId);
+    setText(this.b, this.c.text, this.c.diffId);
     this.queue.shift();
     this.startMs = null;
     this.rest();

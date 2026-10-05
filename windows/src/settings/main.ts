@@ -88,10 +88,18 @@ function claudeSection(status: HookStatus): HTMLElement {
       }));
     }
 
+    // Hooks written by an older build lack the one that answers Claude's questions.
+    if (status.installed && status.outdated) {
+      body.append(h("div", {
+        class: "notice warn",
+        text: "Hooks outdated — update them to answer Claude's questions from the island.",
+      }));
+    }
+
     const actions = h("div", { class: "row" });
     const install = h("button", {
       class: "primary",
-      text: status.installed ? "Reinstall hooks…" : "Install hooks…",
+      text: !status.installed ? "Install hooks…" : status.outdated ? "Update hooks…" : "Reinstall hooks…",
       onclick: () => showPreview(true),
     });
     // Writing hook commands that point at a relay which isn't there would give
@@ -154,6 +162,113 @@ function claudeSection(status: HookStatus): HTMLElement {
         body.append(h("div", {
           class: "notice ok",
           text: `Done. Previous settings saved as ${backup}. Open a new Claude Code session to pick the hooks up.`,
+        }));
+        window.setTimeout(() => void rebuild(), 2600);
+      } catch (err) {
+        confirm.disabled = false;
+        body.append(h("div", { class: "notice err", text: `Could not write: ${String(err)}` }));
+      }
+    });
+    body.append(h("div", { class: "row" }, confirm, h("button", {
+      text: "Cancel",
+      onclick: () => { clear(body); draw(); },
+    })));
+  }
+
+  draw();
+  return section;
+}
+
+// ── Plan usage section ────────────────────────────────────────────────────────
+
+/**
+ * The gauge needs a statusLine relay in ~/.claude/settings.json, so it goes
+ * through the same rule as the hooks: the exact diff, the dated backup, and a
+ * write only after a click. An existing statusLine of yours is kept and still
+ * runs; uninstalling puts it back untouched.
+ */
+function planSection(status: HookStatus): HTMLElement {
+  const body = h("div", { style: "display:flex;flex-direction:column;gap:12px" });
+  const section = h("section", {}, h("h2", {}, h("span", { text: "Plan usage" })), body);
+
+  const rebuild = async () => {
+    const fresh = await Bridge.hooksStatus();
+    if (fresh) Object.assign(status, fresh);
+    clear(body);
+    draw();
+  };
+
+  function draw() {
+    const installed = status.statuslineInstalled;
+    const show = toggle(settings.planGauge, (v) => {
+      settings.planGauge = v;
+      void save();
+      // Turning it on without the relay would show nothing: offer to install it.
+      if (v && !status.statuslineInstalled) void showPreview(true);
+    });
+    body.append(
+      h("div", {
+        class: "hint",
+        text: "A small pill in the island's header with how much of your Claude plan you have used (5-hour and 7-day windows). Claude Code only reports it on Pro and Max plans.",
+      }),
+      h("div", { class: "row" }, h("label", { text: "Show in the island" }), show),
+      h("div", { class: "row" },
+        h("label", { text: "Relay" }),
+        h("span", { class: "hint", text: installed ? "Installed" : "Not installed" }),
+        statusDot(installed),
+      ),
+    );
+    const actions = h("div", { class: "row" });
+    actions.append(h("button", {
+      class: "primary",
+      text: installed ? "Reinstall relay…" : "Install relay…",
+      onclick: () => showPreview(true),
+    }));
+    if (installed) {
+      actions.append(h("button", {
+        class: "danger",
+        text: "Uninstall relay…",
+        onclick: () => showPreview(false),
+      }));
+    }
+    body.append(actions);
+  }
+
+  async function showPreview(install: boolean) {
+    let preview;
+    try {
+      preview = await Bridge.statuslinePreview(install);
+    } catch (err) {
+      clear(body);
+      body.append(
+        h("div", { class: "notice err", text: String(err).replace(/^Error:\s*/, "") }),
+        h("div", { class: "row" }, h("button", { text: "Back", onclick: () => { clear(body); draw(); } })),
+      );
+      return;
+    }
+    clear(body);
+    body.append(
+      h("div", {
+        class: "hint",
+        text: install
+          ? "This is exactly what will change in your settings.json. If you already have a status line, it keeps running exactly as before."
+          : "This removes Coucou's status line relay and puts yours back, if you had one.",
+      }),
+      renderDiff(preview.diff),
+      h("div", { class: "row" }, h("span", { class: "path", text: `Backup → ${preview.backup}` })),
+    );
+    const confirm = h("button", {
+      class: install ? "primary" : "danger",
+      text: install ? "Back up and write" : "Back up and remove",
+    });
+    confirm.addEventListener("click", async () => {
+      confirm.disabled = true;
+      try {
+        const backup = await Bridge.statuslineApply(install, preview.fingerprint);
+        clear(body);
+        body.append(h("div", {
+          class: "notice ok",
+          text: `Done. Previous settings saved as ${backup}. The gauge appears after the next reply in a Claude Code session.`,
         }));
         window.setTimeout(() => void rebuild(), 2600);
       } catch (err) {
@@ -426,7 +541,8 @@ async function main() {
     version = boot.version;
   }
   const status = (await Bridge.hooksStatus()) ?? {
-    installed: false, settingsPath: "", hookPath: "", hookReady: false,
+    installed: false, outdated: false, statuslineInstalled: false,
+    settingsPath: "", hookPath: "", hookReady: false,
   };
 
   const hasKey = (await Bridge.secretPresent("anthropic-api-key")) ?? false;
@@ -442,6 +558,7 @@ async function main() {
   root.append(
     h("h1", {}, h("span", { text: "Coucou" }), h("span", { class: "version", text: version })),
     claudeSection(status),
+    planSection(status),
     apiSection(hasKey),
     integrationsSection(present),
     generalSection(),

@@ -2,6 +2,9 @@
 
 import type { BotEmoteName, BotStateName, IslandMode, IslandViewName } from "./layout";
 import type { EyeShape } from "../mochi/engine";
+import type { FileDiff } from "../island/diff";
+
+const MAX_DIFFS = 50;
 
 export type AgentSource = "claudeCode" | "n8n" | "agent";
 export type PillBadge = "approval" | "finished" | "error";
@@ -13,6 +16,10 @@ export interface AgentTask {
   state: BotStateName;
   stepIndex: number;
   steps: string[];
+  /** Parallel to `steps`: the live diff behind a step, when it has one. */
+  stepDiffs?: (string | null)[];
+  /** How many steps this session has appended in total (`steps` keeps the last 20). */
+  seq?: number;
   source: AgentSource;
   isIntegration: boolean;
   emote?: BotEmoteName | null;
@@ -26,6 +33,35 @@ export interface ApprovalInfo {
   sessionId: string;
   tool: string;
   command: string;
+}
+
+/** One question from Claude (AskUserQuestion): 2–4 options, optionally several. */
+export interface AskQuestion {
+  question: string;
+  header: string;
+  options: { label: string; description: string }[];
+  multiSelect: boolean;
+}
+
+export interface PendingQuestion {
+  requestId: string;
+  sessionId: string;
+  questions: AskQuestion[];
+}
+
+/** One rolling window of the Claude plan (`five_hour` or `seven_day`). */
+export interface PlanWindow {
+  /** 0–100. */
+  used: number;
+  /** Epoch seconds when the window resets. */
+  resetsAt: number | null;
+}
+
+export interface PlanUsage {
+  fiveHour: PlanWindow | null;
+  sevenDay: PlanWindow | null;
+  /** performance.now()-independent: Date.now() of the last update. */
+  updatedAt: number;
 }
 
 export interface ChatMessage {
@@ -92,6 +128,10 @@ export interface Settings {
   hooksInstalled: boolean;
   /** Claude model used by the chat. */
   model: string;
+  /** Show the plan usage pill in the island's header. */
+  planGauge: boolean;
+  nativeNotifications: boolean;
+  globalShortcuts: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -106,6 +146,9 @@ export const DEFAULT_SETTINGS: Settings = {
   autostart: false,
   hooksInstalled: false,
   model: "claude-opus-5",
+  planGauge: false,
+  nativeNotifications: true,
+  globalShortcuts: true,
 };
 
 type Listener = () => void;
@@ -137,6 +180,16 @@ class AppState {
   searchResult: SearchResult | null = null;
   chatHistory: ChatMessage[] = [];
   pendingApproval: ApprovalInfo | null = null;
+  pendingQuestion: PendingQuestion | null = null;
+
+  /** Plan usage from the statusLine relay; null until Claude Code reports it. */
+  plan: PlanUsage | null = null;
+  /** The header pill was clicked: the plan card replaces the current one. */
+  showingPlanDetail = false;
+
+  /** Live diffs, newest last. See island/diff.ts. */
+  diffs = new Map<string, FileDiff>();
+  openDiffId: string | null = null;
 
   integrations: Record<string, IntegrationInfo> = {};
 
@@ -183,13 +236,56 @@ class AppState {
     this.notify();
   }
 
-  appendStep(id: string, step: string) {
+  appendStep(id: string, step: string, diffId: string | null = null) {
     const t = this.tasks.find((x) => x.id === id);
     if (!t) return;
+    const diffs = (t.stepDiffs ??= []);
+    // Keep the parallel array the same length as `steps` before touching either.
+    while (diffs.length < t.steps.length) diffs.push(null);
     t.steps.push(step);
-    if (t.steps.length > 20) t.steps.shift();
+    diffs.push(diffId);
+    t.seq = (t.seq ?? t.steps.length - 1) + 1;
+    if (t.steps.length > 20) {
+      t.steps.shift();
+      diffs.shift();
+    }
     t.stepIndex = t.steps.length - 1;
     this.notify();
+  }
+
+  /**
+   * The edit finished: the step that announced it now carries its +N −M and the
+   * diff behind it. Falls back to a new step when the announcing one is gone.
+   */
+  finishEditStep(id: string, announced: string, step: string, diffId: string) {
+    const t = this.tasks.find((x) => x.id === id);
+    if (!t) return;
+    const at = t.steps.lastIndexOf(announced);
+    if (at < 0) {
+      this.appendStep(id, step, diffId);
+      return;
+    }
+    const diffs = (t.stepDiffs ??= []);
+    while (diffs.length < t.steps.length) diffs.push(null);
+    t.steps[at] = step;
+    diffs[at] = diffId;
+    this.notify();
+  }
+
+  /** Newest 50 diffs per app run; the rest are forgotten, as on the Mac. */
+  addDiff(diff: FileDiff) {
+    this.diffs.set(diff.id, diff);
+    while (this.diffs.size > MAX_DIFFS) {
+      const oldest = this.diffs.keys().next().value;
+      if (oldest === undefined) break;
+      this.diffs.delete(oldest);
+    }
+  }
+
+  clearDiffs() {
+    this.diffs.clear();
+    this.openDiffId = null;
+    for (const t of this.tasks) t.stepDiffs = [];
   }
 
   setPillBadge(id: string, badge: PillBadge | null) {

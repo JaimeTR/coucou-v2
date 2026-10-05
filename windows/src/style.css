@@ -1365,3 +1365,280 @@ input[type="range"]::-webkit-slider-thumb {
 .int-card.detail {
   padding-top: 8px;
 }
+
+/* ── Plan usage gauge (header pill + card) ──────────────────────────────── */
+
+.plan-pill {
+  margin-left: 12px;
+  height: 20px;
+  padding: 0 9px 0 7px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 0;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--ink-2);
+  font: 600 10.5px var(--font);
+  cursor: default;
+}
+
+.plan-pill:hover,
+.plan-pill.on {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.plan-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 10px 12px 0 0;
+}
+
+.plan-row {
+  display: grid;
+  grid-template-columns: 52px 1fr 34px;
+  grid-template-rows: auto auto;
+  column-gap: 8px;
+  row-gap: 2px;
+  align-items: center;
+}
+
+.plan-label {
+  font: 500 11px var(--font);
+  color: #c5c8cd;
+}
+
+.plan-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+
+.plan-bar i {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.4s ease-out;
+}
+
+.plan-pct {
+  font: 600 11px var(--mono);
+  text-align: right;
+}
+
+.plan-reset {
+  grid-column: 2 / 4;
+  font: 400 10px var(--font);
+  color: var(--dim-3);
+}
+
+/* ── Live diff ──────────────────────────────────────────────────────────── */
+
+.d-add {
+  color: #22c55e;
+  -webkit-text-fill-color: #22c55e;
+  font-family: var(--mono);
+  font-size: 0.88em;
+}
+
+.d-del {
+  color: #f4505e;
+  -webkit-text-fill-color: #f4505e;
+  font-family: var(--mono);
+  font-size: 0.88em;
+}
+
+.ticker-row.has-diff {
+  cursor: pointer;
+}
+
+.ticker-row.has-diff:hover .tick-text {
+  text-decoration: underline;
+  text-decoration-color: rgba(255, 255, 255, 0.25);
+  text-underline-offset: 3px;
+}
+
+.diff-card {
+  position: relative;
+  z-index: 1;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 8px 12px 10px 66px;
+  gap: 6px;
+}
+
+.diff-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.diff-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--dim-3);
+  font: 500 12px var(--font);
+  cursor: default;
+}
+
+.diff-back b {
+  font: 600 12px var(--font);
+  color: var(--ink);
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.diff-lines {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 4px 0;
+  font: 400 10.5px/1.5 var(--mono);
+  user-select: text;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+}
+
+.dl {
+  display: flex;
+  min-width: max-content;
+  padding-right: 10px;
+  white-space: pre;
+}
+
+.dl .dg {
+  flex: 0 0 18px;
+  text-align: center;
+  color: var(--dim-3);
+}
+
+.dl.add {
+  background: rgba(34, 197, 94, 0.12);
+}
+
+.dl.add .dg {
+  color: #22c55e;
+}
+
+.dl.del {
+  background: rgba(244, 80, 94, 0.12);
+}
+
+.dl.del .dg {
+  color: #f4505e;
+}
+
+.dl.ctx .dt {
+  color: var(--dim);
+}
+
+.dl.gap {
+  color: var(--dim-4);
+  justify-content: center;
+}
+
+.diff-note {
+  padding: 18px;
+  color: var(--dim-2);
+  font: 400 12px var(--font);
+  text-align: center;
+}
+
+/* ── Questions from Claude ──────────────────────────────────────────────── */
+
+.btn[disabled] {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.q-stack {
+  justify-content: flex-start;
+  gap: 6px;
+}
+
+.q-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.q-count {
+  margin-left: auto;
+  font: 400 11px var(--font);
+  color: var(--dim-3);
+}
+
+.q-title {
+  font: 600 14px/1.25 var(--font);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.q-opts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.q-opt {
+  max-width: 250px;
+  padding: 6px 11px;
+}
+
+.q-opt .q-opt-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.q-opt.sel {
+  background: var(--ink);
+  color: #0b0c0e;
+}
+
+.q-opt.sel .kbd {
+  border-color: rgba(0, 0, 0, 0.4);
+}
+
+.q-other {
+  width: 100%;
+  height: 26px;
+  padding: 0 11px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--ink);
+  font: 400 12px var(--font);
+  user-select: text;
+  outline: none;
+}
+
+.q-other:focus {
+  border-color: rgba(255, 255, 255, 0.28);
+}
+
+.q-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 26px;
+}
+
+.q-terminal {
+  color: #8e939c;
+  font-size: 11.5px;
+}
