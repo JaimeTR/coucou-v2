@@ -2,7 +2,12 @@
 // through the browser engine's speech synthesis). Nothing leaves the PC and no
 // key is needed. It speaks in the interface language, with the best voice found.
 
-import { uiLanguage } from "./i18n.js";
+import { Bridge } from "./bridge";
+import { State } from "./state";
+import { uiLanguage } from "./i18n";
+import { pickVoice, speakable } from "./voiceText";
+
+export { speakable };
 
 const synth: SpeechSynthesis | null = typeof speechSynthesis === "undefined" ? null : speechSynthesis;
 
@@ -10,32 +15,11 @@ export function voiceAvailable(): boolean {
   return synth != null;
 }
 
-/** The nicest voice for a language: "Natural"/online ones first, then any local one. */
-export function pickVoice(voices: ReadonlyArray<{ lang: string; name: string }>, lang: "es" | "en") {
-  const mine = voices.filter((v) => v.lang.toLowerCase().startsWith(lang));
-  const rank = (v: { name: string }) => (/natural/i.test(v.name) ? 0 : /online/i.test(v.name) ? 1 : 2);
-  return [...mine].sort((a, b) => rank(a) - rank(b))[0] ?? null;
-}
-
-/** Text as it should be spoken: no markdown, no code blocks, not too long. */
-export function speakable(text: string, max = 600): string {
-  const plain = text
-    .replace(/```[\s\S]*?```/g, " ")
-    .replace(/`([^`]*)`/g, "$1")
-    .replace(/[*_#>~]+/g, "")
-    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
-    .replace(/\s+/g, " ")
-    .trim();
-  if (plain.length <= max) return plain;
-  const cut = plain.slice(0, max);
-  const end = Math.max(cut.lastIndexOf(". "), cut.lastIndexOf("? "), cut.lastIndexOf("! "));
-  return end > max / 2 ? cut.slice(0, end + 1) : `${cut.trimEnd()}…`;
-}
-
 let speaking = false;
 
 export function stopSpeaking() {
   synth?.cancel();
+  stopPlayer();
   speaking = false;
 }
 
@@ -43,10 +27,18 @@ export function isSpeaking(): boolean {
   return speaking;
 }
 
-/** Says `text` aloud, replacing whatever was being said. Returns false when it cannot. */
-export function speak(text: string, onEnd?: () => void): boolean {
-  const said = speakable(text);
-  if (!synth || !said) return false;
+let player: HTMLAudioElement | null = null;
+
+function stopPlayer() {
+  if (player) {
+    player.pause();
+    player = null;
+  }
+}
+
+/** Says `text` with the voices Windows has. */
+function speakSystem(said: string, onEnd?: () => void): boolean {
+  if (!synth) return false;
   synth.cancel();
   const utterance = new SpeechSynthesisUtterance(said);
   const lang = uiLanguage();
@@ -61,4 +53,43 @@ export function speak(text: string, onEnd?: () => void): boolean {
   speaking = true;
   synth.speak(utterance);
   return true;
+}
+
+/** Says `said` with ElevenLabs; if that fails, with the system voice, so Mochi is never mute. */
+function speakEleven(said: string, onEnd?: () => void): boolean {
+  speaking = true;
+  void Bridge.voiceSpeak(said).then(
+    (mp3) => {
+      if (!speaking) return; // stopped while it was being made
+      stopPlayer();
+      // The page's security policy allows blob: media, not data: ones.
+      const bytes = Uint8Array.from(atob(mp3), (c) => c.charCodeAt(0));
+      const url = URL.createObjectURL(new Blob([bytes], { type: "audio/mpeg" }));
+      player = new Audio(url);
+      player.onended = player.onerror = () => {
+        URL.revokeObjectURL(url);
+        speaking = false;
+        player = null;
+        onEnd?.();
+      };
+      void player.play().catch(() => {
+        speaking = false;
+        onEnd?.();
+      });
+    },
+    (err) => {
+      console.error("[coucou] ElevenLabs", err);
+      speaking = false;
+      speakSystem(said, onEnd);
+    },
+  );
+  return true;
+}
+
+/** Says `text` aloud, replacing whatever was being said. Returns false when it cannot. */
+export function speak(text: string, onEnd?: () => void): boolean {
+  const said = speakable(text);
+  if (!said) return false;
+  stopSpeaking();
+  return State.settings.voiceEngine === "elevenlabs" ? speakEleven(said, onEnd) : speakSystem(said, onEnd);
 }

@@ -1,7 +1,7 @@
 // What Mochi says aloud, and with which voice.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { pickVoice, speakable } from "../.test-build/core/voice.js";
+import { pickVoice, speakable } from "../.test-build/core/voiceText.js";
 
 test("markdown and code are not read out", () => {
   assert.equal(speakable("Hola **mundo**, mira `npm test`"), "Hola mundo, mira npm test");

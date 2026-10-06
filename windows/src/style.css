@@ -1825,3 +1825,28 @@ input[type="range"]::-webkit-slider-thumb {
   color: var(--ink);
   background: rgba(255, 255, 255, 0.12);
 }
+
+.mic-btn {
+  background: rgba(255, 255, 255, 0.14);
+  color: var(--ink);
+}
+
+.mic-btn.rec {
+  background: #f4505e;
+  color: #fff;
+  animation: mic-pulse 1.1s ease-in-out infinite;
+}
+
+@keyframes mic-pulse {
+  50% {
+    box-shadow: 0 0 0 5px rgba(244, 80, 94, 0.25);
+  }
+}
+
+.listen-dot {
+  color: #6b7079;
+}
+
+.listen-dot.on {
+  color: #22c55e;
+}

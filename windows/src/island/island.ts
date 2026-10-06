@@ -11,6 +11,7 @@ import {
 } from "../core/layout";
 import { Sound } from "../core/sound";
 import { speak } from "../core/voice";
+import { WakeListener } from "./listen";
 import { State } from "../core/state";
 import { BotEngine, hexToRGB } from "../mochi/engine";
 import { Greeting } from "../mochi/greeting";
@@ -204,6 +205,7 @@ export class Island {
       },
       closeDiff: () => this.setView(State.defaultView()),
       openFile: (path) => void Bridge.openFile(path),
+      toggleListening: () => this.toggleListening(),
       toggleSound: () => {
         State.settings.soundEnabled = !State.settings.soundEnabled;
         Sound.setEnabled(State.settings.soundEnabled);
@@ -1068,6 +1070,48 @@ export class Island {
   }
 
   /** Applies settings coming from Rust at boot. */
+  // ── "Oye Mochi" ─────────────────────────────────────────────────────────────
+
+  private readonly listener = new WakeListener({
+    busy: () => State.micBusy,
+    onWake: (rest) => {
+      Sound.play("blip");
+      State.pendingVoice = rest ? { query: rest } : { record: true };
+      State.isPinned = true;
+      this.alert("prompt");
+    },
+    onProblem: (message) => {
+      // It stops itself rather than failing again on every phrase.
+      State.settings.wakeWord = false;
+      void Bridge.saveSettings(State.settings);
+      State.listening = false;
+      State.noteMessage = message;
+      this.alert("note");
+      State.notify();
+    },
+  });
+
+  /** Starts or stops the microphone to match the setting. */
+  syncListening() {
+    if (State.settings.wakeWord) void this.listener.start().then(() => this.markListening());
+    else {
+      this.listener.stop();
+      this.markListening();
+    }
+  }
+
+  private markListening() {
+    State.listening = this.listener.running;
+    State.notify();
+  }
+
+  /** The header's microphone and the listen shortcut: turn the wake word on or off. */
+  toggleListening() {
+    State.settings.wakeWord = !State.settings.wakeWord;
+    void Bridge.saveSettings(State.settings);
+    this.syncListening();
+  }
+
   applySettings() {
     Sound.setEnabled(State.settings.soundEnabled);
     Sound.setVolume(State.settings.soundVolume);

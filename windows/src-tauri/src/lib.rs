@@ -16,6 +16,7 @@ mod rules;
 mod secrets;
 mod settings;
 mod tray;
+mod voice;
 mod workspaces;
 
 use std::process::Command;
@@ -120,21 +121,61 @@ fn parse_toggle(accel: &str) -> Result<Shortcut, String> {
     Ok(shortcut)
 }
 
+/// Which of the two configurable shortcuts.
+#[derive(Clone, Copy, PartialEq)]
+enum Which {
+    Toggle,
+    Listen,
+}
+
+impl Which {
+    fn parse(name: &str) -> Option<Which> {
+        match name {
+            "toggle" => Some(Which::Toggle),
+            "listen" => Some(Which::Listen),
+            _ => None,
+        }
+    }
+}
+
 /// The saved combination, or the default when it cannot be read.
-fn toggle_shortcut(app: &AppHandle) -> Shortcut {
-    let saved = app.state::<Shared>().settings.lock().unwrap().toggle_shortcut.clone();
+fn configured_shortcut(app: &AppHandle, which: Which) -> Shortcut {
+    let (saved, default) = {
+        let guard = app.state::<Shared>();
+        let s = guard.settings.lock().unwrap();
+        match which {
+            Which::Toggle => (s.toggle_shortcut.clone(), settings::default_toggle_shortcut()),
+            Which::Listen => (s.listen_shortcut.clone(), settings::default_listen_shortcut()),
+        }
+    };
     parse_toggle(&saved)
-        .or_else(|_| parse_toggle(&settings::default_toggle_shortcut()))
+        .or_else(|_| parse_toggle(&default))
         .expect("the default shortcut is valid")
 }
 
-/// Settings → "Atajo para abrir Coucou": tries the new combination, keeps the old
-/// one when it is taken, and saves it only when it worked.
+fn toggle_shortcut(app: &AppHandle) -> Shortcut {
+    configured_shortcut(app, Which::Toggle)
+}
+
+fn listen_shortcut(app: &AppHandle) -> Shortcut {
+    configured_shortcut(app, Which::Listen)
+}
+
+/// Settings → "Abrir Coucou con" / "Escuchar con": tries the new combination,
+/// keeps the old one when it is taken, and saves it only when it worked.
 #[tauri::command]
-fn set_toggle_shortcut(app: AppHandle, shared: State<Shared>, accel: String) -> Result<String, String> {
+fn set_shortcut(app: AppHandle, shared: State<Shared>, which: String, accel: String) -> Result<String, String> {
+    let which = Which::parse(&which).ok_or("atajo desconocido")?;
     let wanted = parse_toggle(&accel)?;
+    let other = match which {
+        Which::Toggle => listen_shortcut(&app),
+        Which::Listen => toggle_shortcut(&app),
+    };
+    if wanted == other {
+        return Err("Ya la usa el otro atajo de Coucou".into());
+    }
     let enabled = shared.settings.lock().unwrap().global_shortcuts;
-    let old = toggle_shortcut(&app);
+    let old = configured_shortcut(&app, which);
     if wanted != old && enabled {
         let keys = app.global_shortcut();
         keys.register(wanted).map_err(|_| "Otra aplicación ya usa esa combinación".to_string())?;
@@ -143,7 +184,10 @@ fn set_toggle_shortcut(app: AppHandle, shared: State<Shared>, accel: String) -> 
     let accel = accel.trim().to_string();
     let snapshot = {
         let mut current = shared.settings.lock().unwrap();
-        current.toggle_shortcut = accel.clone();
+        match which {
+            Which::Toggle => current.toggle_shortcut = accel.clone(),
+            Which::Listen => current.listen_shortcut = accel.clone(),
+        }
         current.clone()
     };
     if let Err(err) = settings::save(&snapshot) {
@@ -188,8 +232,10 @@ fn set_decision_shortcuts(app: AppHandle, shared: State<Shared>, active: bool) {
 fn apply_shortcut_setting(app: &AppHandle, enabled: bool) {
     if enabled {
         register_shortcut(app, toggle_shortcut(app), "the open shortcut");
+        register_shortcut(app, listen_shortcut(app), "the listen shortcut");
     } else {
         unregister_shortcut(app, toggle_shortcut(app));
+        unregister_shortcut(app, listen_shortcut(app));
         unregister_shortcut(app, allow_shortcut());
         unregister_shortcut(app, deny_shortcut());
     }
@@ -443,6 +489,30 @@ fn open_file_in_vscode(path: String) -> bool {
 #[tauri::command]
 fn quit_app(app: AppHandle) {
     app.exit(0);
+}
+
+// ── Voice ─────────────────────────────────────────────────────────────────────
+
+/// ElevenLabs reads `text` aloud with the voice from Settings; the answer is MP3, base64.
+#[tauri::command]
+async fn voice_speak(shared: State<'_, Shared>, text: String) -> Result<String, String> {
+    let (voice, model) = {
+        let s = shared.settings.lock().unwrap();
+        (s.eleven_voice.clone(), s.eleven_model.clone())
+    };
+    voice::speak(&text, &voice, &model).await
+}
+
+/// The voices the ElevenLabs key can use.
+#[tauri::command]
+async fn voice_list() -> Result<Vec<voice::VoiceInfo>, String> {
+    voice::voices().await
+}
+
+/// Groq Whisper: what was said in a recording.
+#[tauri::command]
+async fn voice_transcribe(audio: Vec<u8>, mime: String, lang: String) -> Result<String, String> {
+    voice::transcribe(&audio, &mime, &lang).await
 }
 
 /// The page resolved its interface language: the tray menu follows it.
@@ -764,6 +834,8 @@ pub fn run() {
                         "deny"
                     } else if shortcut == &toggle_shortcut(app) {
                         "toggle"
+                    } else if shortcut == &listen_shortcut(app) {
+                        "listen"
                     } else {
                         return;
                     };
@@ -826,7 +898,10 @@ pub fn run() {
             open_settings_window,
             set_paused,
             set_ui_language,
-            set_toggle_shortcut,
+            set_shortcut,
+            voice_speak,
+            voice_list,
+            voice_transcribe,
         ])
         .setup(move |app| {
             let handle = app.handle().clone();

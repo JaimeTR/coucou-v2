@@ -24,6 +24,7 @@ async function main() {
     State.detectedName = boot.detectedName ?? "";
   }
   island.applySettings();
+  island.syncListening();
   applyLanguage(State.settings.language);
   void Bridge.setUiLanguage(uiLanguage());
   State.loadIntegrationTasks();
@@ -63,6 +64,8 @@ async function main() {
   await onEvent<string>("shortcut", (name) => {
     if (name === "allow" || name === "deny") {
       island.decideApproval(name);
+    } else if (name === "listen") {
+      island.toggleListening();
     } else if (name === "toggle") {
       setPaused(false);
       island.toggleFromShortcut();
@@ -77,8 +80,10 @@ async function main() {
       void Bridge.chatReset();
     }
     const startChanged = s.startPill !== State.settings.startPill;
+    const listeningChanged = s.wakeWord !== State.settings.wakeWord;
     State.settings = { ...State.settings, ...s };
     island.applySettings();
+    if (listeningChanged) island.syncListening();
     applyLanguage(State.settings.language);
     void Bridge.setUiLanguage(uiLanguage());
     State.loadIntegrationTasks();

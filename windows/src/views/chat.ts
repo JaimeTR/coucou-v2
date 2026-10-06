@@ -6,6 +6,8 @@ import { ICONS } from "./icons";
 import { Bridge, type ChatContext } from "../core/bridge";
 import { Sound } from "../core/sound";
 import { speak, stopSpeaking, voiceAvailable } from "../core/voice";
+import { recordOnce } from "../core/mic";
+import { uiLanguage } from "../core/i18n";
 import { State, type ChatMessage } from "../core/state";
 import type { ViewHost } from "./views";
 
@@ -68,7 +70,8 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
     spellcheck: "false",
   }) as HTMLInputElement;
   const send = h("button", { class: "send-btn", title: "Enviar" }, svg(ICONS.arrowUp, 11));
-  const bar = h("div", { class: "chat-bar" }, input, send);
+  const mic = h("button", { class: "send-btn mic-btn", title: "Hablar" }, svg(ICONS.mic, 11));
+  const bar = h("div", { class: "chat-bar" }, input, mic, send);
 
   const el = h(
     "div",
@@ -115,6 +118,53 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
     }
   }
 
+  // Dictation: say one question, it is understood and sent.
+  let recording: { cancel(): void } | null = null;
+  let status = "";
+  async function dictate() {
+    if (recording) {
+      recording.cancel();
+      return;
+    }
+    if (sending) return;
+    stopSpeaking();
+    const session = recordOnce({ waitMs: 8000 });
+    recording = session;
+    State.micBusy = true;
+    mic.classList.add("rec");
+    status = "Escuchando…";
+    input.placeholder = status;
+    try {
+      const wav = await session.result();
+      if (wav) {
+        status = "Entendiendo…";
+        input.placeholder = status;
+        const said = (await Bridge.voiceTranscribe(Array.from(wav), "audio/wav", uiLanguage())).trim();
+        if (said) {
+          input.value = said;
+          recording = null;
+          await submit();
+        } else {
+          status = "No te oí. Inténtalo otra vez.";
+        }
+      } else {
+        status = "No te oí. Inténtalo otra vez.";
+      }
+    } catch (err) {
+      State.noteMessage = String(err).replace(/^Error:\s*/, "");
+      State.view = "note";
+      Sound.play("error");
+    } finally {
+      recording = null;
+      State.micBusy = false;
+      mic.classList.remove("rec");
+      if (status !== "No te oí. Inténtalo otra vez.") status = "";
+      State.notify();
+      input.focus();
+    }
+  }
+  mic.addEventListener("click", () => void dictate());
+
   send.addEventListener("click", () => void submit());
   input.addEventListener("keydown", (e) => {
     if ((e as KeyboardEvent).key === "Enter") {
@@ -145,8 +195,20 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
         log.scrollTop = log.scrollHeight;
       }
 
-      input.placeholder = State.chatHistory.length === 0 ? "Pregúntame lo que quieras…" : "Continúa…";
+      input.placeholder =
+        status || (State.chatHistory.length === 0 ? "Pregúntame lo que quieras…" : "Continúa…");
       input.disabled = sending;
+      // Said to Mochi by voice ("Oye Mochi…"): take it as soon as the chat is up.
+      const voiced = State.pendingVoice;
+      if (voiced && !sending && !recording) {
+        State.pendingVoice = null;
+        if (voiced.query) {
+          input.value = voiced.query;
+          void submit();
+        } else if (voiced.record) {
+          void dictate();
+        }
+      }
     },
     focus() {
       input.focus();

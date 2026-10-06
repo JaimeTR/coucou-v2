@@ -33,6 +33,8 @@ export interface ViewActions {
   /** The ↗ on the diff card: the edited file in VS Code. */
   openFile(path: string): void;
   toggleSound(): void;
+  /** The header's microphone: stop or resume listening for "Oye Mochi". */
+  toggleListening(): void;
   setVolume(v: number): void;
   setAutoClose(seconds: number): void;
   openSettingsWindow(): void;
@@ -95,6 +97,12 @@ export function buildHeader(actions: ViewActions): ViewHost {
 
   const gearBtn = h("button", { title: "Ajustes", onclick: () => go("settings") }, svg(ICONS.gear, 14));
   const soundBtn = h("button", { title: "Silenciar", onclick: () => actions.toggleSound() }, svg(ICONS.speakerOn, 14));
+  const listenBtn = h(
+    "button",
+    { class: "listen-dot", title: "Escuchando «Oye Mochi»: toca para pausar", onclick: () => actions.toggleListening() },
+    svg(ICONS.mic, 13),
+  );
+  listenBtn.style.display = "none";
 
   function go(v: IslandViewName) {
     actions.blip();
@@ -126,7 +134,7 @@ export function buildHeader(actions: ViewActions): ViewHost {
     { id: "header" },
     h("div", { class: "tabs" }, tabHome, tabChat, tabDrop),
     planPill,
-    h("div", { class: "header-actions" }, gearBtn, soundBtn),
+    h("div", { class: "header-actions" }, listenBtn, gearBtn, soundBtn),
   );
 
   return {
@@ -152,6 +160,8 @@ export function buildHeader(actions: ViewActions): ViewHost {
       gearBtn.append(svg(v === "settings" ? ICONS.gearFill : ICONS.gear, 14));
       clear(soundBtn);
       soundBtn.append(svg(State.settings.soundEnabled ? ICONS.speakerOn : ICONS.speakerOff, 14));
+      listenBtn.style.display = State.settings.wakeWord ? "" : "none";
+      listenBtn.classList.toggle("on", State.listening);
       el.style.opacity = v === "confused" ? "0" : "1";
     },
   };

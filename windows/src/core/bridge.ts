@@ -84,7 +84,14 @@ export const Bridge = {
   openInVSCode: (path: string | null) => call<boolean>("open_in_vscode", { path }),
   openAgentApp: (agent: "opencode" | "gemini" | "antigravity" | "antigravity-ide") => call<boolean>("open_agent_app", { agent }),
   setUiLanguage: (lang: "es" | "en") => call<void>("set_ui_language", { lang }),
-  setToggleShortcut: (accel: string) => callOrThrow<string>("set_toggle_shortcut", { accel }),
+  setShortcut: (which: "toggle" | "listen", accel: string) =>
+    callOrThrow<string>("set_shortcut", { which, accel }),
+  /** ElevenLabs reading `text` aloud: the MP3, base64. */
+  voiceSpeak: (text: string) => callOrThrow<string>("voice_speak", { text }),
+  voiceList: () => callOrThrow<{ id: string; name: string; category: string }[]>("voice_list"),
+  /** Groq Whisper: what was said in a 16 kHz WAV. */
+  voiceTranscribe: (audio: number[], mime: string, lang: string) =>
+    callOrThrow<string>("voice_transcribe", { audio, mime, lang }),
   launchAgent: (agent: "claude" | "opencode" | "gemini" | "agy", path: string | null, resume: boolean) =>
     call<boolean>("launch_agent", { agent, path, resume }),
 

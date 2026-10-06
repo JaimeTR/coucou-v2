@@ -5,7 +5,8 @@
 import "./settings.css";
 import { Bridge, onEvent, type AgentStatus, type DetectedTool, type HookStatus } from "../core/bridge";
 import { applyLanguage } from "../core/i18n";
-import { speak } from "../core/voice";
+import { speak, stopSpeaking } from "../core/voice";
+import { State } from "../core/state";
 import { captureAccelerator } from "../core/accelerator";
 import { greetingLines } from "../island/greetingText";
 import { DEFAULT_SETTINGS, type Settings } from "../core/state";
@@ -310,6 +311,171 @@ function agentsSection(initial: AgentStatus[]): HTMLElement {
   return h("section", {}, h("h2", {}, h("span", { text: "Agentes" })), note, list);
 }
 
+// ── Voice ─────────────────────────────────────────────────────────────────────
+
+function voiceSection(present: Record<string, boolean>): HTMLElement {
+  const engine = h("select", {}) as HTMLSelectElement;
+  engine.append(
+    h("option", { value: "system", text: "Voz de Windows (gratis, sin conexión)" }),
+    h("option", { value: "elevenlabs", text: "ElevenLabs (voz natural o personalizada)" }),
+  );
+  engine.value = settings.voiceEngine;
+
+  // ElevenLabs: key, voice, model.
+  const keyField = h("input", {
+    type: "password", placeholder: "sk_…", autocomplete: "off", spellcheck: "false",
+    style: "flex:1 1 auto;min-width:0",
+  }) as HTMLInputElement;
+  const keyState = h("span", { class: "hint" });
+  const saveKey = h("button", { class: "primary", text: "Guardar clave" });
+  const clearKey = h("button", { class: "danger", text: "Quitar" });
+  const feedback = h("div", {});
+
+  const voice = h("select", { style: "flex:1 1 auto;min-width:0" }) as HTMLSelectElement;
+  const voiceId = h("input", {
+    type: "text", value: settings.elevenVoice, spellcheck: "false", placeholder: "ID de la voz",
+    style: "flex:1 1 auto;min-width:0",
+  }) as HTMLInputElement;
+  const model = h("select", {}) as HTMLSelectElement;
+  model.append(
+    h("option", { value: "eleven_multilingual_v2", text: "Multilingual v2 (la más natural)" }),
+    h("option", { value: "eleven_flash_v2_5", text: "Flash v2.5 (la más rápida y barata)" }),
+    h("option", { value: "eleven_turbo_v2_5", text: "Turbo v2.5 (equilibrada)" }),
+  );
+  model.value = settings.elevenModel;
+
+  const eleven = h("div", { style: "display:flex;flex-direction:column;gap:10px" },
+    h("div", {
+      class: "hint",
+      text: "ElevenLabs crea voces muy naturales, y también una voz tuya o a tu gusto en su web. Crea tu clave en elevenlabs.io (Developers → API Keys), pégala aquí y elige tu voz. Cada respuesta leída gasta caracteres de tu plan de ElevenLabs.",
+    }),
+    keyState,
+    h("div", { class: "row" }, h("label", { text: "Clave API" }), keyField, saveKey, clearKey),
+    h("div", { class: "row" }, h("button", { text: "Conseguir una clave", onclick: () => void Bridge.openUrl("https://elevenlabs.io/app/settings/api-keys") })),
+    h("div", { class: "row" }, h("label", { text: "Voz" }), voice, h("button", { text: "Cargar mis voces", onclick: () => void loadVoices() })),
+    h("div", { class: "row" }, h("label", { text: "ID de la voz" }), voiceId),
+    h("div", { class: "hint", text: "Elige una de tu lista, o pega el ID de una voz tuya (en ElevenLabs: Voces → ⋯ → Copiar ID)." }),
+    h("div", { class: "row" }, h("label", { text: "Modelo" }), model),
+    feedback,
+  );
+
+  async function refreshKey() {
+    const has = (await Bridge.secretPresent("elevenlabs-api-key")) ?? false;
+    present["elevenlabs-api-key"] = has;
+    keyState.textContent = has ? "Clave guardada en el Administrador de credenciales de Windows." : "Aún no hay clave de ElevenLabs.";
+    keyField.placeholder = has ? "••••••••••••  (guardada)" : "sk_…";
+    clearKey.style.display = has ? "" : "none";
+  }
+  saveKey.addEventListener("click", async () => {
+    const value = keyField.value.trim();
+    if (!value) return;
+    clear(feedback);
+    try {
+      await Bridge.secretSet("elevenlabs-api-key", value);
+      keyField.value = "";
+      await refreshKey();
+      void loadVoices();
+    } catch (err) {
+      feedback.append(h("div", { class: "notice err", text: `No se pudo guardar: ${String(err)}` }));
+    }
+  });
+  clearKey.addEventListener("click", async () => {
+    await Bridge.secretClear("elevenlabs-api-key");
+    await refreshKey();
+  });
+
+  async function loadVoices() {
+    clear(feedback);
+    try {
+      const list = (await Bridge.voiceList()) ?? [];
+      voice.replaceChildren(
+        ...list.map((v) => h("option", { value: v.id, text: v.category ? `${v.name} · ${v.category}` : v.name })),
+      );
+      if (list.some((v) => v.id === settings.elevenVoice)) voice.value = settings.elevenVoice;
+      else if (list[0]) chooseVoice(list[0].id);
+    } catch (err) {
+      feedback.append(h("div", { class: "notice err", text: String(err).replace(/^Error:\s*/, "") }));
+    }
+  }
+  function chooseVoice(id: string) {
+    settings.elevenVoice = id;
+    voiceId.value = id;
+    void save();
+  }
+  voice.addEventListener("change", () => chooseVoice(voice.value));
+  voiceId.addEventListener("change", () => chooseVoice(voiceId.value.trim()));
+  model.addEventListener("change", () => {
+    settings.elevenModel = model.value;
+    void save();
+  });
+
+  const test = h("button", { text: "Probar voz" });
+  test.addEventListener("click", () => {
+    clear(feedback);
+    State.settings = { ...State.settings, ...settings };
+    stopSpeaking();
+    const phrase = settings.language === "en" || (settings.language === "auto" && !navigator.language.startsWith("es"))
+      ? "Hi! I'm Mochi. This is how I sound."
+      : "¡Hola! Soy Mochi. Así es como sueno.";
+    speak(phrase);
+  });
+
+  function syncEngine() {
+    eleven.style.display = settings.voiceEngine === "elevenlabs" ? "" : "none";
+  }
+  engine.addEventListener("change", () => {
+    settings.voiceEngine = engine.value as Settings["voiceEngine"];
+    void save();
+    syncEngine();
+    if (settings.voiceEngine === "elevenlabs" && present["elevenlabs-api-key"]) void loadVoices();
+  });
+  syncEngine();
+  void refreshKey().then(() => {
+    if (settings.voiceEngine === "elevenlabs" && present["elevenlabs-api-key"]) void loadVoices();
+  });
+
+  // Listening: the wake phrase, and the shortcut that pauses it.
+  const groqNote = h("div", { class: "hint" });
+  void Bridge.secretPresent("groq-api-key").then((has) => {
+    groqNote.textContent = has
+      ? "Entender tu voz usa Whisper de Groq con la clave que ya guardaste."
+      : "Para entender tu voz hace falta una clave de Groq (Proveedor de chat → Groq).";
+  });
+
+  return h("section", {},
+    h("h2", {}, h("span", { text: "Voz" })),
+    h("div", { class: "hint", text: "Mochi puede hablarte y escucharte. Todo es opcional y está desactivado hasta que lo actives." }),
+    h("div", { class: "row" }, h("label", { text: "Quién habla" }), engine, test),
+    eleven,
+    h("div", { class: "row" },
+      h("label", { text: "Mochi habla" }),
+      toggle(settings.voiceGreeting, (v) => {
+        settings.voiceGreeting = v;
+        void save();
+        if (v) {
+          State.settings = { ...State.settings, ...settings };
+          speak(settings.userName.trim() ? `Hola ${settings.userName.trim()}` : "Hola");
+        }
+      }),
+      h("span", { class: "hint", text: "dice tu nombre y el momento del día al iniciar" }),
+    ),
+    h("div", { class: "row" },
+      h("label", { text: "Leer las respuestas" }),
+      toggle(settings.voiceReplies, (v) => { settings.voiceReplies = v; void save(); }),
+      h("span", { class: "hint", text: "el chat lee en voz alta cada respuesta; cada una también tiene su botón de altavoz" }),
+    ),
+    h("div", { class: "row" },
+      h("label", { text: "Escuchar «Oye Mochi»" }),
+      toggle(settings.wakeWord, (v) => { settings.wakeWord = v; void save(); }),
+      h("span", { class: "hint", text: "dices «Oye Mochi» y se abre el chat para hablar" }),
+    ),
+    h("div", { class: "notice warn", text: "Mientras está activado, el micrófono está abierto y cada frase que dices se envía a Groq para entenderla (no se guarda nada). Desactívalo cuando no lo quieras, aquí, con el botón del micrófono de la isla o con el atajo de abajo." }),
+    groqNote,
+    shortcutRow("listen", "Activar o pausar la escucha con", "Ctrl+Alt+M", () => settings.listenShortcut, (a) => (settings.listenShortcut = a)),
+    h("div", { class: "hint", text: "En el chat también hay un botón de micrófono para dictar una sola pregunta, sin activar «Oye Mochi»." }),
+  );
+}
+
 // ── Personalization ───────────────────────────────────────────────────────────
 
 function personalSection(detectedName: string): HTMLElement {
@@ -417,20 +583,6 @@ function personalSection(detectedName: string): HTMLElement {
       h("label", { text: "Lo último y pendientes" }),
       toggle(settings.greetingPicker, (v) => { settings.greetingPicker = v; void save(); }),
       h("span", { class: "hint", text: "en la bienvenida: tu último proyecto y lo que espera (revisiones, CI)" }),
-    ),
-    h("div", { class: "row" },
-      h("label", { text: "Mochi habla" }),
-      toggle(settings.voiceGreeting, (v) => {
-        settings.voiceGreeting = v;
-        void save();
-        if (v) speak(preview.textContent?.split(" — ")[0] ?? "");
-      }),
-      h("span", { class: "hint", text: "dice tu nombre y el momento del día al iniciar" }),
-    ),
-    h("div", { class: "row" },
-      h("label", { text: "Leer las respuestas" }),
-      toggle(settings.voiceReplies, (v) => { settings.voiceReplies = v; void save(); }),
-      h("span", { class: "hint", text: "el chat lee en voz alta cada respuesta; cada una también tiene su botón de altavoz" }),
     ),
     preview,
   );
@@ -1183,24 +1335,30 @@ function generalSection(): HTMLElement {
       toggle(settings.globalShortcuts, (v) => { settings.globalShortcuts = v; void save(); }),
       h("span", { class: "hint", text: "Ctrl+Alt+Y permitir · Ctrl+Alt+N denegar (solo mientras hay una petición)" }),
     ),
-    shortcutRow(),
+    shortcutRow("toggle", "Abrir Coucou con", "Ctrl+Alt+C", () => settings.toggleShortcut, (a) => (settings.toggleShortcut = a)),
   );
 }
 
 /** "Abrir Coucou con": click, then press the keys you want (Esc cancels). */
-function shortcutRow(): HTMLElement {
+function shortcutRow(
+  which: "toggle" | "listen",
+  label: string,
+  fallback: string,
+  current: () => string,
+  assign: (accel: string) => void,
+): HTMLElement {
   const button = h("button", { class: "btn secondary", style: "min-width:150px" }) as HTMLButtonElement;
   const note = h("span", { class: "hint" });
   const reset = h("button", { class: "link-btn", text: "Restablecer" });
   let capturing = false;
 
   const show = () => {
-    button.textContent = capturing ? "Pulsa las teclas…" : settings.toggleShortcut;
-    reset.style.display = settings.toggleShortcut === "Ctrl+Alt+C" ? "none" : "";
+    button.textContent = capturing ? "Pulsa las teclas…" : current();
+    reset.style.display = current() === fallback ? "none" : "";
   };
   const apply = async (accel: string) => {
     try {
-      settings.toggleShortcut = await Bridge.setToggleShortcut(accel);
+      assign(await Bridge.setShortcut(which, accel));
       note.textContent = "Listo: ya abre y cierra la isla desde cualquier programa.";
     } catch (err) {
       note.textContent = String(err).replace(/^Error:\s*/, "");
@@ -1229,13 +1387,10 @@ function shortcutRow(): HTMLElement {
     show();
   });
   button.addEventListener("blur", () => capturing && stop());
-  reset.addEventListener("click", () => void apply("Ctrl+Alt+C"));
+  reset.addEventListener("click", () => void apply(fallback));
   show();
-  void onEvent<Settings>("settings-changed", (s) => {
-    settings.toggleShortcut = s.toggleShortcut ?? settings.toggleShortcut;
-    show();
-  });
-  return h("div", { class: "row" }, h("label", { text: "Abrir Coucou con" }), button, reset, note);
+  void onEvent<Settings>("settings-changed", () => show());
+  return h("div", { class: "row" }, h("label", { text: label }), button, reset, note);
 }
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
@@ -1272,6 +1427,7 @@ async function main() {
     h("h1", {}, h("span", { text: "Coucou" }), h("span", { class: "version", text: version })),
     setupSection(status, present, hasProviderKey, tools, detectedName, agents),
     personalSection(detectedName),
+    voiceSection(present),
     claudeSection(status),
     agentsSection(agents),
     planSection(status),

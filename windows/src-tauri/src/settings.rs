@@ -44,6 +44,20 @@ pub struct Settings {
     /// Chat replies are read aloud as they arrive (each one also has a speaker button).
     #[serde(default)]
     pub voice_replies: bool,
+    /// Who speaks: "system" (the voices Windows has) or "elevenlabs".
+    #[serde(default = "default_voice_engine")]
+    pub voice_engine: String,
+    /// The ElevenLabs voice (its id) and model.
+    #[serde(default = "default_eleven_voice")]
+    pub eleven_voice: String,
+    #[serde(default = "default_eleven_model")]
+    pub eleven_model: String,
+    /// Listen for "Oye Mochi" (sends short bits of speech to Groq to understand them).
+    #[serde(default)]
+    pub wake_word: bool,
+    /// Turns the listening on or off from anywhere.
+    #[serde(default = "default_listen_shortcut")]
+    pub listen_shortcut: String,
     /// Interface language: "auto" follows the system; otherwise "es" or "en".
     #[serde(default = "default_greeting_language")]
     pub language: String,
@@ -82,6 +96,22 @@ fn default_true() -> bool {
 
 fn default_greeting_template() -> String {
     "Hola {name}".into()
+}
+
+fn default_voice_engine() -> String {
+    "system".into()
+}
+
+fn default_eleven_voice() -> String {
+    crate::voice::DEFAULT_VOICE.into()
+}
+
+fn default_eleven_model() -> String {
+    crate::voice::DEFAULT_MODEL.into()
+}
+
+pub fn default_listen_shortcut() -> String {
+    "Ctrl+Alt+M".into()
 }
 
 pub fn default_toggle_shortcut() -> String {
@@ -142,6 +172,11 @@ impl Default for Settings {
             greeting_language: default_greeting_language(),
             language: default_greeting_language(),
             voice_greeting: false,
+            voice_engine: default_voice_engine(),
+            eleven_voice: default_eleven_voice(),
+            eleven_model: default_eleven_model(),
+            wake_word: false,
+            listen_shortcut: default_listen_shortcut(),
             voice_replies: false,
             chat_provider: default_provider(),
             devmark_model: default_devmark_model(),

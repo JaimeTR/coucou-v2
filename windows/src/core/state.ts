@@ -167,6 +167,14 @@ export interface Settings {
   greetingLanguage: "auto" | "es" | "en";
   /** Mochi says the welcome aloud. */
   voiceGreeting: boolean;
+  /** Who speaks: the voices Windows has, or ElevenLabs. */
+  voiceEngine: "system" | "elevenlabs";
+  elevenVoice: string;
+  elevenModel: string;
+  /** Listen for "Oye Mochi". */
+  wakeWord: boolean;
+  /** Turns the listening on or off from anywhere. */
+  listenShortcut: string;
   /** Opens and closes the island from anywhere, e.g. "Ctrl+Alt+C". */
   toggleShortcut: string;
   /** Chat replies are read aloud as they arrive. */
@@ -204,6 +212,11 @@ export const DEFAULT_SETTINGS: Settings = {
   greetingTemplate: "Hola {name}",
   greetingLanguage: "auto",
   voiceGreeting: false,
+  voiceEngine: "system",
+  elevenVoice: "21m00Tcm4TlvDq8ikWAM",
+  elevenModel: "eleven_multilingual_v2",
+  wakeWord: false,
+  listenShortcut: "Ctrl+Alt+M",
   toggleShortcut: "Ctrl+Alt+C",
   voiceReplies: false,
   language: "auto",
@@ -243,6 +256,12 @@ class AppState {
   promptContext: PromptContext | null = null;
   droppedFile: { name: string; path: string } | null = null;
   noteMessage: string | null = null;
+  /** Said to Mochi by voice: the chat takes it when it opens. */
+  pendingVoice: { query?: string; record?: boolean } | null = null;
+  /** Whether the microphone is listening for "Oye Mochi". */
+  listening = false;
+  /** The chat is using the microphone: the wake word waits. */
+  micBusy = false;
   searchResult: SearchResult | null = null;
   chatHistory: ChatMessage[] = [];
   pendingApproval: ApprovalInfo | null = null;
