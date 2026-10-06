@@ -285,6 +285,16 @@ fn open_in_vscode(path: Option<String>) -> bool {
     false
 }
 
+/// Starts a per-user program installed under `%LOCALAPPDATA%Programs`.
+#[cfg(windows)]
+fn open_local_program(folder: &str, exe: &str) -> bool {
+    let Some(base) = std::env::var_os("LOCALAPPDATA") else {
+        return false;
+    };
+    let exe = std::path::PathBuf::from(base).join("Programs").join(folder).join(exe);
+    exe.is_file() && Command::new(exe).spawn().is_ok()
+}
+
 /// Opens the installed desktop program of an agent: OpenCode's Windows app, or
 /// Gemini on the web (it has no desktop app). False when it is not installed.
 #[tauri::command]
@@ -295,16 +305,11 @@ fn open_agent_app(agent: String) -> bool {
             true
         }
         #[cfg(windows)]
-        "opencode" => {
-            let Some(base) = std::env::var_os("LOCALAPPDATA") else {
-                return false;
-            };
-            let exe = std::path::PathBuf::from(base)
-                .join("Programs")
-                .join("@opencode-aidesktop")
-                .join("OpenCode.exe");
-            exe.is_file() && Command::new(exe).spawn().is_ok()
-        }
+        "opencode" => open_local_program("@opencode-aidesktop", "OpenCode.exe"),
+        #[cfg(windows)]
+        "antigravity" => open_local_program("Antigravity", "Antigravity.exe"),
+        #[cfg(windows)]
+        "antigravity-ide" => open_local_program("Antigravity IDE", "Antigravity IDE.exe"),
         _ => false,
     }
 }
@@ -320,6 +325,7 @@ fn launch_agent(agent: String, path: Option<String>, resume: bool) -> bool {
         "claude" => ("claude", &["--continue"]),
         "opencode" => ("opencode", &["--continue"]),
         "gemini" => ("gemini", &[]),
+        "agy" => ("agy", &[]),
         _ => return false,
     };
     // Without the program installed, Windows would show its own "cannot find the

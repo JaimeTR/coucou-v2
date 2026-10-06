@@ -122,21 +122,23 @@ function projectAgo(unixSeconds: number): string {
 }
 
 const INSTALL_HINT: Record<string, string> = {
-  claude: "npm i -g @anthropic-ai/claude-code",
-  opencode: "npm i -g opencode-ai",
-  gemini: "npm i -g @google/gemini-cli",
+  agy: "Instala el CLI de Antigravity (agy) desde antigravity.google",
+  claude: "Instálalo con: npm i -g @anthropic-ai/claude-code",
+  opencode: "Instálalo con: npm i -g opencode-ai",
+  gemini: "Instálalo con: npm i -g @google/gemini-cli",
 };
 
 /** Starts an agent in a terminal; if it is not installed, says how to get it in `note`. */
-async function launch(agent: "claude" | "opencode" | "gemini", path: string | null, resume: boolean, note: HTMLElement) {
+async function launch(agent: "claude" | "opencode" | "gemini" | "agy", path: string | null, resume: boolean, note: HTMLElement) {
   const ok = await Bridge.launchAgent(agent, path, resume);
-  note.textContent = ok ? "" : `No encuentro «${agent}». Instálalo con: ${INSTALL_HINT[agent]}`;
+  note.textContent = ok ? "" : `No encuentro «${agent}». ${INSTALL_HINT[agent]}`;
 }
 
 /** Opens the agent's desktop program (or web), saying so in `note` when it is not installed. */
-async function openApp(agent: "opencode" | "gemini", note: HTMLElement) {
+async function openApp(agent: "opencode" | "gemini" | "antigravity" | "antigravity-ide", note: HTMLElement) {
   const ok = await Bridge.openAgentApp(agent);
-  note.textContent = ok ? "" : "No encuentro el programa de OpenCode. Instálalo desde opencode.ai/download o usa «En terminal».";
+  const name = agent === "opencode" ? "OpenCode" : "Antigravity";
+  note.textContent = ok ? "" : `No encuentro el programa de ${name}. Instálalo o usa «En terminal».`;
 }
 
 /** Up to `max` projects as links; a click opens the folder in VS Code. */
@@ -253,10 +255,22 @@ function agentCard(task: AgentTask, openSettings: () => void): HTMLElement {
       h("button", { class: "link-btn", style: `color:${task.color}d9`, text: "Continuar", title: `${spec.agent} --continue en ${projects[0].name}`, onclick: () => void launch(spec.agent, projects[0].path, true, note) }),
     );
   }
-  if (!connected) {
-    actions.append(h("button", { class: "link-btn", style: "color:#8e939c", text: "Conectar…", onclick: openSettings }));
-  }
   card.append(actions);
+  if (task.id === "agent_gemini") {
+    // Antigravity is Google's own: its desktop app, its IDE and its CLI (agy).
+    card.append(
+      h("div", { class: "int-actions" },
+        h("button", { class: "link-btn", style: `color:${task.color}d9`, text: "Antigravity", title: "El programa Antigravity de escritorio", onclick: () => void openApp("antigravity", note) }),
+        h("button", { class: "link-btn", style: `color:${task.color}d9`, text: "Antigravity IDE", onclick: () => void openApp("antigravity-ide", note) }),
+        h("button", { class: "link-btn", style: `color:${task.color}d9`, text: "agy (CLI)", title: "El CLI de Antigravity en una terminal nueva", onclick: () => void launch("agy", null, false, note) }),
+      ),
+    );
+  }
+  const extra = h("div", { class: "int-actions" });
+  if (!connected) {
+    extra.append(h("button", { class: "link-btn", style: "color:#8e939c", text: "Conectar…", onclick: openSettings }));
+  }
+  if (extra.childElementCount > 0) card.append(extra);
   return card;
 }
 
