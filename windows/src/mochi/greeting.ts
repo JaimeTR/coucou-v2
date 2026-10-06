@@ -487,9 +487,9 @@ function drawMinis(x: CanvasRenderingContext2D, alpha: number) {
 // ── The words ─────────────────────────────────────────────────────────────────
 
 const FONT = '"Segoe UI Variable Text","Segoe UI",system-ui,sans-serif';
-/** Right of Mochi's waving hand, inside the card. */
-const TEXT_X = 396;
-const TEXT_W = 214;
+/** Centre of the left half of the card, away from Mochi's waving hand. */
+const TEXT_X = 150;
+const TEXT_W = 236;
 
 /** `text`, shortened with an ellipsis until it fits `maxW` in the current font. */
 function fitEllipsis(x: CanvasRenderingContext2D, text: string, maxW: number): string {
@@ -502,7 +502,7 @@ function fitEllipsis(x: CanvasRenderingContext2D, text: string, maxW: number): s
 function drawWords(x: CanvasRenderingContext2D, lines: GreetingLines, alpha: number) {
   x.save();
   x.globalAlpha = alpha;
-  x.textAlign = "left";
+  x.textAlign = "center";
   x.textBaseline = "alphabetic";
   const rise = (1 - alpha) * 6;
 

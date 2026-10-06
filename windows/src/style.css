@@ -1737,9 +1737,9 @@ input[type="range"]::-webkit-slider-thumb {
 
 .gp-group {
   position: absolute;
-  left: 24px;
+  left: 396px;
   top: 52px;
-  width: 252px;
+  width: 214px;
   display: flex;
   flex-direction: column;
   gap: 7px;
