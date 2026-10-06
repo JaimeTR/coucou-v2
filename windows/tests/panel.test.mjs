@@ -1,7 +1,7 @@
 // The left half of the welcome screen.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { agoEs, panelRows, panelHasRows } from "../.test-build/greetingPanel.js";
+import { agoEs, panelRows, panelHasRows } from "../.test-build/island/greetingPanel.js";
 
 const NOW = Date.UTC(2026, 9, 5, 18, 0, 0);
 const secs = (msAgo) => NOW / 1000 - msAgo / 1000;

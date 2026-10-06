@@ -1,7 +1,7 @@
 // "Always allow" is a security boundary: these tests pin down what it refuses.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { ruleFor, ruleMatches, matchRule } from "../.test-build/rules.js";
+import { ruleFor, ruleMatches, matchRule } from "../.test-build/island/rules.js";
 
 const CWD = "C:\\Users\\jaime\\proj";
 

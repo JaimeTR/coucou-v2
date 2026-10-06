@@ -5,6 +5,7 @@
 
 import { Bridge, onEvent } from "../core/bridge";
 import { Sound } from "../core/sound";
+import { applyLanguage, t } from "../core/i18n";
 import { State, type AskQuestion, type PlanUsage, type PlanWindow } from "../core/state";
 import { computeDiff, diffStepLabel } from "./diff";
 import { matchRule, ruleFor } from "./rules";
@@ -143,7 +144,7 @@ function approvalTarget(tool: string, input: Record<string, unknown>): string {
 /** A Windows toast for something that needs a person, when the setting is on. */
 function toast(title: string, body: string) {
   if (!State.settings.nativeNotifications) return;
-  void Bridge.notify(title, body);
+  void Bridge.notify(t(title), t(body));
 }
 
 function upsert(projectName: string, cwd: string) {
@@ -255,6 +256,7 @@ export function registerHookHandlers(island: Island) {
       island,
       hook: (p: HookPayload) => handleHook(island, p),
       statusline: (p: StatuslinePayload) => handleStatusline(p),
+      language: (l: "auto" | "es" | "en") => applyLanguage(l),
     };
   }
 }

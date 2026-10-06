@@ -4,6 +4,8 @@
 
 import "./settings.css";
 import { Bridge, onEvent, type AgentStatus, type DetectedTool, type HookStatus } from "../core/bridge";
+import { applyLanguage } from "../core/i18n";
+import { speak } from "../core/voice";
 import { greetingLines } from "../island/greetingText";
 import { DEFAULT_SETTINGS, type Settings } from "../core/state";
 import { h, clear } from "../views/dom";
@@ -315,7 +317,7 @@ function personalSection(detectedName: string): HTMLElement {
     const lines = greetingLines({
       name: settings.userName.trim() || detectedName,
       template: settings.greetingTemplate,
-      language: settings.greetingLanguage,
+      language: settings.language,
       now: new Date(),
       systemLanguage: navigator.language || "en",
     });
@@ -366,10 +368,11 @@ function personalSection(detectedName: string): HTMLElement {
     h("option", { value: "es", text: "Español" }),
     h("option", { value: "en", text: "English" }),
   );
-  language.value = settings.greetingLanguage;
+  language.value = settings.language;
   language.addEventListener("change", () => {
-    settings.greetingLanguage = language.value as Settings["greetingLanguage"];
+    settings.language = language.value as Settings["language"];
     void save();
+    applyLanguage(settings.language);
     refresh();
   });
 
@@ -403,7 +406,7 @@ function personalSection(detectedName: string): HTMLElement {
     h("div", { class: "row" }, h("label", { text: "Tu nombre" }), name, useDetected),
     h("div", { class: "row" }, h("label", { text: "Saludo" }), template),
     h("div", { class: "hint", text: "{name} se reemplaza por tu nombre. Ejemplo: ¡Hola {name}, bienvenido!" }),
-    h("div", { class: "row" }, h("label", { text: "Idioma" }), language),
+    h("div", { class: "row" }, h("label", { text: "Idioma de la interfaz" }), language),
     h("div", { class: "row" },
       h("label", { text: "Pill inicial" }),
       startPill,
@@ -413,6 +416,20 @@ function personalSection(detectedName: string): HTMLElement {
       h("label", { text: "Lo último y pendientes" }),
       toggle(settings.greetingPicker, (v) => { settings.greetingPicker = v; void save(); }),
       h("span", { class: "hint", text: "en la bienvenida: tu último proyecto y lo que espera (revisiones, CI)" }),
+    ),
+    h("div", { class: "row" },
+      h("label", { text: "Mochi habla" }),
+      toggle(settings.voiceGreeting, (v) => {
+        settings.voiceGreeting = v;
+        void save();
+        if (v) speak(preview.textContent?.split(" — ")[0] ?? "");
+      }),
+      h("span", { class: "hint", text: "dice tu nombre y el momento del día al iniciar" }),
+    ),
+    h("div", { class: "row" },
+      h("label", { text: "Leer las respuestas" }),
+      toggle(settings.voiceReplies, (v) => { settings.voiceReplies = v; void save(); }),
+      h("span", { class: "hint", text: "el chat lee en voz alta cada respuesta; cada una también tiene su botón de altavoz" }),
     ),
     preview,
   );
@@ -1218,7 +1235,9 @@ async function main() {
 
   void onEvent<Settings>("settings-changed", (s) => {
     settings = { ...settings, ...s };
+    applyLanguage(settings.language);
   });
+  applyLanguage(settings.language);
 }
 
 void main();

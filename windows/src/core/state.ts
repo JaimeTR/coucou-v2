@@ -165,6 +165,12 @@ export interface Settings {
   /** `{name}` is replaced by your name. */
   greetingTemplate: string;
   greetingLanguage: "auto" | "es" | "en";
+  /** Mochi says the welcome aloud. */
+  voiceGreeting: boolean;
+  /** Chat replies are read aloud as they arrive. */
+  voiceReplies: boolean;
+  /** Interface language; "auto" follows the system. */
+  language: "auto" | "es" | "en";
   /** Who answers the chat: Claude, DEVMARK AI, Gemini or Groq. */
   chatProvider: "anthropic" | "devmark" | "gemini" | "groq";
   /** Models asked of Gemini and Groq. */
@@ -195,6 +201,9 @@ export const DEFAULT_SETTINGS: Settings = {
   greetingEnabled: true,
   greetingTemplate: "Hola {name}",
   greetingLanguage: "auto",
+  voiceGreeting: false,
+  voiceReplies: false,
+  language: "auto",
   chatProvider: "anthropic",
   geminiModel: "gemini-3.8-flash",
   groqModel: "llama-3.3-70b-versatile",

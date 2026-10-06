@@ -5,6 +5,7 @@ import { h, svg, clear } from "./dom";
 import { ICONS } from "./icons";
 import { Bridge, type ChatContext } from "../core/bridge";
 import { Sound } from "../core/sound";
+import { speak, stopSpeaking, voiceAvailable } from "../core/voice";
 import { State, type ChatMessage } from "../core/state";
 import type { ViewHost } from "./views";
 
@@ -18,7 +19,28 @@ function bubble(message: ChatMessage): HTMLElement {
       h("div", { class: "bubble", text: message.content }),
     );
   }
-  return h("div", { class: "chat-row" }, h("div", { class: "reply", text: message.content }));
+  const reply = h("div", { class: "reply", text: message.content });
+  if (!voiceAvailable()) return h("div", { class: "chat-row" }, reply);
+  const listen = h(
+    "button",
+    { class: "listen-btn", title: "Escuchar" },
+    svg(ICONS.speakerOn, 10),
+  );
+  let on = false;
+  listen.addEventListener("click", () => {
+    if (on) {
+      stopSpeaking();
+      on = false;
+      listen.classList.remove("on");
+      return;
+    }
+    on = speak(message.content, () => {
+      on = false;
+      listen.classList.remove("on");
+    });
+    listen.classList.toggle("on", on);
+  });
+  return h("div", { class: "chat-row" }, reply, listen);
 }
 
 function typingDots(): HTMLElement {
@@ -79,6 +101,7 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
       State.chatHistory.push({ id: nextId++, role: "assistant", content: reply.text });
       State.stateOverride = null;
       Sound.play("finish");
+      if (State.settings.voiceReplies) speak(reply.text);
     } catch (err) {
       State.stateOverride = null;
       State.noteMessage = String(err).replace(/^Error:\s*/, "");

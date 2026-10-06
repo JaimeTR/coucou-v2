@@ -1,7 +1,7 @@
 // The words of the launch greeting.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { greetingLines, fillTemplate, partOfDay, resolveLanguage, DEFAULT_TEMPLATE } from "../.test-build/greetingText.js";
+import { greetingLines, fillTemplate, partOfDay, resolveLanguage, DEFAULT_TEMPLATE } from "../.test-build/island/greetingText.js";
 
 const at = (h) => new Date(2026, 9, 5, h, 30); // Monday 5 October 2026
 

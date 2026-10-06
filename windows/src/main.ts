@@ -4,6 +4,7 @@ import "./style.css";
 import { Bridge, IS_TAURI, onEvent } from "./core/bridge";
 import { Sound } from "./core/sound";
 import { State, type Settings } from "./core/state";
+import { applyLanguage, uiLanguage } from "./core/i18n";
 import { Island } from "./island/island";
 import { registerHookHandlers } from "./island/hooks";
 import { registerIntegrationHandlers, refreshConfigured } from "./island/integrations";
@@ -23,6 +24,8 @@ async function main() {
     State.detectedName = boot.detectedName ?? "";
   }
   island.applySettings();
+  applyLanguage(State.settings.language);
+  void Bridge.setUiLanguage(uiLanguage());
   State.loadIntegrationTasks();
   State.applyStartPill();
   if (boot && !boot.cursorPoll) island.followPageCursor();
@@ -76,6 +79,8 @@ async function main() {
     const startChanged = s.startPill !== State.settings.startPill;
     State.settings = { ...State.settings, ...s };
     island.applySettings();
+    applyLanguage(State.settings.language);
+    void Bridge.setUiLanguage(uiLanguage());
     State.loadIntegrationTasks();
     // A new "first pill" applies right away when the island is not open on something else.
     if (startChanged && State.mode !== "expanded") State.applyStartPill();

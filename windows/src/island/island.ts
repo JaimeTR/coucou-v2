@@ -10,6 +10,7 @@ import {
   type IslandMode, type IslandViewName,
 } from "../core/layout";
 import { Sound } from "../core/sound";
+import { speak } from "../core/voice";
 import { State } from "../core/state";
 import { BotEngine, hexToRGB } from "../mochi/engine";
 import { Greeting } from "../mochi/greeting";
@@ -308,14 +309,18 @@ export class Island {
           else this.picker.replaceChildren();
           this.greeting.setContent(
             s.greetingEnabled
-              ? () =>
-                  greetingLines({
+              ? () => {
+                  const lines = greetingLines({
                     name: s.userName.trim() || State.detectedName,
                     template: s.greetingTemplate,
-                    language: s.greetingLanguage,
+                    language: s.language,
                     now: new Date(),
                     systemLanguage: navigator.language || "en",
-                  })
+                  });
+                  // Mochi says it aloud, if asked: the name and the time of day.
+                  if (s.voiceGreeting) speak(`${lines.title}. ${lines.sub.split(" · ")[0]}.`);
+                  return lines;
+                }
               : null,
             () => s.greetingPicker && this.panelShown,
           );

@@ -35,9 +35,18 @@ pub struct Settings {
     /// What the greeting says; `{name}` is replaced by your name.
     #[serde(default = "default_greeting_template")]
     pub greeting_template: String,
-    /// "auto" follows the system language; otherwise "es" or "en".
+    /// Superseded by `language`; kept so saved settings still load.
     #[serde(default = "default_greeting_language")]
     pub greeting_language: String,
+    /// Mochi says the welcome aloud.
+    #[serde(default)]
+    pub voice_greeting: bool,
+    /// Chat replies are read aloud as they arrive (each one also has a speaker button).
+    #[serde(default)]
+    pub voice_replies: bool,
+    /// Interface language: "auto" follows the system; otherwise "es" or "en".
+    #[serde(default = "default_greeting_language")]
+    pub language: String,
     /// Who answers the chat: "anthropic" (Claude) or "devmark" (DEVMARK AI).
     #[serde(default = "default_provider")]
     pub chat_provider: String,
@@ -123,6 +132,9 @@ impl Default for Settings {
             greeting_enabled: true,
             greeting_template: default_greeting_template(),
             greeting_language: default_greeting_language(),
+            language: default_greeting_language(),
+            voice_greeting: false,
+            voice_replies: false,
             chat_provider: default_provider(),
             devmark_model: default_devmark_model(),
             devmark_max_tokens: default_devmark_max_tokens(),

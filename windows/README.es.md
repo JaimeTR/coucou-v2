@@ -31,7 +31,8 @@ Coucou v2 convierte a Mochi en un pequeño asistente personal. Todo lo de abajo 
 |---|---|
 | **Te saluda por tu nombre** | Al iniciar, Mochi dice *"Hola Jaime Tarazona"* con el momento del día y la fecha. El nombre se detecta de tu cuenta de Windows (o de git) y se edita en Ajustes → Personalización, en español o inglés. |
 | **Una bienvenida que te ayuda a empezar** | A la izquierda, el saludo y la fecha; a la derecha, solo lo importante: **Lo último** (tu último proyecto, con el botón **Continuar donde lo dejé**) y **Pendiente** (revisiones, CI fallando, Copilot o una conexión que falta). Haz clic para ir directo. |
-| **En español** | Toda la interfaz (la isla, Ajustes, el menú de la bandeja, los errores y el instalador) está en español. |
+| **Español e inglés** | Toda la interfaz (la isla, Ajustes, el menú de la bandeja, los errores, las notificaciones y el instalador) está en español o inglés: se elige en Ajustes → Personalización → Idioma de la interfaz (automático sigue a Windows). |
+| **La voz de Mochi** | Mochi puede decir la bienvenida en voz alta y leer las respuestas del chat (cada respuesta tiene además su botón de altavoz), con las voces que Windows ya trae: nada sale de tu PC. Desactivado por defecto; Ajustes → Personalización. |
 | **Lista de configuración** | Ajustes se abre con lo que está conectado y lo que falta (hooks de Claude Code, GitHub, tu clave de chat) y las herramientas encontradas en tu PC (VS Code, Git, Docker, Gemini CLI, Codex…). |
 | **Solo los pills que usas** | Una instalación nueva muestra solo GitHub; el resto (Vercel, Resend…) se activa en Ajustes → Integraciones. |
 | **GitHub + Copilot** | Un pill con lo que te necesita: revisiones pedidas, tus PRs con su CI y los pull requests y revisiones de **GitHub Copilot**. Cada fila abre la lista, y cada PR se abre en GitHub. |

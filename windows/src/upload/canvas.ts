@@ -6,6 +6,7 @@
 // exactly as on macOS, because this canvas draws its own.
 
 import { State } from "../core/state";
+import { t } from "../core/i18n";
 import {
   USC, eIn, eInOut, eOut, lerp, progressAt,
   type UploadEyeShape, type UploadFrame,
@@ -54,7 +55,7 @@ function text(
   ctx.textAlign = align;
   // SwiftUI's .leading / .center / .trailing anchors are vertically centred.
   ctx.textBaseline = "middle";
-  ctx.fillText(s, x, y);
+  ctx.fillText(t(s), x, y);
 }
 
 export interface UploadCanvasActions {

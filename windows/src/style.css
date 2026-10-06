@@ -1802,3 +1802,26 @@ input[type="range"]::-webkit-slider-thumb {
 .gp-go:active {
   transform: scale(0.97);
 }
+
+.listen-btn {
+  flex: 0 0 auto;
+  align-self: flex-start;
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 9px;
+  background: none;
+  color: #6b7079;
+  cursor: default;
+  transition: color 0.12s ease-out, background 0.12s ease-out;
+}
+
+.listen-btn:hover,
+.listen-btn.on {
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.12);
+}

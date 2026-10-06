@@ -398,6 +398,12 @@ fn quit_app(app: AppHandle) {
     app.exit(0);
 }
 
+/// The page resolved its interface language: the tray menu follows it.
+#[tauri::command]
+fn set_ui_language(app: AppHandle, lang: String) {
+    tray::set_language(&app, &lang);
+}
+
 /// Tray → Pause. Paused means paused: the pollers stop talking to the network,
 /// not just the island stopping showing things.
 #[tauri::command]
@@ -772,6 +778,7 @@ pub fn run() {
             refresh_integration,
             open_settings_window,
             set_paused,
+            set_ui_language,
         ])
         .setup(move |app| {
             let handle = app.handle().clone();

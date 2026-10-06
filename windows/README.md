@@ -31,7 +31,8 @@ Coucou v2 turns Mochi into a small personal assistant. Everything below is new o
 |---|---|
 | **Greets you by name** | On start Mochi says *"Hola Jaime Tarazona"* with the time of day. The name is detected from your Windows account (or git), editable in Settings → Personalization, in Spanish or English. |
 | **Welcome that helps you start** | The welcome shows the greeting and date on the right and, on the left, only what matters: **Lo último** (your last project) and **Pendiente** (reviews, failing CI, Copilot, or a missing connection). Click either to jump there. Toggle in Settings → Personalización. |
-| **In Spanish** | The whole interface — the island, Settings, the tray menu, errors and the installer — is in Spanish. The docs are in both languages (`README.es.md`, `CHANGELOG.es.md`). |
+| **Spanish and English** | The whole interface — the island, Settings, the tray menu, errors, notifications and the installer — is in Spanish or English: pick it under Settings → Personalización → Interface language (automatic follows Windows). The docs are in both languages (`README.es.md`, `CHANGELOG.es.md`). |
+| **Mochi's voice** | Mochi can say the welcome aloud and read chat replies (each reply also has a speaker button), with the voices Windows already has — nothing leaves your PC. Off by default; Settings → Personalización. |
 | **Setup checklist** | Settings opens with what is connected and what is left — Claude Code hooks, GitHub, your chat key — plus which tools were found on your PC (VS Code, Git, Docker, Gemini CLI, Codex…). |
 | **Only the pills you use** | A fresh install shows GitHub only; the other pills (Vercel, Resend…) are opt-in under Settings → Integrations. |
 | **GitHub + Copilot** | One pill for what needs you: review requests, your PRs with their CI, and **GitHub Copilot**'s pull requests and reviews. Click a row to list them; each opens on GitHub. |

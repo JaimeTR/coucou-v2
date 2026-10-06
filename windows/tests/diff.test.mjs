@@ -1,7 +1,7 @@
 // Run with `npm test`: the live diff engine, which is pure and has no DOM.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { computeDiff, diffStepLabel, MAX_DIFF_LINES } from "../.test-build/diff.js";
+import { computeDiff, diffStepLabel, MAX_DIFF_LINES } from "../.test-build/island/diff.js";
 
 const edit = (old_string, new_string, file_path = "C:/p/src/app.ts") =>
   computeDiff("Edit", { file_path, old_string, new_string });
