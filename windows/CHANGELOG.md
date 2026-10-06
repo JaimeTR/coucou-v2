@@ -5,7 +5,7 @@ Coucou v2 is [JaimeTR](https://github.com/JaimeTR)'s fork of [Coucou by Louis Ra
 ## 0.2.0 — October 5, 2026
 
 **A personal assistant**
-- Mochi greets you by name when Coucou starts — *"Hola Jaime Tarazona"* — with the time of day and today's date. The name comes from your Windows account (falling back to your git identity), can be changed in Settings → Personalization, and the greeting text and language (automatic, Español, English) are editable.
+- Mochi greets you by name when Coucou starts — *"Hola Jaime Tarazona"* — with the time of day. The name comes from your Windows account (falling back to your git identity), can be changed in Settings → Personalization, and the greeting text and language (automatic, Español, English) are editable.
 - A setup checklist opens Settings: Claude Code hooks, GitHub, your chat key, your name and the plan relay, plus the tools detected on your PC (VS Code, Claude Code, Git, Docker, Node.js, Gemini CLI, Codex, Cursor).
 - A fresh install shows only the GitHub pill; the other integrations are opt-in.
 
@@ -19,7 +19,7 @@ Coucou v2 is [JaimeTR](https://github.com/JaimeTR)'s fork of [Coucou by Louis Ra
 - Windows notifications when Claude needs permission, asks a question, or finishes or fails while the island is closed.
 
 **Welcome screen and Spanish**
-- The welcome screen is now useful at a glance: on the right Mochi says hello by name with the date and a status line (*"Claude Code conectado · último proyecto: coucou"*); on the left, **"¿Por dónde empezamos?"** offers one chip per pill — pick one and the island opens straight on it instead of collapsing. The preferred pill is highlighted and is the one shown first; change it in Settings → Personalización ("Pill inicial"), or turn the chips off ("Elegir al iniciar"). With chips on, the welcome waits a few seconds longer, and stays open while the pointer is over it.
+- The welcome screen is kept light on purpose: on the right Mochi says hello by name (*"Hola Jaime Tarazona"*, *"Buenas tardes"*) and nothing else; on the left, **"¿Por dónde empezamos?"** offers one chip per pill — pick one and the island opens straight on it instead of collapsing. The preferred pill is highlighted and is the one shown first; change it in Settings → Personalización ("Pill inicial"), or turn the chips off ("Elegir al iniciar"). With chips on, the welcome waits a few seconds longer, and stays open while the pointer is over it.
 - **The whole interface is in Spanish**: the island, its cards and notifications, the Settings window, tray menu, error messages, the installer (NSIS and MSI default to Spanish, English stays available) and the files Coucou writes for other tools. Names of products and commands are left as they are.
 **GitHub and Copilot in one pill**
 - The GitHub pill now shows what needs you: **review requests**, **your open pull requests with their CI** (green, amber, red), and **GitHub Copilot** — the pull requests Copilot's coding agent opened for you, and how many of yours Copilot reviewed. Click a row to list the pull requests (three at a time, "N more on GitHub" for the rest); each opens on GitHub. Stars and repositories stay in the header. One GraphQL request, the same token.

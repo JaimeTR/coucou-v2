@@ -314,7 +314,7 @@ export class Island {
                     language: s.greetingLanguage,
                     now: new Date(),
                     systemLanguage: navigator.language || "en",
-                    facts: this.greetingFacts(),
+
                   })
               : null,
             chips > 1,
@@ -333,13 +333,6 @@ export class Island {
 
   // ── Welcome: where do we start? ─────────────────────────────────────────────
 
-  /** What the third line of the welcome says; read when it is time to show it. */
-  private greetingFacts() {
-    return {
-      claudeConnected: State.integrations.integration_claude?.configured ?? State.settings.hooksInstalled,
-      lastProject: State.claudeProjects[0]?.name,
-    };
-  }
 
   /**
    * One chip per pill, the preferred one first and highlighted. Returns how many:

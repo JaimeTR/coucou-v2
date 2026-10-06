@@ -27,8 +27,8 @@ Coucou v2 turns Mochi into a small personal assistant. Everything below is new o
 
 | | |
 |---|---|
-| **Greets you by name** | On start Mochi says *"Hola Jaime Tarazona"* with the time of day and today's date. The name is detected from your Windows account (or git), editable in Settings → Personalization, in Spanish or English. |
-| **Welcome that helps you start** | The welcome screen shows the date and a status line on the right and **"¿Por dónde empezamos?"** on the left: pick a pill and the island opens on it. Set which pill comes first in Settings → Personalización. |
+| **Greets you by name** | On start Mochi says *"Hola Jaime Tarazona"* with the time of day. The name is detected from your Windows account (or git), editable in Settings → Personalization, in Spanish or English. |
+| **Welcome that helps you start** | The welcome screen shows only the greeting on the right and **"¿Por dónde empezamos?"** on the left: pick a pill and the island opens on it. Set which pill comes first in Settings → Personalización. |
 | **In Spanish** | The whole interface — the island, Settings, the tray menu, errors and the installer — is in Spanish. |
 | **Setup checklist** | Settings opens with what is connected and what is left — Claude Code hooks, GitHub, your chat key — plus which tools were found on your PC (VS Code, Git, Docker, Gemini CLI, Codex…). |
 | **Only the pills you use** | A fresh install shows GitHub only; the other pills (n8n, Vercel, Resend…) are opt-in under Settings → Integrations. |

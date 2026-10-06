@@ -506,8 +506,8 @@ function drawWords(x: CanvasRenderingContext2D, lines: GreetingLines, alpha: num
   x.textBaseline = "alphabetic";
   const rise = (1 - alpha) * 6;
 
-  // Three lines when there is a status to give, two otherwise.
-  const rows = lines.status ? { title: 78, sub: 99, status: 120 } : { title: 86, sub: 108, status: 0 };
+  // Two short lines, centred on Mochi: the welcome is for choosing, not reading.
+  const rows = { title: 86, sub: 108 };
 
   // The name is the point: as large as fits, never below 13 px.
   let size = 20;
@@ -522,12 +522,6 @@ function drawWords(x: CanvasRenderingContext2D, lines: GreetingLines, alpha: num
   x.font = `400 12.5px ${FONT}`;
   x.fillStyle = "#9398A1";
   x.fillText(fitEllipsis(x, lines.sub, TEXT_W), TEXT_X, rows.sub + rise);
-
-  if (lines.status) {
-    x.font = `400 11.5px ${FONT}`;
-    x.fillStyle = "#6B7079";
-    x.fillText(fitEllipsis(x, lines.status, TEXT_W), TEXT_X, rows.status + rise);
-  }
   x.restore();
 }
 
