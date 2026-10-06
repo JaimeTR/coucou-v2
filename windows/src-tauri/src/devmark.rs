@@ -71,7 +71,7 @@ fn fit_messages(history: &[(String, String)]) -> Result<Vec<Value>, String> {
         if kept.len() >= MAX_MESSAGES || used + size > MAX_CHARS {
             if kept.is_empty() {
                 return Err(format!(
-                    "That message is too long for DEVMARK AI (about {} characters at most).",
+                    "Ese mensaje es demasiado largo para DEVMARK AI (unos {} caracteres como máximo).",
                     MAX_CHARS - used
                 ));
             }
@@ -143,13 +143,13 @@ fn error_detail(body: &str) -> (String, String) {
 fn explain_error(status: u16, body: &str) -> String {
     let (code, detail) = error_detail(body);
     match status {
-        401 => "DEVMARK AI rejected the API key (401). Check it in Settings.".into(),
-        429 => "DEVMARK AI rate limit reached (429). Wait 10–60 seconds and try again.".into(),
+        401 => "DEVMARK AI rechazó la clave de API (401). Revísala en Ajustes.".into(),
+        429 => "Se alcanzó el límite de peticiones de DEVMARK AI (429). Espera entre 10 y 60 segundos e inténtalo de nuevo.".into(),
         503 | 504 if code == "ai_paused" => {
-            "DEVMARK AI is paused (dormant mode). Try again later.".into()
+            "DEVMARK AI está en pausa (modo dormido). Inténtalo más tarde.".into()
         }
-        503 | 504 => format!("DEVMARK AI is unavailable or slow ({status}). Try again in a moment."),
-        400 | 422 => format!("DEVMARK AI refused the request ({status}): {detail}"),
+        503 | 504 => format!("DEVMARK AI no está disponible o va lento ({status}). Inténtalo en un momento."),
+        400 | 422 => format!("DEVMARK AI rechazó la petición ({status}): {detail}"),
         _ => format!("DEVMARK AI {status}: {detail}"),
     }
 }
@@ -176,7 +176,7 @@ fn file_text(name: &str, path: &str) -> Result<String, String> {
         .to_lowercase();
     let cannot = || {
         format!(
-            "DEVMARK AI's model reads text only — it can't open “{name}”. Text and code files work."
+            "El modelo de DEVMARK AI solo lee texto: no puede abrir “{name}”. Funcionan los archivos de texto y de código."
         )
     };
     if matches!(ext.as_str(), "pdf" | "jpg" | "jpeg" | "png" | "gif" | "webp" | "bmp" | "zip" | "exe") {
@@ -208,9 +208,9 @@ pub async fn send(
     query: String,
     context: Option<ChatContext>,
 ) -> Result<ChatReply, String> {
-    let key = api_key().ok_or_else(|| "DEVMARK AI key missing. Add it in Settings.".to_string())?;
+    let key = api_key().ok_or_else(|| "Falta la clave de DEVMARK AI. Añádela en Ajustes.".to_string())?;
     let Ok(_turn) = chat.busy.try_lock() else {
-        return Err("DEVMARK AI is still answering the last message — wait for it.".into());
+        return Err("DEVMARK AI sigue respondiendo el mensaje anterior: espera a que termine.".into());
     };
 
     let first = chat.history.lock().unwrap().is_empty();
@@ -258,7 +258,7 @@ pub async fn send(
 
     let Some(reply) = reply_text(&response) else {
         chat.history.lock().unwrap().pop();
-        return Err("DEVMARK AI sent an empty answer. Try again.".into());
+        return Err("DEVMARK AI envió una respuesta vacía. Inténtalo de nuevo.".into());
     };
     chat.history.lock().unwrap().push(("assistant".into(), reply.clone()));
     Ok(ChatReply { text: reply })
@@ -277,15 +277,15 @@ async fn post(key: &str, body: &Value) -> Result<Value, String> {
             .await
             .map_err(|e| {
                 if e.is_timeout() {
-                    "DEVMARK AI took too long to answer. Try a shorter question.".to_string()
+                    "DEVMARK AI tardó demasiado en responder. Prueba con una pregunta más corta.".to_string()
                 } else {
-                    format!("Network error talking to DEVMARK AI: {e}")
+                    format!("Error de red al hablar con DEVMARK AI: {e}")
                 }
             })?;
         let status = response.status();
         let text = response.text().await.map_err(|e| e.to_string())?;
         if status.is_success() {
-            return serde_json::from_str(&text).map_err(|e| format!("Bad DEVMARK AI response: {e}"));
+            return serde_json::from_str(&text).map_err(|e| format!("Respuesta no válida de DEVMARK AI: {e}"));
         }
         if let Some(wait) = retry_delay(status.as_u16(), &text, attempt) {
             crate::log::line(format!("devmark {status} — retrying in {}s", wait.as_secs()));
@@ -313,18 +313,18 @@ pub async fn check() -> Check {
     };
     let health = client.get(HEALTH_URL).send().await;
     let reachable = match &health {
-        Ok(r) if r.status().is_success() => "reachable",
+        Ok(r) if r.status().is_success() => "accesible",
         Ok(r) if r.status().as_u16() == 503 => {
-            return Check { ok: false, message: "The service answers but the model is unavailable (503).".into() }
+            return Check { ok: false, message: "El servicio responde pero el modelo no está disponible (503).".into() }
         }
         Ok(r) => {
-            return Check { ok: false, message: format!("The service answered {}.", r.status()) }
+            return Check { ok: false, message: format!("El servicio respondió {}.", r.status()) }
         }
-        Err(e) => return Check { ok: false, message: format!("Can't reach DEVMARK AI: {e}") },
+        Err(e) => return Check { ok: false, message: format!("No se puede llegar a DEVMARK AI: {e}") },
     };
 
     let Some(key) = api_key() else {
-        return Check { ok: false, message: format!("DEVMARK AI is {reachable}, but no key is saved yet.") };
+        return Check { ok: false, message: format!("DEVMARK AI está {reachable}, pero aún no hay clave guardada.") };
     };
     match client.get(format!("{BASE_URL}/models")).bearer_auth(key).send().await {
         Ok(r) if r.status().is_success() => {
@@ -338,15 +338,15 @@ pub async fn check() -> Check {
                         .collect()
                 })
                 .unwrap_or_default();
-            let shown = if models.is_empty() { "no models listed".to_string() } else { models.join(", ") };
-            Check { ok: true, message: format!("Connected — key accepted. Models: {shown}.") }
+            let shown = if models.is_empty() { "sin modelos en la lista".to_string() } else { models.join(", ") };
+            Check { ok: true, message: format!("Conectado: clave aceptada. Modelos: {shown}.") }
         }
         Ok(r) => {
             let status = r.status().as_u16();
             let text = r.text().await.unwrap_or_default();
             Check { ok: false, message: explain_error(status, &text) }
         }
-        Err(e) => Check { ok: false, message: format!("Network error: {e}") },
+        Err(e) => Check { ok: false, message: format!("Error de red: {e}") },
     }
 }
 
@@ -399,7 +399,7 @@ mod tests {
     #[test]
     fn a_single_message_that_cannot_fit_is_refused_with_a_reason() {
         let err = fit_messages(&[turn("user", &"y".repeat(60_000))]).unwrap_err();
-        assert!(err.contains("too long"), "{err}");
+        assert!(err.contains("demasiado largo"), "{err}");
     }
 
     #[test]
@@ -413,16 +413,16 @@ mod tests {
 
     #[test]
     fn the_three_errors_the_guide_names_each_get_their_own_words() {
-        assert!(explain_error(401, "{}").contains("rejected the API key"));
-        assert!(explain_error(429, "{}").contains("rate limit"));
-        assert!(explain_error(503, "{}").contains("unavailable"));
+        assert!(explain_error(401, "{}").contains("rechazó la clave"));
+        assert!(explain_error(429, "{}").contains("límite"));
+        assert!(explain_error(503, "{}").contains("disponible"));
         // Dormant mode is its own message, found wherever the API puts the code.
         for body in [
             r#"{"error":{"code":"ai_paused","message":"asleep"}}"#,
             r#"{"code":"ai_paused"}"#,
             "service says ai_paused",
         ] {
-            assert!(explain_error(503, body).contains("paused"), "{body}");
+            assert!(explain_error(503, body).contains("pausa"), "{body}");
         }
         assert!(explain_error(422, r#"{"error":{"message":"too many messages"}}"#).contains("too many messages"));
     }
@@ -449,7 +449,7 @@ mod tests {
         std::fs::write(&txt, "hello").unwrap();
         let sent = file_text("a.txt", txt.to_str().unwrap()).unwrap();
         assert!(sent.contains("hello") && sent.starts_with("File: a.txt"));
-        assert!(file_text("a.pdf", "C:/x/a.pdf").unwrap_err().contains("text only"));
+        assert!(file_text("a.pdf", "C:/x/a.pdf").unwrap_err().contains("solo lee texto"));
         let _ = std::fs::remove_dir_all(&tmp);
     }
 }

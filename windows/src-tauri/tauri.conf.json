@@ -51,13 +51,16 @@
     "resources": { "../target/release/coucou-hook.exe": "coucou-hook.exe" },
     "copyright": "© JaimeTR · based on Coucou by Louis Raillé",
     "category": "DeveloperTool",
-    "shortDescription": "Mochi lives at the top of your screen",
-    "longDescription": "Coucou puts Mochi at the top of your screen: it shows your Claude Code sessions and a few integrations, and lets you approve, answer, chat and drop files without leaving what you are doing.",
+    "shortDescription": "Mochi vive en la parte superior de tu pantalla",
+    "longDescription": "Coucou pone a Mochi en la parte superior de tu pantalla: muestra tus sesiones de Claude Code y varias integraciones, y te deja aprobar, responder, chatear y soltar archivos sin dejar lo que estás haciendo.",
     "windows": {
       "nsis": {
         "installMode": "currentUser",
-        "languages": ["English", "French"],
+        "languages": ["Spanish", "English"],
         "installerHooks": "nsis/hooks.nsh"
+      },
+      "wix": {
+        "language": "es-ES"
       }
     }
   }

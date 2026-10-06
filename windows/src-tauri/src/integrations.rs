@@ -135,9 +135,9 @@ fn is_new(key: &'static str, id: &str) -> bool {
 
 fn status_error(code: u16, unauthorised_hint: &str) -> String {
     match code {
-        401 => "Invalid API key (401)".into(),
+        401 => "Clave de API no válida (401)".into(),
         403 => unauthorised_hint.into(),
-        _ => format!("API error {code}"),
+        _ => format!("Error de la API {code}"),
     }
 }
 
@@ -180,7 +180,7 @@ async fn poll_stripe(app: AppHandle) {
             emit(&app, IntegrationUpdate {
                 id: "integration_stripe",
                 data: json!({}),
-                error: Some(status_error(code, "Use a secret key (sk_live_… not pk_live_…)")),
+                error: Some(status_error(code, "Usa una clave secreta (sk_live_…, no pk_live_…)")),
                 event: None,
             });
             return;
@@ -189,7 +189,7 @@ async fn poll_stripe(app: AppHandle) {
             emit(&app, IntegrationUpdate {
                 id: "integration_stripe",
                 data: json!({}),
-                error: Some(format!("No connection: {e}")),
+                error: Some(format!("Sin conexión: {e}")),
                 event: None,
             });
             return;
@@ -397,19 +397,19 @@ fn pulse_event(pulse: &Value) -> Option<IntegrationEvent> {
 
     if fresh_failure {
         let p = pulse["mine"].as_array()?.iter().find(|p| p.get("ci").and_then(Value::as_str) == Some("failure")).cloned();
-        return Some(IntegrationEvent { success: false, label: "CI failed".into(), detail: title(&p) });
+        return Some(IntegrationEvent { success: false, label: "Falló el CI".into(), detail: title(&p) });
     }
     if fresh_review {
         let p = first("toReview");
-        return Some(IntegrationEvent { success: true, label: "Review requested".into(), detail: title(&p) });
+        return Some(IntegrationEvent { success: true, label: "Revisión pedida".into(), detail: title(&p) });
     }
     if fresh_copilot_pr {
         let p = first("copilot");
-        return Some(IntegrationEvent { success: true, label: "Copilot opened a pull request".into(), detail: title(&p) });
+        return Some(IntegrationEvent { success: true, label: "Copilot abrió un pull request".into(), detail: title(&p) });
     }
     if fresh_copilot_review {
         let p = pulse["mine"].as_array()?.iter().find(|p| p.get("copilotReviewed").and_then(Value::as_bool) == Some(true)).cloned();
-        return Some(IntegrationEvent { success: true, label: "Copilot reviewed your PR".into(), detail: title(&p) });
+        return Some(IntegrationEvent { success: true, label: "Copilot revisó tu PR".into(), detail: title(&p) });
     }
     None
 }
@@ -430,7 +430,7 @@ async fn poll_github(app: AppHandle) {
         emit(&app, IntegrationUpdate {
             id: "integration_github",
             data: json!({}),
-            error: Some(status_error(response.status().as_u16(), "Token lacks the needed scope")),
+            error: Some(status_error(response.status().as_u16(), "Al token le falta el permiso necesario")),
             event: None,
         });
         return;
@@ -487,11 +487,11 @@ async fn poll_github(app: AppHandle) {
                 let why = body
                     .pointer("/errors/0/message")
                     .and_then(Value::as_str)
-                    .unwrap_or("GitHub refused the pull request query");
+                    .unwrap_or("GitHub rechazó la consulta de pull requests");
                 pulse_error = json!(why);
             }
         }
-        Ok(r) => pulse_error = json!(status_error(r.status().as_u16(), "Token can't read pull requests")),
+        Ok(r) => pulse_error = json!(status_error(r.status().as_u16(), "El token no puede leer pull requests")),
         Err(_) => {}
     }
     let event = if pulse.is_object() { pulse_event(&pulse) } else { None };
@@ -525,7 +525,7 @@ async fn poll_vercel(app: AppHandle) {
         emit(&app, IntegrationUpdate {
             id: "integration_vercel",
             data: json!({}),
-            error: Some(status_error(response.status().as_u16(), "Token lacks access")),
+            error: Some(status_error(response.status().as_u16(), "Al token le falta acceso")),
             event: None,
         });
         return;
@@ -659,7 +659,7 @@ async fn poll_notion(app: AppHandle) {
         emit(&app, IntegrationUpdate {
             id: "integration_notion",
             data: json!({}),
-            error: Some(status_error(response.status().as_u16(), "Integration lacks access")),
+            error: Some(status_error(response.status().as_u16(), "A la integración le falta acceso")),
             event: None,
         });
         return;
@@ -1017,14 +1017,14 @@ mod github_tests {
         // A new review request.
         let review = parse_pulse(&answer(vec![pr(1, "me", "SUCCESS", &[])], vec![pr(10, "colleague", "PENDING", &[]), pr(13, "other", "PENDING", &[])], vec![]));
         let e = pulse_event(&review).expect("a new review request is news");
-        assert_eq!(e.label, "Review requested");
+        assert_eq!(e.label, "Revisión pedida");
         assert!(e.success);
         assert!(pulse_event(&review).is_none(), "and only once");
 
         // CI failing on mine outranks everything.
         let failing = parse_pulse(&answer(vec![pr(1, "me", "FAILURE", &[])], vec![pr(10, "colleague", "PENDING", &[]), pr(13, "other", "PENDING", &[]), pr(14, "x", "PENDING", &[])], vec![pr(20, "Copilot", "SUCCESS", &[])]));
         let e = pulse_event(&failing).unwrap();
-        assert_eq!(e.label, "CI failed");
+        assert_eq!(e.label, "Falló el CI");
         assert!(!e.success);
         // One badge per cycle: the most important. The rest of what arrived with
         // it (a review request, a Copilot PR) stays in the card, not a second badge.
@@ -1032,6 +1032,6 @@ mod github_tests {
 
         // A Copilot PR on its own is news.
         let copilot = parse_pulse(&answer(vec![pr(1, "me", "SUCCESS", &[])], vec![pr(10, "colleague", "PENDING", &[]), pr(13, "other", "PENDING", &[]), pr(14, "x", "PENDING", &[])], vec![pr(20, "Copilot", "SUCCESS", &[]), pr(21, "Copilot", "PENDING", &[])]));
-        assert_eq!(pulse_event(&copilot).unwrap().label, "Copilot opened a pull request");
+        assert_eq!(pulse_event(&copilot).unwrap().label, "Copilot abrió un pull request");
     }
 }

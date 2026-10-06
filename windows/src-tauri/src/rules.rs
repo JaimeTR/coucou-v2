@@ -92,10 +92,10 @@ impl Rules {
         label: String,
     ) -> Result<Rule, String> {
         if tool.is_empty() || tool.len() > 64 || pattern.is_empty() || pattern.len() > 400 {
-            return Err("that rule isn't valid".into());
+            return Err("esa regla no es válida".into());
         }
         if project.len() > 500 || label.len() > 400 {
-            return Err("that rule isn't valid".into());
+            return Err("esa regla no es válida".into());
         }
         let mut rules = self.0.lock().unwrap();
         if let Some(same) = rules
@@ -105,7 +105,7 @@ impl Rules {
             return Ok(same.clone());
         }
         if rules.len() >= MAX_RULES {
-            return Err(format!("{MAX_RULES} rules is the limit — remove some in Settings first"));
+            return Err(format!("{MAX_RULES} reglas es el límite: quita algunas en Ajustes primero"));
         }
         let rule = Rule { id: new_id(), project, tool, pattern, label, created_at: now_secs() };
         let mut next = rules.clone();

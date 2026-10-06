@@ -83,7 +83,7 @@ fn read_settings() -> Result<Value, String> {
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(json!({})),
         // A lock, a permission problem, a bad drive: all of them mean we do not
         // know what is in there, and not knowing is not the same as empty.
-        Err(err) => Err(format!("Can't read {}: {err}", path.display())),
+        Err(err) => Err(format!("No se puede leer {}: {err}", path.display())),
     }
 }
 
@@ -99,9 +99,9 @@ pub(crate) fn parse_settings(bytes: &[u8], path: &str) -> Result<Value, String> 
     }
     match serde_json::from_slice::<Value>(text) {
         Ok(v) if v.is_object() => Ok(v),
-        Ok(_) => Err(format!("{path} isn't a JSON object — Coucou won't touch it.")),
+        Ok(_) => Err(format!("{path} no es un objeto JSON: Coucou no lo tocará.")),
         Err(err) => Err(format!(
-            "{path} isn't valid JSON ({err}). Fix or move it, then try again — Coucou won't overwrite it."
+            "{path} no es un JSON válido ({err}). Corrígelo o muévelo y vuelve a intentarlo: Coucou no lo sobrescribirá."
         )),
     }
 }
@@ -309,7 +309,7 @@ fn remember_previous_statusline(current: &Value) -> Result<(), String> {
         Some(line) => {
             let saved = json!({ "statusLine": line });
             std::fs::write(&path, pretty(&saved))
-                .map_err(|e| format!("could not save your current status line: {e}"))
+                .map_err(|e| format!("no se pudo guardar tu línea de estado actual: {e}"))
         }
         None => {
             let _ = std::fs::remove_file(&path);
@@ -446,14 +446,14 @@ fn write_with(
     let current = read_settings()?;
     if current_fingerprint() != fingerprint {
         return Err(format!(
-            "{} changed since the preview. Nothing was written — review the new diff.",
+            "{} cambió desde la vista previa. No se escribió nada: revisa los cambios nuevos.",
             path.display()
         ));
     }
 
     let backup = backup_path();
     if path.exists() {
-        std::fs::copy(&path, &backup).map_err(|e| format!("backup failed: {e}"))?;
+        std::fs::copy(&path, &backup).map_err(|e| format!("falló la copia de seguridad: {e}"))?;
     }
 
     let next = change(&current)?;
@@ -470,11 +470,11 @@ fn write_with(
     let temp = path.with_extension(format!("json.coucou-{}", std::process::id()));
     if let Err(err) = write_like(&temp, &path, text.as_bytes()) {
         let _ = std::fs::remove_file(&temp);
-        return Err(format!("write failed: {err}"));
+        return Err(format!("falló la escritura: {err}"));
     }
     if let Err(err) = std::fs::rename(&temp, &path) {
         let _ = std::fs::remove_file(&temp);
-        return Err(format!("write failed: {err}"));
+        return Err(format!("falló la escritura: {err}"));
     }
     Ok(backup.to_string_lossy().to_string())
 }
@@ -640,7 +640,7 @@ pub(crate) fn unified_diff(before: &str, after: &str) -> String {
         .map(|(i, _)| i)
         .collect();
     if changed.is_empty() {
-        return "No change.".into();
+        return "Sin cambios.".into();
     }
     let mut keep = vec![false; out.len()];
     for idx in changed {
@@ -852,7 +852,7 @@ mod tests {
         let stale = preview(false).unwrap();
         std::fs::write(&path, br#"{"model":"someone-else-edited-this"}"#).unwrap();
         let err = write(false, &stale.fingerprint).unwrap_err();
-        assert!(err.contains("changed since the preview"), "got: {err}");
+        assert!(err.contains("cambió desde la vista previa"), "got: {err}");
         let untouched: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
         assert_eq!(untouched["model"], "someone-else-edited-this");
 

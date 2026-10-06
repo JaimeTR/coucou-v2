@@ -18,6 +18,9 @@ Coucou v2 is [JaimeTR](https://github.com/JaimeTR)'s fork of [Coucou by Louis Ra
 - Global shortcuts: `Ctrl+Alt+Y` allow and `Ctrl+Alt+N` deny (registered only while a request is up), `Ctrl+Alt+C` opens or closes the island. Each can be switched off.
 - Windows notifications when Claude needs permission, asks a question, or finishes or fails while the island is closed.
 
+**Welcome screen and Spanish**
+- The welcome screen is now useful at a glance: on the right Mochi says hello by name with the date and a status line (*"Claude Code conectado · último proyecto: coucou"*); on the left, **"¿Por dónde empezamos?"** offers one chip per pill — pick one and the island opens straight on it instead of collapsing. The preferred pill is highlighted and is the one shown first; change it in Settings → Personalización ("Pill inicial"), or turn the chips off ("Elegir al iniciar"). With chips on, the welcome waits a few seconds longer, and stays open while the pointer is over it.
+- **The whole interface is in Spanish**: the island, its cards and notifications, the Settings window, tray menu, error messages, the installer (NSIS and MSI default to Spanish, English stays available) and the files Coucou writes for other tools. Names of products and commands are left as they are.
 **GitHub and Copilot in one pill**
 - The GitHub pill now shows what needs you: **review requests**, **your open pull requests with their CI** (green, amber, red), and **GitHub Copilot** — the pull requests Copilot's coding agent opened for you, and how many of yours Copilot reviewed. Click a row to list the pull requests (three at a time, "N more on GitHub" for the rest); each opens on GitHub. Stars and repositories stay in the header. One GraphQL request, the same token.
 - Badges and sounds for what is new: CI failing on one of your PRs, a review asked of you, Copilot opening a PR or reviewing yours — one badge per cycle (the most important), the rest stays in the card.

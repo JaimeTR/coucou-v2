@@ -126,11 +126,11 @@ fn targets(id: &str) -> Result<Vec<Target>, String> {
         VSCODE => {
             let profiles = powershell_profiles();
             if profiles.is_empty() {
-                return Err("No PowerShell was found, so there is no profile to add Coucou to.".into());
+                return Err("No se encontró PowerShell, así que no hay perfil al que añadir Coucou.".into());
             }
             Ok(profiles.into_iter().map(|path| Target { path, kind: Kind::PowerShellProfile }).collect())
         }
-        other => Err(format!("unknown agent {other}")),
+        other => Err(format!("agente desconocido {other}")),
     }
 }
 
@@ -144,11 +144,11 @@ fn read(path: &Path) -> Result<Content, String> {
             // Anything that is not UTF-8 (a profile saved as ANSI, say) is left
             // alone: converting it could silently change what is in there.
             let text = String::from_utf8(bytes)
-                .map_err(|_| format!("{} isn't UTF-8 text — Coucou won't touch it.", path.display()))?;
+                .map_err(|_| format!("{} no es texto UTF-8: Coucou no lo tocará.", path.display()))?;
             Ok(Content { text: Some(text), bom })
         }
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(Content { text: None, bom: false }),
-        Err(err) => Err(format!("Can't read {}: {err}", path.display())),
+        Err(err) => Err(format!("No se puede leer {}: {err}", path.display())),
     }
 }
 
@@ -183,7 +183,7 @@ fn gemini_merged(existing: &Value) -> Value {
 /// slow OpenCode down or break it, so every failure is swallowed.
 fn plugin_source() -> String {
     format!(
-        r#"{PLUGIN_MARKER} — written by Coucou (Settings → Agents). Use Disconnect there, or delete this file, to remove it.
+        r#"{PLUGIN_MARKER} — escrito por Coucou (Ajustes → Agentes). Usa Desconectar allí, o borra este archivo, para quitarlo.
 const HOOK = {hook};
 
 const TOOLS = {{
@@ -232,7 +232,7 @@ export const CoucouPlugin = async ({{ directory }}) => {{
         case "session.deleted": send("SessionEnd", {{ session_id, cwd }}); break;
         case "permission.asked":
         case "permission.updated":
-          send("Notification", {{ session_id, cwd, message: `Permission needed: ${{p.title ?? p.type ?? "a tool"}}?` }});
+          send("Notification", {{ session_id, cwd, message: `¿Permiso para ${{p.title ?? p.type ?? "una herramienta"}}?` }});
           break;
       }}
     }},
@@ -271,8 +271,8 @@ fn profile_block(eol: &str) -> String {
     let hook = exe().replace('\'', "''");
     let body = format!(
         r#"{PROFILE_START}
-# Managed by Coucou (Settings > Agents). In the VS Code terminal only: tells Coucou when a long command finishes.
-# Use Disconnect there, or delete this block, to undo it.
+# Gestionado por Coucou (Ajustes > Agentes). Solo en la terminal de VS Code: avisa a Coucou cuando termina un comando largo.
+# Usa Desconectar, o borra este bloque, para deshacerlo.
 $global:CoucouHook = '{hook}'
 $global:CoucouMinSeconds = 10
 if ($env:TERM_PROGRAM -eq 'vscode' -and (Test-Path -LiteralPath $global:CoucouHook) -and -not $global:CoucouWrapped) {{
@@ -288,7 +288,7 @@ if ($env:TERM_PROGRAM -eq 'vscode' -and (Test-Path -LiteralPath $global:CoucouHo
         $secs = ($h.EndExecutionTime - $h.StartExecutionTime).TotalSeconds
         if ($secs -ge $global:CoucouMinSeconds) {{
           $name = if ($coucouOk) {{ 'Stop' }} else {{ 'StopFailure' }}
-          $state = if ($coucouOk) {{ 'ok' }} else {{ 'failed' }}
+          $state = if ($coucouOk) {{ 'bien' }} else {{ 'fallo' }}
           $text = ($h.CommandLine -replace '\s+', ' ')
           if ($text.Length -gt 60) {{ $text = $text.Substring(0, 60) + '...' }}
           @{{ hook_event_name = $name; session_id = "pwsh-$PID"; cwd = (Get-Location).Path
@@ -342,7 +342,7 @@ fn render(kind: Kind, install: bool, path: &Path, current: &Content) -> Result<O
         Kind::OpenCodePlugin => match (&current.text, install) {
             // A file of that name that is not ours stays untouched.
             (Some(text), _) if !text.contains(PLUGIN_MARKER) => Err(format!(
-                "{} already exists and isn't Coucou's. Rename or remove it first.",
+                "{} ya existe y no es de Coucou. Renómbralo o quítalo primero.",
                 path.display()
             )),
             (_, true) => Ok(Some(plugin_source())),
@@ -416,7 +416,7 @@ pub fn status() -> Vec<AgentStatus> {
             name: "VS Code",
             detected: on_path("code") || platform::vscode_storage_path().exists(),
             installed: installed(VSCODE),
-            target: "your PowerShell profile (VS Code's terminal only)".into(),
+            target: "tu perfil de PowerShell (solo la terminal de VS Code)".into(),
         },
     ]
 }
@@ -453,7 +453,7 @@ pub fn preview(id: &str, install: bool) -> Result<HookPreview, String> {
         let after = next.clone().unwrap_or_default();
         diff.push_str(&format!("── {}\n", t.path.display()));
         if next == current.text {
-            diff.push_str("No change.\n\n");
+            diff.push_str("Sin cambios.\n\n");
             continue;
         }
         diff.push_str(&hooks::unified_diff(&before, &after));
@@ -464,7 +464,7 @@ pub fn preview(id: &str, install: bool) -> Result<HookPreview, String> {
     }
     Ok(HookPreview {
         diff,
-        backup: if backups.is_empty() { "nothing to back up (new file)".into() } else { backups.join("  ·  ") },
+        backup: if backups.is_empty() { "no hay nada que respaldar (archivo nuevo)".into() } else { backups.join("  ·  ") },
         settings_path: ts.iter().map(|t| t.path.to_string_lossy().to_string()).collect::<Vec<_>>().join("  ·  "),
         fingerprint: fingerprint_of(&ts, &contents),
     })
@@ -475,7 +475,7 @@ pub fn write(id: &str, install: bool, fingerprint: &str) -> Result<String, Strin
     let ts = targets(id)?;
     let contents = snapshot(&ts)?;
     if fingerprint_of(&ts, &contents) != fingerprint {
-        return Err("A file changed since the preview. Nothing was written — review the new diff.".into());
+        return Err("Un archivo cambió desde la vista previa. No se escribió nada: revisa los cambios nuevos.".into());
     }
     // Work out every result before touching anything: one refusal stops them all.
     let mut plan: Vec<(&Target, &Content, Option<String>)> = Vec::new();
@@ -490,7 +490,7 @@ pub fn write(id: &str, install: bool, fingerprint: &str) -> Result<String, Strin
     for (t, current, next) in plan {
         if current.text.is_some() {
             let backup = backup_of(&t.path);
-            std::fs::copy(&t.path, &backup).map_err(|e| format!("backup failed: {e}"))?;
+            std::fs::copy(&t.path, &backup).map_err(|e| format!("falló la copia de seguridad: {e}"))?;
             backups.push(backup.to_string_lossy().to_string());
         }
         match next {
@@ -517,7 +517,7 @@ pub fn write(id: &str, install: bool, fingerprint: &str) -> Result<String, Strin
             }
         }
     }
-    Ok(if backups.is_empty() { "no backup needed".into() } else { backups.join("  ·  ") })
+    Ok(if backups.is_empty() { "no hizo falta copia de seguridad".into() } else { backups.join("  ·  ") })
 }
 
 #[cfg(test)]
