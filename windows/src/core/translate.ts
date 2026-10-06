@@ -27,6 +27,10 @@ const EXTRA: ReadonlyArray<readonly [string, string]> = [
   ["{0} está listo.", "{0} is ready."],
   ["{0} (borrador)", "{0} (draft)"],
   ["Idioma de la interfaz", "Interface language"],
+  ["Abriendo {0}", "Opening {0}"],
+  ["No pude abrir {0}", "I couldn't open {0}"],
+  ["Hola {0}, ¿qué quieres hacer hoy? ¿Te ayudo con algo?", "Hi {0}, what do you want to do today? Can I help with something?"],
+  ["¿Qué quieres hacer hoy? ¿Te ayudo con algo?", "What do you want to do today? Can I help with something?"],
   ["Voz", "Voice"],
   ["Mochi puede hablarte y escucharte. Todo es opcional y está desactivado hasta que lo actives.", "Mochi can talk to you and listen to you. Everything is optional and off until you turn it on."],
   ["Quién habla", "Who speaks"],
@@ -156,7 +160,11 @@ function viaPattern(piece: string): string {
   for (const p of patterns) {
     const m = p.re.exec(piece);
     if (m) {
-      return p.to.replace(/\{(\d)\}/g, (_, i: string) => m[Number(i) + 1] ?? "");
+      // A captured piece that is itself a known string ("Ajustes") is translated too.
+      return p.to.replace(/\{(\d)\}/g, (_, i: string) => {
+        const piece = m[Number(i) + 1] ?? "";
+        return exact.get(piece) ?? piece;
+      });
     }
   }
   return piece;

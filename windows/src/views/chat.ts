@@ -8,6 +8,8 @@ import { Sound } from "../core/sound";
 import { speak, stopSpeaking, voiceAvailable } from "../core/voice";
 import { recordOnce } from "../core/mic";
 import { uiLanguage } from "../core/i18n";
+import { parseIntent } from "../core/intent";
+import { runLaunch } from "../island/voiceCommands";
 import { State, type ChatMessage } from "../core/state";
 import type { ViewHost } from "./views";
 
@@ -140,7 +142,11 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
         status = "Entendiendo…";
         input.placeholder = status;
         const said = (await Bridge.voiceTranscribe(Array.from(wav), "audio/wav", uiLanguage())).trim();
-        if (said) {
+        const intent = said ? parseIntent(said) : null;
+        if (intent?.kind === "launch") {
+          // "Abre Claude Code": do it, instead of asking the chat about it.
+          await runLaunch(intent);
+        } else if (said) {
           input.value = said;
           recording = null;
           await submit();

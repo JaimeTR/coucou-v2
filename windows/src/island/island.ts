@@ -12,6 +12,8 @@ import {
 import { Sound } from "../core/sound";
 import { speak } from "../core/voice";
 import { WakeListener } from "./listen";
+import { parseIntent } from "../core/intent";
+import { helloLine, runLaunch } from "./voiceCommands";
 import { State } from "../core/state";
 import { BotEngine, hexToRGB } from "../mochi/engine";
 import { Greeting } from "../mochi/greeting";
@@ -1076,9 +1078,26 @@ export class Island {
     busy: () => State.micBusy,
     onWake: (rest) => {
       Sound.play("blip");
-      State.pendingVoice = rest ? { query: rest } : { record: true };
+      const intent = rest ? parseIntent(rest) : null;
+      if (intent?.kind === "launch") {
+        // "Oye Mochi, abre Claude Code": it just does it.
+        void runLaunch(intent);
+        return;
+      }
       State.isPinned = true;
       this.alert("prompt");
+      if (rest) {
+        // A question: straight to the chat, which answers there.
+        State.pendingVoice = { query: rest };
+        State.notify();
+        return;
+      }
+      // Only the name: greet, ask what is wanted, and listen once Mochi has finished talking.
+      const listen = () => {
+        State.pendingVoice = { record: true };
+        State.notify();
+      };
+      if (!speak(helloLine(), listen)) listen();
     },
     onProblem: (message) => {
       // It stops itself rather than failing again on every phrase.
