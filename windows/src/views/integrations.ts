@@ -133,6 +133,12 @@ async function launch(agent: "claude" | "opencode" | "gemini", path: string | nu
   note.textContent = ok ? "" : `No encuentro «${agent}». Instálalo con: ${INSTALL_HINT[agent]}`;
 }
 
+/** Opens the agent's desktop program (or web), saying so in `note` when it is not installed. */
+async function openApp(agent: "opencode" | "gemini", note: HTMLElement) {
+  const ok = await Bridge.openAgentApp(agent);
+  note.textContent = ok ? "" : "No encuentro el programa de OpenCode. Instálalo desde opencode.ai/download o usa «En terminal».";
+}
+
 /** Up to `max` projects as links; a click opens the folder in VS Code. */
 function projectLinks(projects: ProjectInfo[], color: string, max = 3): HTMLElement {
   const row = h("div", { class: "proj-row" });
@@ -194,9 +200,12 @@ function claudeCard(task: AgentTask, openSettings: () => void): HTMLElement {
 }
 
 /** What each terminal agent can do from its card. */
-const AGENT_LAUNCH: Record<string, { agent: "opencode" | "gemini"; resume: boolean }> = {
-  agent_opencode: { agent: "opencode", resume: true },
-  agent_gemini: { agent: "gemini", resume: false },
+const AGENT_LAUNCH: Record<
+  string,
+  { agent: "opencode" | "gemini"; resume: boolean; appLabel: string; appTitle: string }
+> = {
+  agent_opencode: { agent: "opencode", resume: true, appLabel: "Abrir app", appTitle: "El programa OpenCode de Windows" },
+  agent_gemini: { agent: "gemini", resume: false, appLabel: "Abrir Gemini web", appTitle: "Gemini no tiene programa de escritorio: abre gemini.google.com" },
 };
 
 /** Gemini CLI and OpenCode: start them in a project, or continue the last session. */
@@ -230,7 +239,14 @@ function agentCard(task: AgentTask, openSettings: () => void): HTMLElement {
   }
   card.append(note);
   const actions = h("div", { class: "int-actions" },
-    h("button", { class: "link-btn", style: `color:${task.color}d9`, text: `Abrir ${task.name}`, onclick: () => void launch(spec.agent, null, false, note) }),
+    h("button", {
+      class: "link-btn",
+      style: `color:${task.color}d9`,
+      text: spec.appLabel,
+      title: spec.appTitle,
+      onclick: () => void openApp(spec.agent, note),
+    }),
+    h("button", { class: "link-btn", style: `color:${task.color}d9`, text: "En terminal", title: `${spec.agent} en una terminal nueva`, onclick: () => void launch(spec.agent, null, false, note) }),
   );
   if (spec.resume && projects[0]) {
     actions.append(

@@ -285,6 +285,30 @@ fn open_in_vscode(path: Option<String>) -> bool {
     false
 }
 
+/// Opens the installed desktop program of an agent: OpenCode's Windows app, or
+/// Gemini on the web (it has no desktop app). False when it is not installed.
+#[tauri::command]
+fn open_agent_app(agent: String) -> bool {
+    match agent.as_str() {
+        "gemini" => {
+            platform::open_url("https://gemini.google.com/app");
+            true
+        }
+        #[cfg(windows)]
+        "opencode" => {
+            let Some(base) = std::env::var_os("LOCALAPPDATA") else {
+                return false;
+            };
+            let exe = std::path::PathBuf::from(base)
+                .join("Programs")
+                .join("@opencode-aidesktop")
+                .join("OpenCode.exe");
+            exe.is_file() && Command::new(exe).spawn().is_ok()
+        }
+        _ => false,
+    }
+}
+
 /// Starts a coding agent in a new terminal window, in a project folder (the home
 /// folder when none is given). `resume` continues that folder's latest
 /// conversation where the agent supports it. Only these three agents can be
@@ -319,7 +343,9 @@ fn launch_agent(agent: String, path: Option<String>, resume: bool) -> bool {
     #[cfg(windows)]
     {
         let mut cmd = Command::new("cmd");
-        cmd.current_dir(&dir).args(["/c", "start", program, program]);
+        cmd.current_dir(&dir)// The title must be quoted (a space makes Rust quote it): an unquoted
+        // one is taken for the program, and the program for its argument.
+        .args(["/c", "start", "Coucou agente", program]);
         if resume {
             cmd.args(resume_args);
         }
@@ -708,6 +734,7 @@ pub fn run() {
             open_url,
             open_in_vscode,
             launch_agent,
+            open_agent_app,
             open_file_in_vscode,
             focus_terminal,
             quit_app,
