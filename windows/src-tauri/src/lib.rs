@@ -3,6 +3,7 @@
 mod agents;
 mod claude;
 mod compat;
+mod custom;
 mod devmark;
 mod files;
 mod hooks;
@@ -269,7 +270,9 @@ fn notify(app: AppHandle, shared: State<Shared>, title: String, body: String) {
 }
 
 #[tauri::command]
-fn save_settings(app: AppHandle, shared: State<Shared>, settings: Settings) {
+fn save_settings(app: AppHandle, shared: State<Shared>, mut settings: Settings) {
+    settings.custom_pills = settings::sanitize_pills(std::mem::take(&mut settings.custom_pills));
+    let pills_changed = shared.settings.lock().unwrap().custom_pills != settings.custom_pills;
     let (screen_changed, autostart_changed, shortcuts_changed) = {
         let mut current = shared.settings.lock().unwrap();
         let screen_changed = current.screen != settings.screen;
@@ -280,6 +283,9 @@ fn save_settings(app: AppHandle, shared: State<Shared>, settings: Settings) {
     };
     if shortcuts_changed {
         apply_shortcut_setting(&app, settings.global_shortcuts);
+    }
+    if pills_changed {
+        custom::reload(&app);
     }
     if let Err(err) = settings::save(&settings) {
         eprintln!("[coucou] could not save settings: {err}");
@@ -733,6 +739,12 @@ fn secret_clear(key: String) -> Result<(), String> {
 }
 
 
+/// "Probar" on one of your own apps: what it would show right now.
+#[tauri::command]
+async fn custom_test(app: AppHandle, id: String) -> Result<String, String> {
+    custom::test(&app, &id).await
+}
+
 /// Refresh buttons in the integration cards.
 #[tauri::command]
 async fn refresh_integration(app: AppHandle, id: String) {
@@ -899,6 +911,7 @@ pub fn run() {
             set_paused,
             set_ui_language,
             set_shortcut,
+            custom_test,
             voice_speak,
             voice_list,
             voice_transcribe,
@@ -928,6 +941,7 @@ pub fn run() {
             apply_shortcut_setting(&handle, loaded.global_shortcuts);
             pipe::start(handle.clone());
             integrations::start(handle.clone());
+            custom::start(handle.clone());
             Ok(())
         })
         .run(tauri::generate_context!())

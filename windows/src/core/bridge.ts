@@ -92,6 +92,8 @@ export const Bridge = {
   /** Groq Whisper: what was said in a 16 kHz WAV. */
   voiceTranscribe: (audio: number[], mime: string, lang: string) =>
     callOrThrow<string>("voice_transcribe", { audio, mime, lang }),
+  /** "Probar": what one of your own apps would show right now. */
+  customTest: (id: string) => callOrThrow<string>("custom_test", { id }),
   launchAgent: (agent: "claude" | "opencode" | "gemini" | "agy", path: string | null, resume: boolean) =>
     call<boolean>("launch_agent", { agent, path, resume }),
 

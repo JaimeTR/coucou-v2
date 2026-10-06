@@ -179,6 +179,11 @@ export class Island {
           integration_notion: "https://notion.so",
           integration_calcom: "https://app.cal.com/bookings",
         };
+        const mine = State.settings.customPills?.find((p) => p.id === task.id);
+        if (mine) {
+          if (mine.openUrl) void Bridge.openUrl(mine.openUrl);
+          return;
+        }
         if (task.id === "integration_claude") this.openSessionTerminal();
         else if (urls[task.id]) void Bridge.openUrl(urls[task.id]);
       },

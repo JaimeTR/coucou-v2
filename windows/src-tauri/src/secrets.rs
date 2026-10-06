@@ -20,8 +20,16 @@ pub const KNOWN_KEYS: &[&str] = &[
     "calcom-api-key",
 ];
 
+/// The token of a custom pill: "custom-<slug>-token".
+fn is_custom_key(key: &str) -> bool {
+    key.len() <= 48
+        && key.starts_with("custom-")
+        && key.ends_with("-token")
+        && key.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+}
+
 fn entry(key: &str) -> Option<Entry> {
-    if !KNOWN_KEYS.contains(&key) {
+    if !KNOWN_KEYS.contains(&key) && !is_custom_key(key) {
         return None;
     }
     Entry::new(SERVICE, key).ok()

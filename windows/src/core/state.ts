@@ -143,7 +143,27 @@ export interface IntegrationInfo {
   configured: boolean;
 }
 
+/** An app of your own with a pill: fed by a webhook, or by polling a URL. */
+export interface CustomPill {
+  /** "custom_" + lowercase letters and digits. */
+  id: string;
+  name: string;
+  /** "#rrggbb" */
+  color: string;
+  kind: "webhook" | "poll";
+  hookToken: string;
+  pollUrl: string;
+  pollPath: string;
+  pollEvery: number;
+  authHeader: string;
+  openUrl: string;
+}
+
+export const CUSTOM_PILL_LIMIT = 8;
+export const WEBHOOK_PORT = 47821;
+
 export interface Settings {
+  customPills: CustomPill[];
   soundEnabled: boolean;
   soundVolume: number;
   autoCloseInterval: number;
@@ -215,6 +235,7 @@ export const DEFAULT_SETTINGS: Settings = {
   greetingEnabled: true,
   greetingTemplate: "Hola {name}",
   greetingLanguage: "auto",
+  customPills: [],
   voiceGreeting: false,
   voiceEnabled: false,
   voiceEvents: false,
@@ -421,8 +442,29 @@ class AppState {
       // both known integrations → declaration order
       return order.indexOf(a.id) - order.indexOf(b.id);
     });
+    this.loadCustomTasks();
     if (!this.focusId) this.focusId = "integration_claude";
     this.notify();
+  }
+
+  /** Your own apps: one pill each, after the built-in ones. */
+  private loadCustomTasks() {
+    const mine = this.settings.customPills ?? [];
+    // Gone from Settings: gone from the island.
+    for (let i = this.tasks.length - 1; i >= 0; i--) {
+      const id = this.tasks[i].id;
+      if (id.startsWith("custom_") && !mine.some((p) => p.id === id)) this.tasks.splice(i, 1);
+    }
+    for (const p of mine) {
+      const idx = this.tasks.findIndex((t) => t.id === p.id);
+      // Same legacy source as the other integrations: it is what labels them "Integración".
+      if (idx < 0) this.tasks.push({ ...task(p.id, p.name, p.color, "n8n") });
+      else {
+        this.tasks[idx].name = p.name;
+        this.tasks[idx].color = p.color;
+      }
+    }
+    this.tasks.sort((a, b) => Number(a.id.startsWith("custom_")) - Number(b.id.startsWith("custom_")));
   }
 
   /** Focus the pill the person chose to see first, when it is one of the active ones. */

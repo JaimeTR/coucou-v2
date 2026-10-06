@@ -667,6 +667,40 @@ function calcomCard(): HTMLElement {
   return h("div", { class: "int-card" }, header("#C9956A", "Cal.com", "Agenda"), rows);
 }
 
+// ── Your own apps ─────────────────────────────────────────────────────────────
+
+/** The card of an app you added: what it last said, or the value it is watching. */
+function customCard(task: AgentTask, openSettings: () => void): HTMLElement {
+  const mine = State.settings.customPills?.find((p) => p.id === task.id);
+  const info = State.integrations[task.id];
+  const data = (info?.data ?? {}) as { value?: string; last?: { title: string; detail?: string | null; success: boolean } };
+  const card = h("div", { class: "int-card" }, header(task.color, task.name, mine?.kind === "poll" ? "Valor" : "Avisos"));
+
+  if (info?.error) {
+    card.append(h("div", { class: "int-status" }, dot("#F4505E", 5), h("span", { text: info.error })));
+  } else if (data.value != null) {
+    card.append(h("div", { class: "int-status" }, dot("#22C55E", 5), h("span", { text: data.value })));
+  } else if (data.last) {
+    const ok = data.last.success ? "#22C55E" : "#F4505E";
+    card.append(h("div", { class: "int-status" }, dot(ok, 5), h("span", { text: data.last.title })));
+    if (data.last.detail) card.append(h("div", { class: "int-sub", text: data.last.detail }));
+  } else {
+    card.append(
+      h("div", { class: "int-sub", text: mine?.kind === "poll" ? "Esperando la primera lectura…" : "Esperando el primer aviso…" }),
+    );
+  }
+
+  const actions = h("div", { class: "int-actions" });
+  if (mine?.openUrl) {
+    actions.append(
+      h("button", { class: "link-btn", style: `color:${task.color}d9`, text: `Abrir ${task.name}`, onclick: () => void Bridge.openUrl(mine.openUrl) }),
+    );
+  }
+  actions.append(h("button", { class: "link-btn", style: "color:#8e939c", text: "Ajustes…", onclick: openSettings }));
+  card.append(actions);
+  return card;
+}
+
 // ── Dispatch ──────────────────────────────────────────────────────────────────
 
 export interface IntegrationCardHooks {
@@ -702,6 +736,7 @@ export function renderIntegrationCard(task: AgentTask, hooks: IntegrationCardHoo
   // Claude Code and VS Code each have a card of their own, whatever their state.
   if (task.id === "integration_claude") return claudeCard(task, hooks.openSettings);
   if (task.id === "agent_vscode") return vscodeCard(task, hooks.openSettings);
+  if (task.id.startsWith("custom_")) return customCard(task, hooks.openSettings);
   if (AGENT_LAUNCH[task.id]) return agentCard(task, hooks.openSettings);
   if (task.id === "integration_github" && hasIntegrationData(task.id)) {
     return hooks.detailOpen ? githubDetail(hooks.closeDetail) : githubCard(hooks.openDetail);

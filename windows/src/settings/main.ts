@@ -9,7 +9,7 @@ import { speak, stopSpeaking } from "../core/voice";
 import { State } from "../core/state";
 import { captureAccelerator } from "../core/accelerator";
 import { greetingLines } from "../island/greetingText";
-import { DEFAULT_SETTINGS, type Settings } from "../core/state";
+import { CUSTOM_PILL_LIMIT, DEFAULT_SETTINGS, WEBHOOK_PORT, type CustomPill, type Settings } from "../core/state";
 import { h, clear } from "../views/dom";
 import type { Rule } from "../island/rules";
 
@@ -309,6 +309,149 @@ function agentsSection(initial: AgentStatus[]): HTMLElement {
   }
   updateNote();
   return h("section", {}, h("h2", {}, h("span", { text: "Agentes" })), note, list);
+}
+
+// ── Your own apps ─────────────────────────────────────────────────────────────
+
+const randomText = (bytes: number, alphabet: string) => {
+  const values = crypto.getRandomValues(new Uint8Array(bytes));
+  return Array.from(values, (v) => alphabet[v % alphabet.length]).join("");
+};
+
+const tokenKey = (id: string) => `custom-${id.replace(/^custom_/, "")}-token`;
+const hookUrl = (p: CustomPill) => `http://127.0.0.1:${WEBHOOK_PORT}/hook/${p.hookToken}`;
+
+function newPill(): CustomPill {
+  return {
+    id: `custom_${randomText(8, "abcdefghijklmnopqrstuvwxyz0123456789")}`,
+    name: "Mi app",
+    color: "#2DA8F5",
+    kind: "webhook",
+    hookToken: randomText(32, "abcdef0123456789"),
+    pollUrl: "",
+    pollPath: "",
+    pollEvery: 120,
+    authHeader: "Authorization",
+    openUrl: "",
+  };
+}
+
+function customSection(): HTMLElement {
+  const list = h("div", { style: "display:flex;flex-direction:column;gap:18px" });
+  const addBtn = h("button", { class: "primary", text: "Añadir app" });
+
+  const field = (label: string, input: HTMLElement, hint?: string) =>
+    h("div", { class: "row" }, h("label", { text: label }), input, hint ? h("span", { class: "hint", text: hint }) : h("span"));
+
+  function draw() {
+    clear(list);
+    for (const pill of settings.customPills) list.append(card(pill));
+    addBtn.style.display = settings.customPills.length >= CUSTOM_PILL_LIMIT ? "none" : "";
+  }
+
+  function card(pill: CustomPill): HTMLElement {
+    const feedback = h("div", {});
+    const text = (value: string, placeholder: string, on: (v: string) => void, type = "text") => {
+      const el = h("input", { type, value, placeholder, spellcheck: "false", style: "flex:1 1 auto;min-width:0" }) as HTMLInputElement;
+      el.addEventListener("change", () => { on(el.value.trim()); void save(); });
+      return el;
+    };
+
+    const name = text(pill.name, "Nombre", (v) => (pill.name = v.slice(0, 24) || "Mi app"));
+    const color = h("input", { type: "color", value: pill.color }) as HTMLInputElement;
+    color.addEventListener("change", () => { pill.color = color.value; void save(); });
+    const kind = h("select", {}) as HTMLSelectElement;
+    kind.append(
+      h("option", { value: "webhook", text: "Recibe avisos de otro programa (webhook)" }),
+      h("option", { value: "poll", text: "Consulta una dirección cada cierto tiempo (URL)" }),
+    );
+    kind.value = pill.kind;
+    kind.addEventListener("change", () => { pill.kind = kind.value as CustomPill["kind"]; void save(); drawBody(); });
+
+    const body = h("div", { style: "display:flex;flex-direction:column;gap:10px" });
+
+    function drawBody() {
+      clear(body);
+      clear(feedback);
+      if (pill.kind === "webhook") {
+        const url = h("input", { type: "text", value: hookUrl(pill), readonly: "true", style: "flex:1 1 auto;min-width:0" }) as HTMLInputElement;
+        url.addEventListener("focus", () => url.select());
+        body.append(
+          h("div", { class: "hint", text: "Cualquier programa tuyo (un script, n8n, una acción de GitHub…) puede avisar a Mochi con un POST a esta dirección. Solo funciona desde este PC, y el secreto va en la propia dirección: no la compartas." }),
+          h("div", { class: "row" }, h("label", { text: "Dirección" }), url, h("button", { text: "Copiar", onclick: () => void navigator.clipboard?.writeText(url.value) })),
+          h("div", { class: "hint", text: `Ejemplo:  curl -X POST ${hookUrl(pill)} -d '{"title":"Deploy listo","detail":"v1.2","status":"success"}'   (status: success, error o info)` }),
+        );
+      } else {
+        const secret = h("input", { type: "password", placeholder: "Token (opcional)", autocomplete: "off", style: "flex:1 1 auto;min-width:0" }) as HTMLInputElement;
+        const saveToken = h("button", { text: "Guardar token" });
+        saveToken.addEventListener("click", async () => {
+          if (!secret.value.trim()) return;
+          clear(feedback);
+          try {
+            await Bridge.secretSet(tokenKey(pill.id), secret.value.trim());
+            secret.value = "";
+            feedback.append(h("div", { class: "notice ok", text: "Guardado en el Administrador de credenciales de Windows." }));
+          } catch (err) {
+            feedback.append(h("div", { class: "notice err", text: `No se pudo guardar: ${String(err)}` }));
+          }
+        });
+        const every = text(String(pill.pollEvery), "120", (v) => (pill.pollEvery = Math.max(30, Number(v) || 120)));
+        body.append(
+          field("Dirección", text(pill.pollUrl, "https://…", (v) => (pill.pollUrl = v)), "debe empezar por http:// o https://"),
+          field("Valor a mostrar", text(pill.pollPath, "data.issues_abiertos", (v) => (pill.pollPath = v)), "ruta dentro del JSON, separada por puntos; vacío = toda la respuesta"),
+          h("div", { class: "row" }, h("label", { text: "Cada" }), every, h("span", { class: "hint", text: "segundos (mínimo 30)" })),
+          h("div", { class: "row" }, h("label", { text: "Token" }), secret, saveToken),
+          field("Cabecera del token", text(pill.authHeader, "Authorization", (v) => (pill.authHeader = v || "Authorization")), "Authorization usa «Bearer …» solo"),
+          h("div", { class: "hint", text: "Un cambio en el valor se avisa como un evento; la primera lectura no." }),
+        );
+      }
+      body.append(field("Al hacer clic en ↗", text(pill.openUrl, "https://… (opcional)", (v) => (pill.openUrl = v)), "abre esta dirección"));
+      const test = h("button", { text: pill.kind === "webhook" ? "Enviar aviso de prueba" : "Probar ahora" });
+      test.addEventListener("click", async () => {
+        clear(feedback);
+        test.disabled = true;
+        try {
+          await save(); // the island needs the pill before it can test it
+          const result = await Bridge.customTest(pill.id);
+          feedback.append(h("div", { class: "notice ok", text: pill.kind === "poll" ? `Leído: ${result}` : result }));
+        } catch (err) {
+          feedback.append(h("div", { class: "notice err", text: String(err).replace(/^Error:\s*/, "") }));
+        } finally {
+          test.disabled = false;
+        }
+      });
+      const remove = h("button", { class: "danger", text: "Quitar esta app" });
+      remove.addEventListener("click", async () => {
+        settings.customPills = settings.customPills.filter((p) => p.id !== pill.id);
+        try { await Bridge.secretClear(tokenKey(pill.id)); } catch { /* nothing was saved */ }
+        void save();
+        draw();
+      });
+      body.append(h("div", { class: "row" }, test, remove), feedback);
+    }
+    drawBody();
+
+    return h("div", { class: "notice", style: "display:flex;flex-direction:column;gap:10px" },
+      h("div", { class: "row" }, h("label", { text: "Nombre" }), name, color),
+      h("div", { class: "row" }, h("label", { text: "Cómo se entera" }), kind),
+      body,
+    );
+  }
+
+  addBtn.addEventListener("click", () => {
+    if (settings.customPills.length >= CUSTOM_PILL_LIMIT) return;
+    settings.customPills = [...settings.customPills, newPill()];
+    void save();
+    draw();
+  });
+  draw();
+
+  return h("section", {},
+    h("h2", {}, h("span", { text: "Mis apps" })),
+    h("div", { class: "hint", text: `Añade tus propios programas y servicios a la isla: cada uno tiene su pill, su tarjeta y sus avisos. Hasta ${CUSTOM_PILL_LIMIT}.` }),
+    list,
+    h("div", { class: "row" }, addBtn),
+  );
 }
 
 // ── Voice ─────────────────────────────────────────────────────────────────────
@@ -1458,6 +1601,7 @@ async function main() {
     providerSection(present),
     apiSection(hasKey),
     integrationsSection(present),
+    customSection(),
     generalSection(),
     h("div", {
       class: "hint",
