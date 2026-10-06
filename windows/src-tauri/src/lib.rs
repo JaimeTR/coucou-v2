@@ -298,6 +298,11 @@ fn launch_agent(agent: String, path: Option<String>, resume: bool) -> bool {
         "gemini" => ("gemini", &[]),
         _ => return false,
     };
+    // Without the program installed, Windows would show its own "cannot find the
+    // file" dialog; the island says so (and how to install it) instead.
+    if platform::find_on_path(program).is_none() {
+        return false;
+    }
     let dir = match path.filter(|p| !p.is_empty()) {
         Some(p) => {
             let d = std::path::PathBuf::from(p);

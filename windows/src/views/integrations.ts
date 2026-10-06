@@ -121,6 +121,18 @@ function projectAgo(unixSeconds: number): string {
   return timeAgo(unixSeconds * 1000);
 }
 
+const INSTALL_HINT: Record<string, string> = {
+  claude: "npm i -g @anthropic-ai/claude-code",
+  opencode: "npm i -g opencode-ai",
+  gemini: "npm i -g @google/gemini-cli",
+};
+
+/** Starts an agent in a terminal; if it is not installed, says how to get it in `note`. */
+async function launch(agent: "claude" | "opencode" | "gemini", path: string | null, resume: boolean, note: HTMLElement) {
+  const ok = await Bridge.launchAgent(agent, path, resume);
+  note.textContent = ok ? "" : `No encuentro «${agent}». Instálalo con: ${INSTALL_HINT[agent]}`;
+}
+
 /** Up to `max` projects as links; a click opens the folder in VS Code. */
 function projectLinks(projects: ProjectInfo[], color: string, max = 3): HTMLElement {
   const row = h("div", { class: "proj-row" });
@@ -169,11 +181,12 @@ function claudeCard(task: AgentTask, openSettings: () => void): HTMLElement {
     card.append(h("div", { class: "int-sub", text: "Aún no hay proyectos" }));
   }
   const last = State.claudeProjects[0]?.path ?? null;
-  card.append(
+  const note = h("div", { class: "int-sub", style: "color:#F4505E;white-space:normal" });
+  card.append(note,
     h("div", { class: "int-actions" },
-      h("button", { class: "link-btn", style: `color:${task.color}d9`, text: "Abrir Claude Code", onclick: () => void Bridge.launchAgent("claude", last, false) }),
+      h("button", { class: "link-btn", style: `color:${task.color}d9`, text: "Abrir Claude Code", onclick: () => void launch("claude", last, false, note) }),
       last
-        ? h("button", { class: "link-btn", style: `color:${task.color}d9`, text: "Continuar", title: "claude --continue en el último proyecto", onclick: () => void Bridge.launchAgent("claude", last, true) })
+        ? h("button", { class: "link-btn", style: `color:${task.color}d9`, text: "Continuar", title: "claude --continue en el último proyecto", onclick: () => void launch("claude", last, true, note) })
         : h("span"),
     ),
   );
@@ -197,6 +210,7 @@ function agentCard(task: AgentTask, openSettings: () => void): HTMLElement {
     );
   }
   const projects = State.claudeProjects.slice(0, 3);
+  const note = h("div", { class: "int-sub", style: "color:#F4505E;white-space:normal" });
   if (projects.length > 0) {
     const row = h("div", { class: "proj-row" });
     for (const p of projects) {
@@ -206,7 +220,7 @@ function agentCard(task: AgentTask, openSettings: () => void): HTMLElement {
           style: `color:${task.color}d9`,
           title: `Abrir ${task.name} en ${p.path}`,
           text: p.name,
-          onclick: () => void Bridge.launchAgent(spec.agent, p.path, false),
+          onclick: () => void launch(spec.agent, p.path, false, note),
         }),
       );
     }
@@ -214,12 +228,13 @@ function agentCard(task: AgentTask, openSettings: () => void): HTMLElement {
   } else {
     card.append(h("div", { class: "int-sub", text: "Elige un proyecto para empezar" }));
   }
+  card.append(note);
   const actions = h("div", { class: "int-actions" },
-    h("button", { class: "link-btn", style: `color:${task.color}d9`, text: `Abrir ${task.name}`, onclick: () => void Bridge.launchAgent(spec.agent, null, false) }),
+    h("button", { class: "link-btn", style: `color:${task.color}d9`, text: `Abrir ${task.name}`, onclick: () => void launch(spec.agent, null, false, note) }),
   );
   if (spec.resume && projects[0]) {
     actions.append(
-      h("button", { class: "link-btn", style: `color:${task.color}d9`, text: "Continuar", title: `${spec.agent} --continue en ${projects[0].name}`, onclick: () => void Bridge.launchAgent(spec.agent, projects[0].path, true) }),
+      h("button", { class: "link-btn", style: `color:${task.color}d9`, text: "Continuar", title: `${spec.agent} --continue en ${projects[0].name}`, onclick: () => void launch(spec.agent, projects[0].path, true, note) }),
     );
   }
   if (!connected) {
