@@ -376,7 +376,7 @@ function personalSection(detectedName: string): HTMLElement {
   // Which pill opens first: Claude Code, or any of the ones that are switched on.
   const startPill = h("select", {}) as HTMLSelectElement;
   const names: Record<string, string> = {
-    integration_claude: "Claude Code", integration_github: "GitHub", integration_n8n: "n8n",
+    integration_claude: "Claude Code", integration_github: "GitHub",
     integration_vercel: "Vercel", integration_resend: "Resend", integration_notion: "Notion",
     integration_calcom: "Cal.com", integration_stripe: "Stripe",
     agent_gemini: "Gemini CLI", agent_opencode: "OpenCode", agent_vscode: "VS Code",
@@ -1017,11 +1017,6 @@ const INTEGRATIONS: IntegrationDef[] = [
     fields: [{ key: "github-token", label: "Token", placeholder: "ghp_…", secret: true }] },
   { id: "integration_vercel", name: "Vercel", color: "#7C5CFF",
     fields: [{ key: "vercel-token", label: "Token", placeholder: "…", secret: true }] },
-  { id: "integration_n8n", name: "n8n", color: "#F29B38",
-    fields: [
-      { key: "n8n-url", label: "URL de la instancia", placeholder: "https://n8n.example.com", secret: false },
-      { key: "n8n-api-key", label: "Clave API", placeholder: "…", secret: true },
-    ] },
   { id: "integration_resend", name: "Resend", color: "#22C55E",
     fields: [{ key: "resend-api-key", label: "Clave API", placeholder: "re_…", secret: true }] },
   { id: "integration_notion", name: "Notion", color: "#8C8C8C",
@@ -1191,7 +1186,7 @@ async function main() {
 
   const keys = [
     "stripe-api-key", "github-token", "vercel-token",
-    "n8n-url", "n8n-api-key", "resend-api-key", "notion-api-key", "calcom-api-key",
+    "resend-api-key", "notion-api-key", "calcom-api-key",
     "devmark-api-key", "gemini-api-key", "groq-api-key",
   ];
   const present: Record<string, boolean> = {};

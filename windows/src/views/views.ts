@@ -258,7 +258,7 @@ function buildOverview(actions: ViewActions): ViewHost {
         who.append(
           dot(task.color, 7),
           h("span", { class: "name", text: task.name }),
-          h("span", { class: "tool", text: task.source === "claudeCode" ? "Claude Code" : task.source === "agent" ? "Agente" : "n8n" }),
+          h("span", { class: "tool", text: task.source === "claudeCode" ? "Claude Code" : task.source === "agent" ? "Agente" : "Integración" }),
         );
         if (task.steps.length > 1) {
           who.append(h("span", {
@@ -406,7 +406,7 @@ function buildError(actions: ViewActions): ViewHost {
   const detail = h("div", { class: "detail" });
   const row = h("div", { class: "actions" },
     btn("Reintentar", "primary", () => actions.setView(State.defaultView())),
-    btn("Abrir en n8n", "secondary", () => actions.openUrl("")),
+    btn("Abrir terminal", "secondary", () => actions.openTerminal()),
   );
   const el = h("div", { class: "view" }, card("red", stack(116, 16, who, title, detail, row)));
   return {
@@ -414,8 +414,8 @@ function buildError(actions: ViewActions): ViewHost {
     sync() {
       const task = State.focusTask;
       clear(who);
-      who.append(agentWho(task, task?.source === "n8n" ? "n8n" : task?.source === "agent" ? "Agente" : "Claude Code"));
-      title.textContent = task?.source === "n8n" ? "El flujo se detuvo." : task?.source === "agent" ? "Se detuvo por un error." : "La sesión se detuvo por un error.";
+      who.append(agentWho(task, task?.source === "n8n" ? "Integración" : task?.source === "agent" ? "Agente" : "Claude Code"));
+      title.textContent = task?.source === "n8n" ? "Algo salió mal." : task?.source === "agent" ? "Se detuvo por un error." : "La sesión se detuvo por un error.";
       detail.textContent = task?.steps.at(-1) ?? "Sin más detalles.";
     },
   };

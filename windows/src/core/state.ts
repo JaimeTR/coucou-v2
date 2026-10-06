@@ -105,7 +105,6 @@ export const INTEGRATION_AGENTS: AgentTask[] = [
   // v2 says what it is. The id is a stable contract and does not change.)
   task("integration_claude", "Claude Code", "#D97757", "claudeCode"),
   task("integration_resend", "Resend", "#22C55E", "n8n"),
-  task("integration_n8n", "n8n", "#F29B38", "n8n"),
   task("integration_vercel", "Vercel", "#7C5CFF", "n8n"),
   task("integration_github", "GitHub", "#F4505E", "n8n"),
   task("integration_notion", "Notion", "#8C8C8C", "n8n"),
@@ -120,7 +119,7 @@ export const INTEGRATION_AGENTS: AgentTask[] = [
 ];
 
 export const TOGGLEABLE_INTEGRATION_IDS = [
-  "integration_resend", "integration_n8n", "integration_vercel", "integration_github",
+  "integration_resend", "integration_vercel", "integration_github",
   "integration_notion", "integration_calcom", "integration_stripe",
   "agent_gemini", "agent_opencode", "agent_vscode",
 ];

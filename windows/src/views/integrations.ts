@@ -77,15 +77,6 @@ function idleCard(task: AgentTask, openSettings: () => void): HTMLElement {
         onclick: () => void Bridge.openInVSCode(task.sessionCwd ?? null),
       }),
     );
-  } else if (task.id === "integration_n8n") {
-    actions.append(
-      h("button", {
-        class: "link-btn",
-        style: `color:${task.color}d9`,
-        text: "Abrir n8n",
-        onclick: () => void Bridge.openN8n(),
-      }),
-    );
   } else if (OPEN_URLS[task.id]) {
     actions.append(
       h("button", {
@@ -177,6 +168,64 @@ function claudeCard(task: AgentTask, openSettings: () => void): HTMLElement {
   } else {
     card.append(h("div", { class: "int-sub", text: "Aún no hay proyectos" }));
   }
+  const last = State.claudeProjects[0]?.path ?? null;
+  card.append(
+    h("div", { class: "int-actions" },
+      h("button", { class: "link-btn", style: `color:${task.color}d9`, text: "Abrir Claude Code", onclick: () => void Bridge.launchAgent("claude", last, false) }),
+      last
+        ? h("button", { class: "link-btn", style: `color:${task.color}d9`, text: "Continuar", title: "claude --continue en el último proyecto", onclick: () => void Bridge.launchAgent("claude", last, true) })
+        : h("span"),
+    ),
+  );
+  return card;
+}
+
+/** What each terminal agent can do from its card. */
+const AGENT_LAUNCH: Record<string, { agent: "opencode" | "gemini"; resume: boolean }> = {
+  agent_opencode: { agent: "opencode", resume: true },
+  agent_gemini: { agent: "gemini", resume: false },
+};
+
+/** Gemini CLI and OpenCode: start them in a project, or continue the last session. */
+function agentCard(task: AgentTask, openSettings: () => void): HTMLElement {
+  const spec = AGENT_LAUNCH[task.id];
+  const connected = State.integrations[task.id]?.configured ?? false;
+  const card = h("div", { class: "int-card" }, header(task.color, task.name, connected ? "Conectado" : "Sin conectar"));
+  if (!connected) {
+    card.append(
+      h("div", { class: "int-status" }, dot("#F4505E", 5), h("span", { text: "Sin conectar" })),
+    );
+  }
+  const projects = State.claudeProjects.slice(0, 3);
+  if (projects.length > 0) {
+    const row = h("div", { class: "proj-row" });
+    for (const p of projects) {
+      row.append(
+        h("button", {
+          class: "link-btn proj-link",
+          style: `color:${task.color}d9`,
+          title: `Abrir ${task.name} en ${p.path}`,
+          text: p.name,
+          onclick: () => void Bridge.launchAgent(spec.agent, p.path, false),
+        }),
+      );
+    }
+    card.append(row);
+  } else {
+    card.append(h("div", { class: "int-sub", text: "Elige un proyecto para empezar" }));
+  }
+  const actions = h("div", { class: "int-actions" },
+    h("button", { class: "link-btn", style: `color:${task.color}d9`, text: `Abrir ${task.name}`, onclick: () => void Bridge.launchAgent(spec.agent, null, false) }),
+  );
+  if (spec.resume && projects[0]) {
+    actions.append(
+      h("button", { class: "link-btn", style: `color:${task.color}d9`, text: "Continuar", title: `${spec.agent} --continue en ${projects[0].name}`, onclick: () => void Bridge.launchAgent(spec.agent, projects[0].path, true) }),
+    );
+  }
+  if (!connected) {
+    actions.append(h("button", { class: "link-btn", style: "color:#8e939c", text: "Conectar…", onclick: openSettings }));
+  }
+  card.append(actions);
   return card;
 }
 
@@ -191,7 +240,7 @@ function vscodeCard(task: AgentTask, openSettings: () => void): HTMLElement {
   const card = h(
     "div",
     { class: "int-card" },
-    header(task.color, "VS Code", claudeHere ? "Claude Code corre aquí" : connected ? "Avisos de terminal activados" : "Proyectos"),
+    header(task.color, "VS Code", claudeHere ? "Claude Code corre aquí" : connected ? "Terminal conectada" : "Proyectos"),
   );
 
   if (State.vscodeProjects.length > 0) {
@@ -211,7 +260,7 @@ function vscodeCard(task: AgentTask, openSettings: () => void): HTMLElement {
   );
   if (!connected) {
     actions.append(
-      h("button", { class: "link-btn", style: "color:#8e939c", text: "Avisos de terminal…", onclick: openSettings }),
+      h("button", { class: "link-btn", style: "color:#8e939c", text: "Conectar terminal…", onclick: openSettings }),
     );
   }
   card.append(actions);
@@ -573,63 +622,6 @@ function calcomCard(): HTMLElement {
   return h("div", { class: "int-card" }, header("#C9956A", "Cal.com", "Agenda"), rows);
 }
 
-// ── n8n ───────────────────────────────────────────────────────────────────────
-
-function n8nCard(task: AgentTask, onDetail: () => void, openSettings: () => void): HTMLElement {
-  const hasActivity = task.steps.length > 0 && (task.state === "finished" || task.state === "error");
-  if (!hasActivity) return idleCard(task, openSettings);
-  const success = task.state === "finished";
-  const accent = success ? "#22C55E" : "#F4505E";
-  return h(
-    "div",
-    { class: "int-card" },
-    header("#F29B38", "n8n", "Flujo"),
-    h(
-      "div",
-      { class: "int-actions" },
-      h(
-        "button",
-        {
-          class: "int-pill",
-          style: `background:${accent}1a;border-color:${accent}38`,
-          onclick: onDetail,
-        },
-        dot(accent, 5),
-        h("span", { class: "int-name", text: task.steps[0] ?? "Workflow" }),
-        svg(ICONS.ellipsis, 8),
-      ),
-    ),
-  );
-}
-
-function n8nDetail(task: AgentTask, onBack: () => void): HTMLElement {
-  const success = task.state === "finished";
-  const accent = success ? "#22C55E" : "#F4505E";
-  const detail = task.steps[1];
-  return h(
-    "div",
-    { class: "int-card detail" },
-    h(
-      "div",
-      { class: "int-detail-head" },
-      h("button", { class: "int-back", onclick: onBack }, svg(ICONS.chevronLeft, 10, { stroke: 2.4 })),
-      dot(accent, 6),
-      h("b", { text: task.steps[0] ?? "Workflow" }),
-      h("span", {
-        class: "int-badge",
-        style: `color:${accent};background:${accent}24`,
-        text: success ? "Correcto" : "Falló",
-      }),
-    ),
-    detail
-      ? h("pre", { class: "int-detail-text", text: detail })
-      : h("div", {
-          class: "int-status",
-          text: success ? "Completado con éxito." : "Sin detalles del error.",
-        }),
-  );
-}
-
 // ── Dispatch ──────────────────────────────────────────────────────────────────
 
 export interface IntegrationCardHooks {
@@ -665,12 +657,7 @@ export function renderIntegrationCard(task: AgentTask, hooks: IntegrationCardHoo
   // Claude Code and VS Code each have a card of their own, whatever their state.
   if (task.id === "integration_claude") return claudeCard(task, hooks.openSettings);
   if (task.id === "agent_vscode") return vscodeCard(task, hooks.openSettings);
-  if (task.id === "integration_n8n") {
-    const hasActivity = task.steps.length > 0 && (task.state === "finished" || task.state === "error");
-    return hooks.detailOpen && hasActivity
-      ? n8nDetail(task, hooks.closeDetail)
-      : n8nCard(task, hooks.openDetail, hooks.openSettings);
-  }
+  if (AGENT_LAUNCH[task.id]) return agentCard(task, hooks.openSettings);
   if (task.id === "integration_github" && hasIntegrationData(task.id)) {
     return hooks.detailOpen ? githubDetail(hooks.closeDetail) : githubCard(hooks.openDetail);
   }

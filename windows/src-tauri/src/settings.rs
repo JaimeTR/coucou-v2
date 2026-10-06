@@ -162,6 +162,8 @@ fn migrate(settings: &mut Settings) {
             *id = "agent_vscode".to_string();
         }
     }
+    // n8n was removed in v2: drop it from saved settings.
+    settings.active_integrations.retain(|id| id != "integration_n8n");
     let mut seen = std::collections::HashSet::new();
     settings.active_integrations.retain(|id| seen.insert(id.clone()));
 }

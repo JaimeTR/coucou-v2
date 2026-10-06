@@ -82,7 +82,8 @@ export const Bridge = {
 
   /** "Open terminal" → opens the folder in VS Code when `code` is on PATH. */
   openInVSCode: (path: string | null) => call<boolean>("open_in_vscode", { path }),
-  continueClaude: (path: string) => call<boolean>("continue_claude", { path }),
+  launchAgent: (agent: "claude" | "opencode" | "gemini", path: string | null, resume: boolean) =>
+    call<boolean>("launch_agent", { agent, path, resume }),
 
   // ── "Always allow" rules ──────────────────────────────────────────────────
   rulesList: () => call<Rule[]>("rules_list"),
@@ -164,8 +165,6 @@ export const Bridge = {
 
   // ── Integrations ──────────────────────────────────────────────────────────
   refreshIntegration: (id: string) => call<void>("refresh_integration", { id }),
-  /** Opens the configured n8n instance in the browser. */
-  openN8n: () => call<void>("open_n8n"),
 
   /** Tray → Pause. Stops the integration pollers, not just the island. */
   setPaused: (paused: boolean) => call<void>("set_paused", { paused }),

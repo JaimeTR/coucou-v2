@@ -160,7 +160,7 @@ export class Island {
         State.setFocus(id);
         Sound.play("blip");
         // Their project lists change as you work: look again when one is opened.
-        if (id === "integration_claude" || id === "agent_vscode") void refreshProjects();
+        if (id === "integration_claude" || id.startsWith("agent_")) void refreshProjects();
       },
       openTerminal: () => this.openSessionTerminal(),
       // The ↗ button — same targets as openAgentTarget() on macOS.
@@ -176,7 +176,6 @@ export class Island {
           integration_calcom: "https://app.cal.com/bookings",
         };
         if (task.id === "integration_claude") this.openSessionTerminal();
-        else if (task.id === "integration_n8n") void Bridge.openN8n();
         else if (urls[task.id]) void Bridge.openUrl(urls[task.id]);
       },
       openUrl: (url) => {
@@ -414,7 +413,7 @@ export class Island {
   private continueLast(path: string) {
     this.greeting.interrupt();
     Sound.play("blip");
-    void Bridge.continueClaude(path);
+    void Bridge.launchAgent("claude", path, true);
     State.setFocus("integration_claude");
     this.fsm.forceHome();
   }

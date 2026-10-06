@@ -18,6 +18,11 @@ Coucou v2 is [JaimeTR](https://github.com/JaimeTR)'s fork of [Coucou by Louis Ra
 - Global shortcuts: `Ctrl+Alt+Y` allow and `Ctrl+Alt+N` deny (registered only while a request is up), `Ctrl+Alt+C` opens or closes the island. Each can be switched off.
 - Windows notifications when Claude needs permission, asks a question, or finishes or fails while the island is closed.
 
+**Agents you can launch, and n8n removed**
+- n8n is gone from the Windows app (pill, Settings, poller, "Abrir n8n" buttons); an error now offers "Abrir terminal" instead.
+- Claude Code, OpenCode and Gemini CLI cards can start the agent in a new terminal: in one of your recent projects, in your home folder, or **Continuar** (`--continue`, for Claude Code and OpenCode).
+- The VS Code card says "Terminal conectada" instead of the long notice text.
+
 **Welcome screen and Spanish**
 - The welcome screen is kept light on purpose: on the right Mochi says hello by name, with the time of day and the date (*"Hola Jaime Tarazona" · "Buenas tardes · Lunes, 5 de octubre"*); on the left, at most two quiet lines — **Lo último** (the project you used Claude Code in last, with "hace 2 h"; click to open it, plus a **Continuar donde lo dejé** button that opens a terminal there with `claude --continue`) and **Pendiente** (GitHub review requests, failing CI, Copilot PRs, or "Falta conectar Claude Code"; click to go there). A line with nothing to say is not shown, and the welcome only waits longer when there is something to read. Turn it off in Settings → Personalización ("Lo último y pendientes"). GitHub is now polled 3 s after launch so its news is ready for the welcome.
 - **The whole interface is in Spanish**: the island, its cards and notifications, the Settings window, tray menu, error messages, the installer (NSIS and MSI default to Spanish, English stays available) and the files Coucou writes for other tools. Names of products and commands are left as they are.

@@ -285,25 +285,44 @@ fn open_in_vscode(path: Option<String>) -> bool {
     false
 }
 
-/// "Continue where I left off": a new terminal window in the project folder
-/// running `claude --continue`, which resumes that folder's latest conversation.
-/// The folder is handed over as the working directory, never inside a command
+/// Starts a coding agent in a new terminal window, in a project folder (the home
+/// folder when none is given). `resume` continues that folder's latest
+/// conversation where the agent supports it. Only these three agents can be
+/// started, and the folder is the working directory — never part of a command
 /// line, so nothing in its name can be read as shell syntax.
 #[tauri::command]
-fn continue_claude(path: String) -> bool {
-    let p = std::path::Path::new(&path);
-    if !(p.is_absolute() && p.is_dir()) {
-        return false;
-    }
+fn launch_agent(agent: String, path: Option<String>, resume: bool) -> bool {
+    let (program, resume_args): (&str, &[&str]) = match agent.as_str() {
+        "claude" => ("claude", &["--continue"]),
+        "opencode" => ("opencode", &["--continue"]),
+        "gemini" => ("gemini", &[]),
+        _ => return false,
+    };
+    let dir = match path.filter(|p| !p.is_empty()) {
+        Some(p) => {
+            let d = std::path::PathBuf::from(p);
+            if !(d.is_absolute() && d.is_dir()) {
+                return false;
+            }
+            d
+        }
+        None => match std::env::var_os("USERPROFILE").or_else(|| std::env::var_os("HOME")) {
+            Some(h) => std::path::PathBuf::from(h),
+            None => return false,
+        },
+    };
     #[cfg(windows)]
     {
         let mut cmd = Command::new("cmd");
-        cmd.current_dir(p)
-            .args(["/c", "start", "Claude Code", "claude", "--continue"]);
+        cmd.current_dir(&dir).args(["/c", "start", program, program]);
+        if resume {
+            cmd.args(resume_args);
+        }
         return platform::no_console(&mut cmd).spawn().is_ok();
     }
     #[cfg(not(windows))]
     {
+        let _ = (program, resume_args, resume, dir);
         false
     }
 }
@@ -553,13 +572,6 @@ fn secret_clear(key: String) -> Result<(), String> {
     secrets::clear(&key)
 }
 
-/// Opens the configured n8n instance — the URL lives in the Credential Manager.
-#[tauri::command]
-fn open_n8n() {
-    if let Some(url) = secrets::get("n8n-url") {
-        open_url(url);
-    }
-}
 
 /// Refresh buttons in the integration cards.
 #[tauri::command]
@@ -690,7 +702,7 @@ pub fn run() {
             reposition,
             open_url,
             open_in_vscode,
-            continue_claude,
+            launch_agent,
             open_file_in_vscode,
             focus_terminal,
             quit_app,
@@ -720,7 +732,6 @@ pub fn run() {
             secret_set,
             secret_clear,
             refresh_integration,
-            open_n8n,
             open_settings_window,
             set_paused,
         ])
