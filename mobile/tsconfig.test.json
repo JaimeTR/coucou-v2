@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ES2022",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noEmit": false,
+    "outDir": ".test-build",
+    "rootDir": "src/logic",
+    "skipLibCheck": true,
+    "lib": ["ES2022"],
+    "types": []
+  },
+  "include": [],
+  "files": [
+    "src/logic/extract.ts",
+    "src/logic/github.ts",
+    "src/logic/custom.ts",
+    "src/logic/translate.ts"
+  ]
+}

@@ -10,7 +10,7 @@ Approve permissions, watch your agents work, drop a file, chat with Claude — a
 
 > **Coucou v2** is [JaimeTR](https://github.com/JaimeTR)'s fork of [Coucou by Louis Raillé](https://github.com/Louis-CFM/coucou) (MIT). v2 adds a personal-assistant layer to the Windows and Linux app: a greeting by name, a setup checklist for the tools you use, a plan-usage gauge, live diffs, answering Claude's questions from the island, "Always allow" rules, global shortcuts, native notifications, and DEVMARK AI as a chat provider. See [what's new in v2](windows/CHANGELOG.md).
 
-Windows y Linux · Windows/Linux: [README](windows/README.md) · [en español](windows/README.es.md) · [CHANGELOG](windows/CHANGELOG.md) · [en español](windows/CHANGELOG.es.md)
+iPhone y Android (una sola app): [mobile](mobile/README.md) · Windows y Linux · Windows/Linux: [README](windows/README.md) · [en español](windows/README.es.md) · [CHANGELOG](windows/CHANGELOG.md) · [en español](windows/CHANGELOG.es.md)
 
 [![Version](https://img.shields.io/badge/version-0.3.0-0A84FF)](windows/CHANGELOG.md)
 ![macOS 15+](https://img.shields.io/badge/macOS-15%2B-black?logo=apple)

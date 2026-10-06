@@ -1,0 +1,43 @@
+{
+  "expo": {
+    "name": "Coucou",
+    "slug": "coucou-mobile",
+    "scheme": "coucou",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0B0C0E"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.jaimetr.coucou"
+    },
+    "android": {
+      "package": "com.jaimetr.coucou",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0B0C0E"
+      },
+      "edgeToEdgeEnabled": true
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "single",
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "expo-font",
+      "expo-asset"
+    ],
+    "extra": {
+      "author": "JaimeTR"
+    }
+  }
+}
