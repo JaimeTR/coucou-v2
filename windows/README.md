@@ -10,6 +10,8 @@ Approve Claude Code permissions, watch your session work, drop a file, chat with
 
 *Coucou v2 is [JaimeTR](https://github.com/JaimeTR)'s fork of [Coucou by Louis Raillé](https://github.com/Louis-CFM/coucou) (MIT).*
 
+**English** · [Español](README.es.md)
+
 ![Windows 10/11](https://img.shields.io/badge/Windows-10%2F11-0078D4?logo=windows)
 ![Tauri 2](https://img.shields.io/badge/Tauri-2-FFC131?logo=tauri&logoColor=black)
 ![Rust](https://img.shields.io/badge/Rust-backend-000?logo=rust)
@@ -29,12 +31,12 @@ Coucou v2 turns Mochi into a small personal assistant. Everything below is new o
 |---|---|
 | **Greets you by name** | On start Mochi says *"Hola Jaime Tarazona"* with the time of day. The name is detected from your Windows account (or git), editable in Settings → Personalization, in Spanish or English. |
 | **Welcome that helps you start** | The welcome shows the greeting and date on the right and, on the left, only what matters: **Lo último** (your last project) and **Pendiente** (reviews, failing CI, Copilot, or a missing connection). Click either to jump there. Toggle in Settings → Personalización. |
-| **In Spanish** | The whole interface — the island, Settings, the tray menu, errors and the installer — is in Spanish. |
+| **In Spanish** | The whole interface — the island, Settings, the tray menu, errors and the installer — is in Spanish. The docs are in both languages (`README.es.md`, `CHANGELOG.es.md`). |
 | **Setup checklist** | Settings opens with what is connected and what is left — Claude Code hooks, GitHub, your chat key — plus which tools were found on your PC (VS Code, Git, Docker, Gemini CLI, Codex…). |
 | **Only the pills you use** | A fresh install shows GitHub only; the other pills (Vercel, Resend…) are opt-in under Settings → Integrations. |
 | **GitHub + Copilot** | One pill for what needs you: review requests, your PRs with their CI, and **GitHub Copilot**'s pull requests and reviews. Click a row to list them; each opens on GitHub. |
 | **Claude Code and VS Code, apart** | The **Claude Code** pill is only Claude Code (connection, plan usage, recent projects, live sessions). **VS Code** has its own pill (recent projects, Claude running inside it, alerts for long commands in its terminal). |
-| **More agents** | **Gemini CLI** and **OpenCode** each get a pill (Settings → Agents). Connecting shows the exact change first. |
+| **More agents** | **Gemini CLI** and **OpenCode** each get a pill (Settings → Agents). Connecting shows the exact change first. From their cards you start them in a terminal or in their desktop app, or pick up the last session (**Continuar**); the Gemini card also opens **Antigravity** (app, IDE and `agy` CLI). |
 | **Plan usage gauge** | A pill in the header with how much of your Claude plan is used (5-hour and 7-day), through a statusLine relay that keeps your own status line working. |
 | **Live diff** | Edits show `+N −M` in the ticker; click one to read the diff, ↗ opens the file in VS Code. |
 | **Answer Claude's questions** | `AskUserQuestion` prompts show their options in the island (keys 1–4, "Other…", or reply in the terminal). |
@@ -42,7 +44,7 @@ Coucou v2 turns Mochi into a small personal assistant. Everything below is new o
 | **Jump to the right terminal** | "Open terminal" brings forward the window of the terminal or VS Code that session runs in. |
 | **Global shortcuts** | `Ctrl+Alt+Y` allow · `Ctrl+Alt+N` deny (only while a request is up) · `Ctrl+Alt+C` open or close the island. |
 | **Windows notifications** | A toast when Claude needs permission, asks something, or finishes while the island is closed. |
-| **Chat with Claude, DEVMARK AI, Gemini or Groq** | Pick who answers under Settings → Proveedor de chat. DEVMARK AI is the company's private model (see [below](#devmark-ai-chat-provider)); Gemini and Groq use your own key. |
+| **Chat with Claude, DEVMARK AI, Gemini or Groq** | Pick who answers under Settings → Proveedor de chat. DEVMARK AI is the company's private model (see [below](#devmark-ai-chat-provider)); Gemini and Groq use your own key. If a provider retires the configured model, Coucou switches to one your key can use. |
 
 ## Install
 
@@ -66,6 +68,7 @@ installs for the current user only — no admin prompt.
 |---|---|
 | Move the mouse to the very top-centre of the screen | Mochi peeks out |
 | Click the small island | It opens |
+| `Ctrl+Alt+C` | Opens the island from the keyboard even when it is hidden, or closes it |
 | Click Mochi | It gets annoyed. Three times in a row and it goes dizzy |
 | Rest the pointer on Mochi for two seconds | Hearts |
 | Drag a file onto the island | Mochi turns into a box, swallows it, then offers to answer questions about it |

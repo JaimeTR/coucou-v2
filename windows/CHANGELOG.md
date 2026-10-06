@@ -1,5 +1,7 @@
 # Coucou v2 — changelog (Windows and Linux)
 
+**English** · [Español](CHANGELOG.es.md)
+
 Coucou v2 is [JaimeTR](https://github.com/JaimeTR)'s fork of [Coucou by Louis Raillé](https://github.com/Louis-CFM/coucou) (MIT). The macOS release notes stay in the root [CHANGELOG.md](../CHANGELOG.md).
 
 ## 0.2.0 — October 5, 2026
@@ -49,7 +51,9 @@ Coucou v2 is [JaimeTR](https://github.com/JaimeTR)'s fork of [Coucou by Louis Ra
 - The ticker froze after 20 steps in a long session.
 - The pill for Claude Code sessions is now labelled "Claude Code" (the original app calls it "VS Code", which hid what it was). Its id is unchanged.
 - An agent whose long command or session ends no longer leaves its pill stuck on the last message.
+- Starting OpenCode in a terminal passed its own name as the project folder; fixed. A missing agent program is now explained in its card instead of Windows' "cannot find the file" dialog.
+- Chat: when a provider retires the configured model (404), Coucou uses another chat model your key can reach instead of staying broken.
 
 **Under the hood**
-- 40 Rust tests, 9 relay tests and 24 TypeScript tests (`npm test`) cover the hooks and statusLine merge, the question protocol, the live diff, the "Always allow" rules, DEVMARK AI, the greeting, the GitHub / Copilot pulse, the project readers and the Gemini / OpenCode / PowerShell installers (including the generated PowerShell block, which was also run in PowerShell 7 and 5.1).
+- 41 Rust tests, 9 relay tests and 28 TypeScript tests (`npm test`) cover the hooks and statusLine merge, the question protocol, the live diff, the "Always allow" rules, DEVMARK AI, the greeting, the GitHub / Copilot pulse, the project readers and the Gemini / OpenCode / PowerShell installers (including the generated PowerShell block, which was also run in PowerShell 7 and 5.1).
 - `cargo test -p coucou show_real_previews -- --ignored --nocapture` prints what connecting each agent would change on your computer, and `show_real_projects` lists the projects found for the Claude Code and VS Code pills. Both read real files and write nothing.

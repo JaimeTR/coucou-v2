@@ -1,0 +1,62 @@
+# Coucou v2: registro de cambios (Windows y Linux)
+
+[English](CHANGELOG.md) · **Español**
+
+Coucou v2 es el fork de [JaimeTR](https://github.com/JaimeTR) de [Coucou, de Louis Raillé](https://github.com/Louis-CFM/coucou) (MIT). Las notas de la versión de macOS siguen en el [CHANGELOG.md](../CHANGELOG.md) de la raíz.
+
+## 0.2.0: 5 de octubre de 2026
+
+**Un asistente personal**
+- Mochi te saluda por tu nombre al iniciar Coucou (*"Hola Jaime Tarazona"*) con el momento del día. El nombre sale de tu cuenta de Windows (o de tu identidad de git), se cambia en Ajustes → Personalización, y el texto y el idioma del saludo (automático, Español, English) son editables.
+- Una lista de configuración abre Ajustes: hooks de Claude Code, GitHub, tu clave de chat, tu nombre y el relay del plan, además de las herramientas detectadas en tu PC (VS Code, Claude Code, Git, Docker, Node.js, Gemini CLI, Codex, Cursor).
+- Una instalación nueva muestra solo el pill de GitHub; las demás integraciones son opcionales.
+
+**Claude Code**
+- Medidor del plan: un pill en la cabecera (verde bajo 50 %, naranja hasta 80 %, rojo por encima) y una tarjeta con las ventanas de 5 horas y 7 días. Se instala desde Ajustes con un relay de statusLine (`coucou-hook --statusline`), con el diff de siempre, copia de seguridad con fecha y clic explícito; una línea de estado existente sigue funcionando y se restaura al desinstalar.
+- Diff en vivo: las ediciones muestran `+N −M` en el ticker, un clic abre el diff (tres líneas de contexto, "Diff demasiado grande" por encima de 200 KB o 4 000 líneas) y ↗ abre el archivo en VS Code. Se calcula en local a partir de la llamada a la herramienta, nunca desde el disco.
+- Responde las preguntas de Claude desde la isla: opción única y múltiple, hasta cuatro preguntas, "Otra…", teclas 1–4, o responder en la terminal. Usa un hook `PreToolUse` propio (`--ask`, 130 s); los hooks de versiones anteriores se marcan como "desactualizados" y se actualizan desde Ajustes.
+- "Siempre permitir": el botón **Siempre** recuerda una regla estrecha por proyecto. Comandos exactos o un subcomando de solo lectura (`git status`, `npm test`…), archivos de una carpeta del proyecto, o un host; nunca comandos con operadores de shell, nunca `.git`, `.claude`, `.ssh` ni `.env`. Las reglas se listan y se quitan en Ajustes, y cada respuesta automática aparece en el ticker.
+- "Abrir terminal" trae al frente la ventana exacta de Windows Terminal o VS Code de la sesión.
+- Atajos globales: `Ctrl+Alt+Y` permitir y `Ctrl+Alt+N` denegar (registrados solo mientras hay una petición), `Ctrl+Alt+C` abre o cierra la isla, también cuando está oculta. Cada uno se puede desactivar.
+- Notificaciones de Windows cuando Claude pide permiso, hace una pregunta, o termina o falla con la isla cerrada.
+
+**Agentes que puedes lanzar, y n8n eliminado**
+- n8n ya no está en la app de Windows (pill, Ajustes, sondeo, botones "Abrir n8n"); un error ahora ofrece "Abrir terminal".
+- Las tarjetas de Claude Code, OpenCode y Gemini CLI abren el agente en una terminal nueva: en uno de tus proyectos recientes, en tu carpeta de usuario, o **Continuar** (`--continue`, para Claude Code y OpenCode). Si el programa no está instalado, la tarjeta lo dice y muestra cómo instalarlo, en lugar del error de Windows.
+- OpenCode abre también su programa de escritorio ("Abrir app"); Gemini abre gemini.google.com, porque no tiene programa de escritorio.
+- La tarjeta de Gemini CLI también lanza Antigravity: su programa de escritorio, el IDE y el CLI `agy`.
+- La tarjeta de VS Code dice "Terminal conectada" en lugar del aviso largo.
+
+**Bienvenida y español**
+- La bienvenida es ligera a propósito: a la izquierda Mochi te saluda por tu nombre, con el momento del día y la fecha (*"Hola Jaime Tarazona" · "Buenas tardes · Lunes, 5 de octubre"*); a la derecha, como mucho dos líneas discretas: **Lo último** (el proyecto en el que usaste Claude Code por última vez, con "hace 2 h"; un clic lo abre, y el botón **Continuar donde lo dejé** abre una terminal ahí con `claude --continue`) y **Pendiente** (revisiones pedidas en GitHub, CI fallando, PRs de Copilot, o "Falta conectar Claude Code"; un clic lleva ahí). Una línea sin nada que decir no se muestra, y la bienvenida solo espera más cuando hay algo que leer. Se desactiva en Ajustes → Personalización ("Lo último y pendientes"). GitHub se consulta 3 s después de iniciar para que sus novedades estén listas.
+- **Toda la interfaz está en español**: la isla, sus tarjetas y notificaciones, la ventana de Ajustes, el menú de la bandeja, los mensajes de error, el instalador (NSIS y MSI en español por defecto, el inglés sigue disponible) y los archivos que Coucou escribe para otras herramientas. Los nombres de productos y comandos se dejan tal cual.
+- La documentación está en español e inglés (`README.es.md`, `CHANGELOG.es.md`).
+
+**GitHub y Copilot en un solo pill**
+- El pill de GitHub muestra lo que te necesita: **revisiones pedidas**, **tus pull requests abiertos con su CI** (verde, ámbar, rojo) y **GitHub Copilot**: los pull requests que el agente de Copilot abrió por ti y cuántos tuyos revisó. Un clic en una fila lista los pull requests (tres a la vez, "N más en GitHub" para el resto); cada uno abre en GitHub. Las estrellas y los repositorios siguen en la cabecera. Una sola petición GraphQL, el mismo token.
+- Insignias y sonidos para lo nuevo: CI fallando en uno de tus PRs, una revisión que te piden, Copilot abriendo un PR o revisando uno tuyo; una insignia por ciclo (la más importante), el resto queda en la tarjeta.
+
+**Claude Code y VS Code, cada uno con su pill**
+- **Claude Code** (naranja) es solo de Claude Code, corra en una terminal o dentro de VS Code: estado de conexión, uso del plan (5 h y 7 d) y tus proyectos recientes de Claude Code (un clic abre uno en VS Code). Una sesión en vivo sigue mostrando el ticker, los diffs y las aprobaciones.
+- **VS Code** (azul) es su propio pill y reemplaza al de Terminal: tus proyectos recientes de VS Code, "Claude Code corre aquí" cuando hay una sesión dentro, un enlace para abrir VS Code y, una vez conectado, avisos de comandos largos en la terminal integrada de VS Code (las demás terminales no se tocan). Quien tenía el pill de Terminal activado recibe el de VS Code.
+
+**Más agentes, cada uno con su pill** (Ajustes → Agentes)
+- **Gemini CLI**: los hooks de Coucou se mezclan en `~/.gemini/settings.json`. El relay traduce los eventos y nombres de herramientas de Gemini (`BeforeTool` → `PreToolUse`, `replace` → Edit…), así una sesión de Gemini se ve como cualquier otra: pasos, diff en vivo, estados de terminado y de error.
+- **OpenCode**: un pequeño plugin, `~/.config/opencode/plugins/coucou.js`, informa de sesiones, mensajes y llamadas a herramientas. Es un archivo propio de Coucou y nunca sobrescribe uno que no lo sea.
+- **Terminal de VS Code (PowerShell)**: un bloque marcado en tu perfil de PowerShell informa, solo dentro de la terminal integrada de VS Code, de los comandos que tardaron 10 segundos o más, con su resultado y duración, para que puedas apartar la vista de una compilación larga. Funciona en PowerShell 7 y Windows PowerShell 5.1.
+- Conectar o desconectar sigue la misma regla que el `settings.json` de Claude Code: primero el diff exacto, una copia de seguridad con fecha, escritura solo tras un clic, y rechazo si el archivo cambió desde la vista previa. Desconectar quita solo la parte de Coucou. Un pill que activas se mantiene entre sesiones; la lista de configuración enumera los agentes encontrados en el PC.
+
+**Chat**
+- **Gemini (Google AI Studio) y Groq** se suman a Claude y DEVMARK AI como proveedores de chat. Elige uno en Ajustes → Proveedor de chat, pega su clave (guardada en el Administrador de credenciales de Windows, o `GEMINI_API_KEY` / `GROQ_API_KEY` en el entorno), escribe cualquier modelo que ofrezca y usa "Probar conexión", que lista los modelos que tu clave puede usar sin generar nada. Ambos usan los endpoints compatibles con OpenAI (`generativelanguage.googleapis.com/v1beta/openai`, `api.groq.com/openai/v1`); las respuestas 429 y 5xx se reintentan con la pausa que pide el proveedor, y cada error dice qué proveedor habló. Se pueden soltar archivos de texto y código; los PDF y las imágenes funcionan solo con Claude por ahora.
+- Si el proveedor retira el modelo configurado (404), el chat usa otro modelo de chat que tu clave pueda usar en lugar de quedarse roto.
+- DEVMARK AI como proveedor de chat (compatible con OpenAI, `llama3.2:1b`): clave en el Administrador de credenciales (o `DEVMARK_API_KEY`), una petición a la vez, historial recortado al límite de 48 000 caracteres, tiempo límite de 150 s, reintentos y mensajes claros para 401 / 429 / 503, y un botón **Probar conexión** que no genera nada.
+
+**Correcciones**
+- El ticker se congelaba tras 20 pasos en una sesión larga.
+- El pill de las sesiones de Claude Code ahora se llama "Claude Code" (la app original lo llama "VS Code", lo que ocultaba qué era). Su id no cambia.
+- Un agente cuyo comando largo o sesión termina ya no deja su pill atascado en el último mensaje.
+- Lanzar una terminal con OpenCode le pasaba su propio nombre como carpeta del proyecto; corregido.
+
+**Por dentro**
+- 41 pruebas de Rust, 9 del relay y 28 de TypeScript (`npm test`) cubren la mezcla de hooks y statusLine, el protocolo de preguntas, el diff en vivo, las reglas de "Siempre permitir", DEVMARK AI, el saludo y el panel de bienvenida, el pulso de GitHub / Copilot, los lectores de proyectos y los instaladores de Gemini / OpenCode / PowerShell (incluido el bloque de PowerShell generado, que también se ejecutó en PowerShell 7 y 5.1).
+- `cargo test -p coucou show_real_previews -- --ignored --nocapture` imprime qué cambiaría conectar cada agente en tu equipo, y `show_real_projects` lista los proyectos encontrados para los pills de Claude Code y VS Code. Ambos leen archivos reales y no escriben nada.
