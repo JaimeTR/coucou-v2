@@ -541,25 +541,26 @@ export class Greeting {
   /** Asked for the words once, when it is time to show them — so the status line
    *  reflects what has loaded by then, not what was known at launch. */
   private provider: (() => GreetingLines | null) | null = null;
-  /** Chips to choose where to start are on screen, so the greeting waits for them. */
-  private picker = false;
+  /** Asked while the greeting runs: is there something on the left worth waiting for? */
+  private hold: () => boolean = () => false;
 
   onComplete: (() => void) | null = null;
 
   /**
    * Set before `start()`. `provider` builds the words when Mochi has finished
-   * waving; `picker` says the "where do we start?" chips are being offered.
+   * waving; `hold` says whether the panel on the left has anything to read, so
+   * the welcome waits a little longer for it (and not at all when it is empty).
    */
-  setContent(provider: (() => GreetingLines | null) | null, picker: boolean) {
+  setContent(provider: (() => GreetingLines | null) | null, hold: () => boolean = () => false) {
     this.provider = provider;
     this.lines = null;
-    this.picker = picker && provider != null;
+    this.hold = hold;
   }
 
   /** When the greeting ends by itself, and the last moment hovering can keep it. */
   private get extra(): number {
     if (!this.provider) return 0;
-    return this.picker ? T.pickTime : T.readTime;
+    return this.hold() ? T.pickTime : T.readTime;
   }
 
   private get endAt(): number {
@@ -578,7 +579,7 @@ export class Greeting {
     this.timers.push(
       window.setTimeout(() => Sound.play("greet"), T.pop0 * 1000),
       window.setTimeout(() => Sound.play("blip"), T.badge * 1000),
-      window.setTimeout(() => this.fire(), (this.endAt + 0.05) * 1000),
+      window.setTimeout(() => this.fire(), (T.end + (this.provider ? T.pickTime : 0) + 0.05) * 1000),
     );
   }
 

@@ -21,6 +21,7 @@ import { h } from "../views/dom";
 import { IslandStateMachine } from "./fsm";
 import { endQuestion } from "./hooks";
 import { greetingLines } from "./greetingText";
+import { panelHasRows, panelRows } from "./greetingPanel";
 import { refreshProjects } from "./integrations";
 
 const BOT_OVERHANG = 40;
@@ -304,7 +305,8 @@ export class Island {
           // A personal touch: Mochi says your name, the time of day and the date,
           // and offers to start wherever you want (the chips on the left).
           const s = State.settings;
-          const chips = s.greetingEnabled && s.greetingPicker ? this.fillPicker() : 0;
+          if (s.greetingEnabled && s.greetingPicker) this.fillPanel();
+          else this.picker.replaceChildren();
           this.greeting.setContent(
             s.greetingEnabled
               ? () =>
@@ -314,10 +316,9 @@ export class Island {
                     language: s.greetingLanguage,
                     now: new Date(),
                     systemLanguage: navigator.language || "en",
-
                   })
               : null,
-            chips > 1,
+            () => s.greetingPicker && this.panelShown,
           );
           this.greeting.start();
           break;
@@ -331,43 +332,85 @@ export class Island {
     this.fsm.launch();
   }
 
-  // ── Welcome: where do we start? ─────────────────────────────────────────────
+  // ── Welcome: what you left off with, and what is pending ────────────────────
 
+  private panelShown = false;
 
   /**
-   * One chip per pill, the preferred one first and highlighted. Returns how many:
-   * with a single pill there is nothing to choose and no picker is shown.
+   * The left half of the welcome: the last project you worked on and, if there is
+   * news, one line about it. Rebuilt while Mochi waves, since GitHub answers a
+   * moment after launch. A row with nothing to say is not drawn.
    */
-  private fillPicker(): number {
-    const tasks = State.tasks.slice(0, 6);
-    const preferred = State.settings.startPill;
-    const ordered = [...tasks].sort((a, b) => Number(b.id === preferred) - Number(a.id === preferred));
-    this.picker.replaceChildren();
-    if (ordered.length < 2) return ordered.length;
-    const chips = h("div", { class: "gp-chips" });
-    for (const t of ordered) {
-      const chip = h(
-        "button",
+  private fillPanel() {
+    const build = () => {
+      const pulse = State.integrations.integration_github?.data?.pulse as
+        | { toReview?: unknown[]; mine?: { ci?: string }[]; copilot?: unknown[] }
+        | undefined;
+      const rows = panelRows(
         {
-          class: t.id === preferred ? "gp-chip first" : "gp-chip",
-          title: `Empezar en ${t.name}`,
-          onclick: () => this.startOn(t.id),
+          claudeConnected: State.integrations.integration_claude?.configured ?? State.settings.hooksInstalled,
+          lastProject: State.claudeProjects[0] ?? null,
+          github: pulse
+            ? {
+                reviews: pulse.toReview?.length ?? 0,
+                failing: (pulse.mine ?? []).filter((p) => p.ci === "failure").length,
+                copilot: pulse.copilot?.length ?? 0,
+              }
+            : null,
         },
-        h("i", { class: "dot", style: `width:7px;height:7px;background:${t.color}` }),
-        h("span", { text: t.name }),
+        Date.now(),
       );
-      chips.append(chip);
-    }
-    this.picker.append(h("div", { class: "gp-label", text: "¿Por dónde empezamos?" }), chips);
-    return ordered.length;
+      this.panelShown = panelHasRows(rows);
+      this.picker.replaceChildren();
+      if (!this.panelShown) return;
+      const group = h("div", { class: "gp-group" });
+      if (rows.last) {
+        const last = rows.last;
+        group.append(
+          h(
+            "button",
+            { class: "gp-item", title: `Abrir ${last.name} en VS Code`, onclick: () => this.openLast(last.path) },
+            h("span", { class: "gp-k", text: "Lo último" }),
+            h("span", { class: "gp-v", text: last.ago ? `${last.name} · ${last.ago}` : last.name }),
+          ),
+        );
+      }
+      if (rows.pending) {
+        const target = rows.pending.target;
+        group.append(
+          h(
+            "button",
+            { class: "gp-item", onclick: () => this.openPending(target) },
+            h("span", { class: "gp-k", text: "Pendiente" }),
+            h("span", { class: "gp-v", text: rows.pending.text }),
+          ),
+        );
+      }
+      this.picker.append(group);
+    };
+    this.panelShown = false;
+    build();
+    for (const ms of [900, 2200]) window.setTimeout(() => this.greeting.done || build(), ms);
   }
 
-  /** A chip was chosen: open the island on that pill instead of closing to the compact one. */
-  startOn(id: string) {
+  /** The last project was clicked: open it, and show Claude Code on the island. */
+  private openLast(path: string) {
     this.greeting.interrupt();
-    State.setFocus(id);
+    State.setFocus("integration_claude");
     Sound.play("blip");
-    if (id === "integration_claude" || id === "agent_vscode") void refreshProjects();
+    void refreshProjects();
+    void Bridge.openInVSCode(path);
+    this.fsm.forceHome();
+  }
+
+  private openPending(target: "settings" | "github") {
+    this.greeting.interrupt();
+    Sound.play("blip");
+    if (target === "settings") {
+      void Bridge.openSettingsWindow();
+      return;
+    }
+    State.setFocus("integration_github");
     this.fsm.forceHome();
   }
 

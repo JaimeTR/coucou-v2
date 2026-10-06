@@ -1,7 +1,5 @@
-// What Mochi says when Coucou starts: your name and the time of day, like a
-// personal assistant. Kept to two short lines on purpose — the welcome screen
-// is for choosing where to start, not for reading. Pure, so it can be tested
-// without a screen.
+// What Mochi says when Coucou starts: your name, the time of day and today's
+// date, like a personal assistant. Pure, so it can be tested without a screen.
 
 export type GreetingLanguage = "auto" | "es" | "en";
 
@@ -19,7 +17,7 @@ export interface GreetingInput {
 export interface GreetingLines {
   /** "Hola Jaime Tarazona" */
   title: string;
-  /** "Buenas tardes" */
+  /** "Buenas tardes · Lunes, 5 de octubre" */
   sub: string;
 }
 
@@ -78,8 +76,17 @@ export function greetingLines(input: GreetingInput): GreetingLines {
   const stock = input.template.trim() === "" || input.template.trim() === DEFAULT_TEMPLATE;
   const template = stock ? (lang === "es" ? "Hola {name}" : "Hello {name}") : input.template;
 
+  const phrase = PHRASES[lang][partOfDay(input.now.getHours())];
+  let date = "";
+  try {
+    date = input.now.toLocaleDateString(lang === "es" ? "es" : "en", { weekday: "long", day: "numeric", month: "long" });
+  } catch {
+    date = "";
+  }
+  if (date) date = date.charAt(0).toUpperCase() + date.slice(1);
+
   return {
     title: fillTemplate(template, name),
-    sub: PHRASES[lang][partOfDay(input.now.getHours())],
+    sub: date ? `${phrase} · ${date}` : phrase,
   };
 }

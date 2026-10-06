@@ -7,12 +7,10 @@ const at = (h) => new Date(2026, 9, 5, h, 30); // Monday 5 October 2026
 
 const base = { name: "Jaime Tarazona", template: DEFAULT_TEMPLATE, language: "es", systemLanguage: "es-ES" };
 
-test("it greets by the full name, in Spanish, in two short lines", () => {
+test("it greets by the full name, in Spanish, with the time of day and the date", () => {
   const g = greetingLines({ ...base, now: at(15) });
   assert.equal(g.title, "Hola Jaime Tarazona");
-  // No date and no status: the welcome screen is for choosing, not for reading.
-  assert.equal(g.sub, "Buenas tardes");
-  assert.deepEqual(Object.keys(g).sort(), ["sub", "title"]);
+  assert.match(g.sub, /^Buenas tardes · Lunes, 5 de octubre$/);
 });
 
 test("the part of the day follows the hour", () => {
@@ -24,8 +22,8 @@ test("the part of the day follows the hour", () => {
   assert.equal(partOfDay(19), "evening");
   assert.equal(partOfDay(23), "evening");
   assert.equal(partOfDay(0), "night");
-  assert.equal(greetingLines({ ...base, now: at(8) }).sub, "Buenos días");
-  assert.equal(greetingLines({ ...base, now: at(22) }).sub, "Buenas noches");
+  assert.match(greetingLines({ ...base, now: at(8) }).sub, /^Buenos días/);
+  assert.match(greetingLines({ ...base, now: at(22) }).sub, /^Buenas noches/);
 });
 
 test("'auto' follows the system language, and the stock template follows it too", () => {
@@ -35,7 +33,7 @@ test("'auto' follows the system language, and the stock template follows it too"
   assert.equal(resolveLanguage("es", "en-US"), "es");
   const g = greetingLines({ ...base, language: "auto", systemLanguage: "en-US", now: at(9) });
   assert.equal(g.title, "Hello Jaime Tarazona");
-  assert.equal(g.sub, "Good morning");
+  assert.match(g.sub, /^Good morning · Monday, October 5$/);
 });
 
 test("a template you wrote is left as written", () => {

@@ -410,9 +410,9 @@ function personalSection(detectedName: string): HTMLElement {
     ),
     h("div", { class: "hint", text: "El pill que se muestra primero al abrir la isla." }),
     h("div", { class: "row" },
-      h("label", { text: "Elegir al iniciar" }),
+      h("label", { text: "Lo último y pendientes" }),
       toggle(settings.greetingPicker, (v) => { settings.greetingPicker = v; void save(); }),
-      h("span", { class: "hint", text: "muestra “¿Por dónde empezamos?” en la bienvenida" }),
+      h("span", { class: "hint", text: "en la bienvenida: tu último proyecto y lo que espera (revisiones, CI)" }),
     ),
     preview,
   );
