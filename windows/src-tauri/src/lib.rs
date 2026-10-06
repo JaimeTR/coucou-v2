@@ -2,6 +2,7 @@
 
 mod agents;
 mod claude;
+mod compat;
 mod devmark;
 mod files;
 mod hooks;
@@ -460,30 +461,51 @@ async fn chat_send(
     shared: State<'_, Shared>,
     chat: State<'_, Chat>,
     devmark_chat: State<'_, devmark::DevmarkChat>,
+    compat_chat: State<'_, compat::CompatChat>,
     query: String,
     context: Option<ChatContext>,
 ) -> Result<ChatReply, String> {
-    let (provider, model, dm_model, dm_tokens) = {
+    let (provider, model, dm_model, dm_tokens, gemini_model, groq_model) = {
         let s = shared.settings.lock().unwrap();
-        (s.chat_provider.clone(), s.model.clone(), s.devmark_model.clone(), s.devmark_max_tokens)
+        (
+            s.chat_provider.clone(),
+            s.model.clone(),
+            s.devmark_model.clone(),
+            s.devmark_max_tokens,
+            s.gemini_model.clone(),
+            s.groq_model.clone(),
+        )
     };
     match provider.as_str() {
         "devmark" => devmark::send(&devmark_chat, &dm_model, dm_tokens, query, context).await,
+        "gemini" => compat::send(&compat_chat, &compat::GEMINI, &gemini_model, query, context).await,
+        "groq" => compat::send(&compat_chat, &compat::GROQ, &groq_model, query, context).await,
         _ => claude::send(&chat, &model, query, context).await,
     }
 }
 
 /// Starts the conversation over, whoever answers it.
 #[tauri::command]
-fn chat_reset(chat: State<Chat>, devmark_chat: State<devmark::DevmarkChat>) {
+fn chat_reset(
+    chat: State<Chat>,
+    devmark_chat: State<devmark::DevmarkChat>,
+    compat_chat: State<compat::CompatChat>,
+) {
     chat.reset();
     devmark_chat.reset();
+    compat_chat.reset();
 }
 
-/// Settings → DEVMARK AI → "Test connection": no text is generated.
+/// Settings → Chat provider → "Test connection": no text is generated.
 #[tauri::command]
-async fn devmark_test() -> devmark::Check {
-    devmark::check().await
+async fn provider_test(id: String) -> devmark::Check {
+    match id.as_str() {
+        "devmark" => devmark::check().await,
+        other => match compat::provider(other) {
+            Some(p) => compat::check(p).await,
+            None => devmark::Check { ok: false, message: format!("proveedor desconocido: {other}") },
+        },
+    }
 }
 
 /// Copies a dropped file into the inbox and reports its name back.
@@ -632,6 +654,7 @@ pub fn run() {
         .manage(rules::load())
         .manage(Chat::default())
         .manage(devmark::DevmarkChat::default())
+        .manage(compat::CompatChat::default())
         .invoke_handler(tauri::generate_handler![
             boot,
             detect_tools,
@@ -667,7 +690,7 @@ pub fn run() {
             log_line,
             chat_send,
             chat_reset,
-            devmark_test,
+            provider_test,
             ingest_file,
             secret_present,
             secret_set,

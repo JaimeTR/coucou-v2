@@ -111,12 +111,12 @@ function setupSection(
     ),
     item(
       hasProviderKey,
-      settings.chatProvider === "devmark" ? "Chat con DEVMARK AI" : "Chat con Claude",
+      `Chat con ${chatProviderInfo(settings.chatProvider).name}`,
       hasProviderKey
         ? "Clave guardada en el Administrador de credenciales de Windows."
-        : settings.chatProvider === "devmark"
-          ? "Pega tu clave dmk_… en Proveedor de chat."
-          : "Pega tu clave de la API de Anthropic en Claude, o elige DEVMARK AI en Proveedor de chat.",
+        : settings.chatProvider !== "anthropic"
+          ? "Pega tu clave en Proveedor de chat."
+          : "Pega tu clave de la API de Anthropic en Claude, o elige otro proveedor (DEVMARK AI, Gemini, Groq) en Proveedor de chat.",
     ),
     item(
       !!(settings.userName.trim() || detectedName),
@@ -716,120 +716,177 @@ function rulesSection(initial: Rule[]): HTMLElement {
   return section;
 }
 
-// ── Chat provider + DEVMARK AI ────────────────────────────────────────────────
+// ── Chat provider ─────────────────────────────────────────────────────────────
 
-/** Which AI answers the chat, and the settings of the company's DEVMARK AI. */
-function providerSection(hasKey: boolean): HTMLElement {
+/** An AI that can answer the chat besides Claude. */
+interface ProviderDef {
+  id: "devmark" | "gemini" | "groq";
+  /** As it reads in the drop-down. */
+  name: string;
+  /** Credential Manager entry for its key. */
+  keyName: string;
+  keyPlaceholder: string;
+  modelSetting: "devmarkModel" | "geminiModel" | "groqModel";
+  modelDefault: string;
+  intro: string;
+  /** Where a person gets a key. */
+  getKeyUrl?: string;
+}
+
+const PROVIDERS: ProviderDef[] = [
+  {
+    id: "devmark", name: "DEVMARK AI (privada)", keyName: "devmark-api-key", keyPlaceholder: "dmk_live_…",
+    modelSetting: "devmarkModel", modelDefault: "llama3.2:1b",
+    intro: "IA privada de la empresa (compatible con OpenAI, https://ai.devmarkpe.com). Solo lee texto, responde un mensaje a la vez y la primera respuesta puede tardar.",
+  },
+  {
+    id: "gemini", name: "Gemini (Google)", keyName: "gemini-api-key", keyPlaceholder: "AIza…",
+    modelSetting: "geminiModel", modelDefault: "gemini-3.8-flash",
+    intro: "Gemini, de Google AI Studio. Lee texto y código. La clave se crea gratis en Google AI Studio. Si un modelo no existe, “Probar conexión” muestra los que tu clave puede usar.",
+    getKeyUrl: "https://aistudio.google.com/apikey",
+  },
+  {
+    id: "groq", name: "Groq", keyName: "groq-api-key", keyPlaceholder: "gsk_…",
+    modelSetting: "groqModel", modelDefault: "llama-3.3-70b-versatile",
+    intro: "Groq: respuestas muy rápidas con modelos abiertos (Llama y otros). Lee texto y código. Crea una clave en la consola de Groq; “Probar conexión” muestra los modelos disponibles.",
+    getKeyUrl: "https://console.groq.com/keys",
+  },
+];
+
+/** Name and key of whoever answers the chat now, for the setup checklist. */
+function chatProviderInfo(id: Settings["chatProvider"]): { name: string; keyName: string } {
+  const p = PROVIDERS.find((x) => x.id === id);
+  return p ? { name: p.name.replace(/ \(.*\)$/, ""), keyName: p.keyName } : { name: "Claude", keyName: "anthropic-api-key" };
+}
+
+/** Which AI answers the chat, and the key, model and test of each one. */
+function providerSection(present: Record<string, boolean>): HTMLElement {
   const provider = h("select", {}) as HTMLSelectElement;
-  provider.append(
-    h("option", { value: "anthropic", text: "Claude (Anthropic)" }),
-    h("option", { value: "devmark", text: "DEVMARK AI (privada)" }),
-  );
+  provider.append(h("option", { value: "anthropic", text: "Claude (Anthropic)" }));
+  for (const def of PROVIDERS) provider.append(h("option", { value: def.id, text: def.name }));
   provider.value = settings.chatProvider;
 
-  // ── DEVMARK AI ──
-  const dot = statusDot(hasKey);
-  const state = h("span", { class: "hint" });
-  const field = h("input", {
-    type: "password",
-    placeholder: "dmk_live_…",
-    style: "flex:1 1 auto;min-width:0",
-    autocomplete: "off",
-    spellcheck: "false",
-  }) as HTMLInputElement;
-  const saveBtn = h("button", { class: "primary", text: "Guardar clave" });
-  const clearBtn = h("button", { class: "danger", text: "Quitar" });
-  const feedback = h("div", {});
+  const dot = statusDot(false);
+  const blocks = new Map<string, HTMLElement>();
 
-  const model = h("input", {
-    type: "text",
-    value: settings.devmarkModel,
-    placeholder: "llama3.2:1b",
-    style: "flex:1 1 auto;min-width:0",
-    spellcheck: "false",
-  }) as HTMLInputElement;
-  model.addEventListener("change", () => {
-    settings.devmarkModel = model.value.trim() || "llama3.2:1b";
-    model.value = settings.devmarkModel;
-    void save();
-  });
+  function buildBlock(def: ProviderDef): HTMLElement {
+    const state = h("span", { class: "hint" });
+    const field = h("input", {
+      type: "password",
+      placeholder: def.keyPlaceholder,
+      style: "flex:1 1 auto;min-width:0",
+      autocomplete: "off",
+      spellcheck: "false",
+    }) as HTMLInputElement;
+    const saveBtn = h("button", { class: "primary", text: "Guardar clave" });
+    const clearBtn = h("button", { class: "danger", text: "Quitar" });
+    const feedback = h("div", {});
 
-  const tokens = h("input", {
-    type: "number", min: "50", max: "2000", step: "50",
-    value: String(settings.devmarkMaxTokens),
-    style: "width:88px",
-  }) as HTMLInputElement;
-  tokens.addEventListener("change", () => {
-    settings.devmarkMaxTokens = Math.max(50, Math.min(2000, Math.round(Number(tokens.value)) || 400));
-    tokens.value = String(settings.devmarkMaxTokens);
-    void save();
-  });
+    const model = h("input", {
+      type: "text",
+      value: settings[def.modelSetting],
+      placeholder: def.modelDefault,
+      style: "flex:1 1 auto;min-width:0",
+      spellcheck: "false",
+    }) as HTMLInputElement;
+    model.addEventListener("change", () => {
+      settings[def.modelSetting] = model.value.trim() || def.modelDefault;
+      model.value = settings[def.modelSetting];
+      void save();
+    });
 
-  async function refresh() {
-    const present = (await Bridge.secretPresent("devmark-api-key")) ?? false;
-    dot.style.background = present ? "#22c55e" : "#f4505e";
-    state.textContent = present
-      ? "Clave guardada en el Administrador de credenciales de Windows."
-      : "Aún no hay clave: pega la clave dmk_… que te dieron.";
-    field.placeholder = present ? "••••••••••••  (guardada)" : "dmk_live_…";
-    clearBtn.style.display = present ? "" : "none";
+    async function refresh() {
+      const has = (await Bridge.secretPresent(def.keyName)) ?? false;
+      present[def.keyName] = has;
+      state.textContent = has
+        ? "Clave guardada en el Administrador de credenciales de Windows."
+        : "Aún no hay clave: pega la que te dieron.";
+      field.placeholder = has ? "••••••••••••  (guardada)" : def.keyPlaceholder;
+      clearBtn.style.display = has ? "" : "none";
+      if (provider.value === def.id) dot.style.background = has ? "#22c55e" : "#f4505e";
+    }
+
+    saveBtn.addEventListener("click", async () => {
+      const value = field.value.trim();
+      if (!value) return;
+      clear(feedback);
+      try {
+        await Bridge.secretSet(def.keyName, value);
+        field.value = "";
+        feedback.append(h("div", { class: "notice ok", text: "Guardada. Nunca toca el disco ni la página." }));
+        await refresh();
+      } catch (err) {
+        feedback.append(h("div", { class: "notice err", text: `No se pudo guardar: ${String(err)}` }));
+      }
+    });
+    clearBtn.addEventListener("click", async () => {
+      clear(feedback);
+      try {
+        await Bridge.secretClear(def.keyName);
+        feedback.append(h("div", { class: "notice ok", text: "Clave eliminada." }));
+        await refresh();
+      } catch (err) {
+        feedback.append(h("div", { class: "notice err", text: `No se pudo quitar: ${String(err)}` }));
+      }
+    });
+
+    const testBtn = h("button", { text: "Probar conexión" });
+    testBtn.addEventListener("click", async () => {
+      clear(feedback);
+      testBtn.disabled = true;
+      testBtn.textContent = "Probando…";
+      try {
+        const result = await Bridge.providerTest(def.id);
+        feedback.append(h("div", { class: result.ok ? "notice ok" : "notice warn", text: result.message }));
+      } catch (err) {
+        feedback.append(h("div", { class: "notice err", text: String(err).replace(/^Error:\s*/, "") }));
+      } finally {
+        testBtn.disabled = false;
+        testBtn.textContent = "Probar conexión";
+      }
+    });
+
+    const rows: Node[] = [
+      h("div", { class: "hint", text: def.intro }),
+      state,
+      h("div", { class: "row" }, h("label", { text: "Clave API" }), field, saveBtn, clearBtn),
+    ];
+    if (def.getKeyUrl) {
+      rows.push(
+        h("div", { class: "row" },
+          h("button", { text: "Conseguir una clave", onclick: () => void Bridge.openUrl(def.getKeyUrl!) }),
+        ),
+      );
+    }
+    rows.push(h("div", { class: "row" }, h("label", { text: "Modelo" }), model));
+
+    // DEVMARK AI's replies are kept short on purpose: the model runs on a CPU.
+    if (def.id === "devmark") {
+      const tokens = h("input", {
+        type: "number", min: "50", max: "2000", step: "50",
+        value: String(settings.devmarkMaxTokens),
+        style: "width:88px",
+      }) as HTMLInputElement;
+      tokens.addEventListener("change", () => {
+        settings.devmarkMaxTokens = Math.max(50, Math.min(2000, Math.round(Number(tokens.value)) || 400));
+        tokens.value = String(settings.devmarkMaxTokens);
+        void save();
+      });
+      rows.push(
+        h("div", { class: "row" },
+          h("label", { text: "Respuesta máx." }),
+          tokens,
+          h("span", { class: "hint", text: "tokens: más corto es más rápido" }),
+        ),
+      );
+    }
+    rows.push(h("div", { class: "row" }, testBtn), feedback);
+
+    const block = h("div", { style: "display:flex;flex-direction:column;gap:12px" }, ...rows);
+    (block as HTMLElement & { refresh?: () => Promise<void> }).refresh = refresh;
+    void refresh();
+    return block;
   }
-
-  saveBtn.addEventListener("click", async () => {
-    const value = field.value.trim();
-    if (!value) return;
-    clear(feedback);
-    try {
-      await Bridge.secretSet("devmark-api-key", value);
-      field.value = "";
-      feedback.append(h("div", { class: "notice ok", text: "Guardada. Nunca toca el disco ni la página." }));
-      await refresh();
-    } catch (err) {
-      feedback.append(h("div", { class: "notice err", text: `No se pudo guardar: ${String(err)}` }));
-    }
-  });
-  clearBtn.addEventListener("click", async () => {
-    clear(feedback);
-    try {
-      await Bridge.secretClear("devmark-api-key");
-      feedback.append(h("div", { class: "notice ok", text: "Clave eliminada." }));
-      await refresh();
-    } catch (err) {
-      feedback.append(h("div", { class: "notice err", text: `No se pudo quitar: ${String(err)}` }));
-    }
-  });
-
-  const testBtn = h("button", { text: "Probar conexión" });
-  testBtn.addEventListener("click", async () => {
-    clear(feedback);
-    testBtn.disabled = true;
-    testBtn.textContent = "Probando…";
-    try {
-      const result = await Bridge.devmarkTest();
-      feedback.append(h("div", { class: result.ok ? "notice ok" : "notice warn", text: result.message }));
-    } catch (err) {
-      feedback.append(h("div", { class: "notice err", text: String(err).replace(/^Error:\s*/, "") }));
-    } finally {
-      testBtn.disabled = false;
-      testBtn.textContent = "Probar conexión";
-    }
-  });
-
-  const devmark = h(
-    "div",
-    { style: "display:flex;flex-direction:column;gap:12px" },
-    h("div", { class: "hint", text: "IA privada de la empresa (compatible con OpenAI, https://ai.devmarkpe.com). Solo lee texto, responde un mensaje a la vez y la primera respuesta puede tardar." }),
-    state,
-    h("div", { class: "row" }, h("label", { text: "Clave API" }), field, saveBtn, clearBtn),
-    h("div", { class: "row" }, h("label", { text: "Modelo" }), model),
-    h("div", { class: "row" },
-      h("label", { text: "Respuesta máx." }),
-      tokens,
-      h("span", { class: "hint", text: "tokens: más corto es más rápido" }),
-    ),
-    h("div", { class: "row" }, testBtn),
-    feedback,
-  );
 
   const section = h(
     "section",
@@ -837,21 +894,26 @@ function providerSection(hasKey: boolean): HTMLElement {
     h("h2", {}, dot, h("span", { text: "Proveedor de chat" })),
     h("div", { class: "hint", text: "Quién responde cuando le preguntas algo a Mochi. Al cambiarlo empieza una conversación nueva." }),
     h("div", { class: "row" }, h("label", { text: "Responde con" }), provider),
-    devmark,
   );
+  for (const def of PROVIDERS) {
+    const block = buildBlock(def);
+    blocks.set(def.id, block);
+    section.append(block);
+  }
 
-  // The DEVMARK settings only matter while it is the chosen provider.
-  const showDevmark = () => {
-    devmark.style.display = provider.value === "devmark" ? "" : "none";
-    dot.style.display = provider.value === "devmark" ? "" : "none";
+  // Only the chosen provider's settings are shown; Claude's live in its own section below.
+  const show = () => {
+    for (const [id, block] of blocks) block.style.display = provider.value === id ? "" : "none";
+    const def = PROVIDERS.find((p) => p.id === provider.value);
+    dot.style.display = def ? "" : "none";
+    if (def) dot.style.background = present[def.keyName] ? "#22c55e" : "#f4505e";
   };
   provider.addEventListener("change", () => {
     settings.chatProvider = provider.value as Settings["chatProvider"];
-    showDevmark();
+    show();
     void save();
   });
-  showDevmark();
-  void refresh();
+  show();
   return section;
 }
 
@@ -1130,13 +1192,14 @@ async function main() {
   const keys = [
     "stripe-api-key", "github-token", "vercel-token",
     "n8n-url", "n8n-api-key", "resend-api-key", "notion-api-key", "calcom-api-key",
+    "devmark-api-key", "gemini-api-key", "groq-api-key",
   ];
   const present: Record<string, boolean> = {};
   for (const k of keys) present[k] = (await Bridge.secretPresent(k)) ?? false;
 
   const tools = (await Bridge.detectTools()) ?? [];
   const agents = (await Bridge.agentsStatus()) ?? [];
-  const providerKey = settings.chatProvider === "devmark" ? "devmark-api-key" : "anthropic-api-key";
+  const providerKey = chatProviderInfo(settings.chatProvider).keyName;
   const hasProviderKey = (await Bridge.secretPresent(providerKey)) ?? false;
 
   clear(root);
@@ -1148,7 +1211,7 @@ async function main() {
     agentsSection(agents),
     planSection(status),
     rulesSection((await Bridge.rulesList()) ?? []),
-    providerSection((await Bridge.secretPresent("devmark-api-key")) ?? false),
+    providerSection(present),
     apiSection(hasKey),
     integrationsSection(present),
     generalSection(),

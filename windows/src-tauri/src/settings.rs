@@ -44,6 +44,11 @@ pub struct Settings {
     /// Model asked of DEVMARK AI, and how long its replies may be.
     #[serde(default = "default_devmark_model")]
     pub devmark_model: String,
+    /// Models asked of Gemini and Groq (any model the provider offers).
+    #[serde(default = "default_gemini_model")]
+    pub gemini_model: String,
+    #[serde(default = "default_groq_model")]
+    pub groq_model: String,
     #[serde(default = "default_devmark_max_tokens")]
     pub devmark_max_tokens: u32,
     /// Show the plan usage pill in the island's header.
@@ -82,6 +87,14 @@ fn default_devmark_model() -> String {
     crate::devmark::DEFAULT_MODEL.to_string()
 }
 
+fn default_gemini_model() -> String {
+    crate::compat::DEFAULT_GEMINI_MODEL.to_string()
+}
+
+fn default_groq_model() -> String {
+    crate::compat::DEFAULT_GROQ_MODEL.to_string()
+}
+
 fn default_devmark_max_tokens() -> u32 {
     crate::devmark::DEFAULT_MAX_TOKENS
 }
@@ -113,6 +126,8 @@ impl Default for Settings {
             chat_provider: default_provider(),
             devmark_model: default_devmark_model(),
             devmark_max_tokens: default_devmark_max_tokens(),
+            gemini_model: default_gemini_model(),
+            groq_model: default_groq_model(),
             plan_gauge: false,
             native_notifications: true,
             global_shortcuts: true,

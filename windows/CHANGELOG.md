@@ -36,6 +36,7 @@ Coucou v2 is [JaimeTR](https://github.com/JaimeTR)'s fork of [Coucou by Louis Ra
 - Connecting or disconnecting follows the same rule as Claude Code's `settings.json`: the exact diff first, a dated backup, a write only after a click, and a refusal if the file changed since the preview. Disconnecting removes only Coucou's part. A pill you switch on stays between sessions; the setup checklist lists the agents found on the PC.
 
 **Chat**
+- **Gemini (Google AI Studio) and Groq** join Claude and DEVMARK AI as chat providers. Pick one under Settings → Proveedor de chat, paste its key (saved in the Windows Credential Manager, or `GEMINI_API_KEY` / `GROQ_API_KEY` in the environment), type any model it offers, and use "Probar conexión", which lists the models your key can use without generating anything. Both use the OpenAI-compatible endpoints (`generativelanguage.googleapis.com/v1beta/openai`, `api.groq.com/openai/v1`); 429 and 5xx answers are retried with the pause the provider asks for, and every error says which provider spoke. Text and code files can be dropped on them; PDFs and images work with Claude only for now.
 - DEVMARK AI as a chat provider (OpenAI-compatible, `llama3.2:1b`): key in the Credential Manager (or `DEVMARK_API_KEY`), one request at a time, history trimmed to the 48 000-character limit, 150 s timeout, retries and clear messages for 401 / 429 / 503, and a **Test connection** button that generates nothing.
 
 **Fixes**
@@ -44,5 +45,5 @@ Coucou v2 is [JaimeTR](https://github.com/JaimeTR)'s fork of [Coucou by Louis Ra
 - An agent whose long command or session ends no longer leaves its pill stuck on the last message.
 
 **Under the hood**
-- 34 Rust tests, 9 relay tests and 23 TypeScript tests (`npm test`) cover the hooks and statusLine merge, the question protocol, the live diff, the "Always allow" rules, DEVMARK AI, the greeting, the GitHub / Copilot pulse, the project readers and the Gemini / OpenCode / PowerShell installers (including the generated PowerShell block, which was also run in PowerShell 7 and 5.1).
+- 40 Rust tests, 9 relay tests and 24 TypeScript tests (`npm test`) cover the hooks and statusLine merge, the question protocol, the live diff, the "Always allow" rules, DEVMARK AI, the greeting, the GitHub / Copilot pulse, the project readers and the Gemini / OpenCode / PowerShell installers (including the generated PowerShell block, which was also run in PowerShell 7 and 5.1).
 - `cargo test -p coucou show_real_previews -- --ignored --nocapture` prints what connecting each agent would change on your computer, and `show_real_projects` lists the projects found for the Claude Code and VS Code pills. Both read real files and write nothing.

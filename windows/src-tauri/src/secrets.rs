@@ -9,6 +9,8 @@ const SERVICE: &str = "fr.louisraille.coucou";
 pub const KNOWN_KEYS: &[&str] = &[
     "anthropic-api-key",
     "devmark-api-key",
+    "gemini-api-key",
+    "groq-api-key",
     "n8n-url",
     "n8n-api-key",
     "vercel-token",

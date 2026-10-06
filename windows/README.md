@@ -42,7 +42,7 @@ Coucou v2 turns Mochi into a small personal assistant. Everything below is new o
 | **Jump to the right terminal** | "Open terminal" brings forward the window of the terminal or VS Code that session runs in. |
 | **Global shortcuts** | `Ctrl+Alt+Y` allow · `Ctrl+Alt+N` deny (only while a request is up) · `Ctrl+Alt+C` open or close the island. |
 | **Windows notifications** | A toast when Claude needs permission, asks something, or finishes while the island is closed. |
-| **DEVMARK AI** | The company's private model as the chat provider (see [below](#devmark-ai-chat-provider)). |
+| **Chat with Claude, DEVMARK AI, Gemini or Groq** | Pick who answers under Settings → Proveedor de chat. DEVMARK AI is the company's private model (see [below](#devmark-ai-chat-provider)); Gemini and Groq use your own key. |
 
 ## Install
 

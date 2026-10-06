@@ -90,7 +90,7 @@ fn fit_messages(history: &[(String, String)]) -> Result<Vec<Value>, String> {
     Ok(out)
 }
 
-fn build_body(model: &str, max_tokens: u32, messages: Vec<Value>) -> Value {
+pub(crate) fn build_body(model: &str, max_tokens: u32, messages: Vec<Value>) -> Value {
     json!({
         "model": model,
         "messages": messages,
@@ -101,7 +101,7 @@ fn build_body(model: &str, max_tokens: u32, messages: Vec<Value>) -> Value {
 }
 
 /// `choices[0].message.content`, trimmed; None when there is nothing to show.
-fn reply_text(response: &Value) -> Option<String> {
+pub(crate) fn reply_text(response: &Value) -> Option<String> {
     let text = response
         .get("choices")?
         .get(0)?
@@ -168,7 +168,7 @@ fn retry_delay(status: u16, body: &str, attempt: u32) -> Option<Duration> {
 }
 
 /// Text files only: the model cannot read PDFs or images.
-fn file_text(name: &str, path: &str) -> Result<String, String> {
+pub(crate) fn file_text(who: &str, name: &str, path: &str) -> Result<String, String> {
     let ext = std::path::Path::new(path)
         .extension()
         .and_then(|e| e.to_str())
@@ -176,7 +176,7 @@ fn file_text(name: &str, path: &str) -> Result<String, String> {
         .to_lowercase();
     let cannot = || {
         format!(
-            "El modelo de DEVMARK AI solo lee texto: no puede abrir “{name}”. Funcionan los archivos de texto y de código."
+            "El modelo de {who} solo lee texto: no puede abrir “{name}”. Funcionan los archivos de texto y de código."
         )
     };
     if matches!(ext.as_str(), "pdf" | "jpg" | "jpeg" | "png" | "gif" | "webp" | "bmp" | "zip" | "exe") {
@@ -219,7 +219,7 @@ pub async fn send(
     if first {
         match &context {
             Some(ChatContext::File { name, path }) => {
-                text.push_str(&file_text(name, path)?);
+                text.push_str(&file_text("DEVMARK AI", name, path)?);
                 text.push_str("\n\n");
             }
             Some(ChatContext::Window { app_name, title, url }) => {
@@ -447,9 +447,9 @@ mod tests {
         std::fs::create_dir_all(&tmp).unwrap();
         let txt = tmp.join("a.txt");
         std::fs::write(&txt, "hello").unwrap();
-        let sent = file_text("a.txt", txt.to_str().unwrap()).unwrap();
+        let sent = file_text("DEVMARK AI", "a.txt", txt.to_str().unwrap()).unwrap();
         assert!(sent.contains("hello") && sent.starts_with("File: a.txt"));
-        assert!(file_text("a.pdf", "C:/x/a.pdf").unwrap_err().contains("solo lee texto"));
+        assert!(file_text("DEVMARK AI", "a.pdf", "C:/x/a.pdf").unwrap_err().contains("solo lee texto"));
         let _ = std::fs::remove_dir_all(&tmp);
     }
 }

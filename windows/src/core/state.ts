@@ -166,8 +166,11 @@ export interface Settings {
   /** `{name}` is replaced by your name. */
   greetingTemplate: string;
   greetingLanguage: "auto" | "es" | "en";
-  /** Who answers the chat: Claude, or the company's DEVMARK AI. */
-  chatProvider: "anthropic" | "devmark";
+  /** Who answers the chat: Claude, DEVMARK AI, Gemini or Groq. */
+  chatProvider: "anthropic" | "devmark" | "gemini" | "groq";
+  /** Models asked of Gemini and Groq. */
+  geminiModel: string;
+  groqModel: string;
   /** Model asked of DEVMARK AI, and the longest reply it may write. */
   devmarkModel: string;
   devmarkMaxTokens: number;
@@ -194,6 +197,8 @@ export const DEFAULT_SETTINGS: Settings = {
   greetingTemplate: "Hola {name}",
   greetingLanguage: "auto",
   chatProvider: "anthropic",
+  geminiModel: "gemini-3.8-flash",
+  groqModel: "llama-3.3-70b-versatile",
   devmarkModel: "llama3.2:1b",
   devmarkMaxTokens: 400,
   planGauge: false,

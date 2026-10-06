@@ -152,8 +152,8 @@ export const Bridge = {
   chatSend: (query: string, context: ChatContext | null) =>
     callOrThrow<{ text: string }>("chat_send", { query, context }),
   chatReset: () => call<void>("chat_reset"),
-  /** Settings → DEVMARK AI → Test connection. Generates nothing. */
-  devmarkTest: () => callOrThrow<{ ok: boolean; message: string }>("devmark_test"),
+  /** Settings → Chat provider → Test connection (devmark, gemini or groq). Generates nothing. */
+  providerTest: (id: string) => callOrThrow<{ ok: boolean; message: string }>("provider_test", { id }),
   /** Copies a dropped file into the inbox. */
   ingestFile: (path: string) => callOrThrow<DroppedFile>("ingest_file", { path }),
   /** Only ever tells you whether a key exists — never its value. */
