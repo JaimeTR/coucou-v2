@@ -44,6 +44,12 @@ pub struct Settings {
     /// Chat replies are read aloud as they arrive (each one also has a speaker button).
     #[serde(default)]
     pub voice_replies: bool,
+    /// Master switch: Mochi's automatic phrases are spoken (off by default).
+    #[serde(default)]
+    pub voice_enabled: bool,
+    /// Agent news is spoken: session finished, permission, question, error.
+    #[serde(default)]
+    pub voice_events: bool,
     /// Who speaks: "system" (the voices Windows has) or "elevenlabs".
     #[serde(default = "default_voice_engine")]
     pub voice_engine: String,
@@ -172,6 +178,8 @@ impl Default for Settings {
             greeting_language: default_greeting_language(),
             language: default_greeting_language(),
             voice_greeting: false,
+            voice_enabled: false,
+            voice_events: false,
             voice_engine: default_voice_engine(),
             eleven_voice: default_eleven_voice(),
             eleven_model: default_eleven_model(),

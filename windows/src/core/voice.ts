@@ -103,3 +103,18 @@ export function speak(text: string, onEnd?: () => void, opts: { free?: boolean }
   const premium = State.settings.voiceEngine === "elevenlabs" && !opts.free;
   return premium ? speakEleven(said, onEnd) : speakSystem(said, onEnd);
 }
+
+export type Occasion = "greeting" | "events" | "replies" | "assistant";
+
+/**
+ * Speech Mochi starts by itself. Nothing is said unless voice is switched on, and
+ * then only for the kinds that were chosen. Returns whether it is speaking.
+ */
+export function speakAuto(occasion: Occasion, text: string, onEnd?: () => void): boolean {
+  const s = State.settings;
+  if (!s.voiceEnabled) return false;
+  if (occasion === "greeting" && !s.voiceGreeting) return false;
+  if (occasion === "events" && !s.voiceEvents) return false;
+  if (occasion === "replies" && !s.voiceReplies) return false;
+  return speak(text, onEnd);
+}

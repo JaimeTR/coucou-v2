@@ -434,6 +434,27 @@ function voiceSection(present: Record<string, boolean>): HTMLElement {
     if (settings.voiceEngine === "elevenlabs" && present["elevenlabs-api-key"]) void loadVoices();
   });
 
+  // What Mochi says on its own, once its voice is on.
+  const optionsBox = h("div", { style: "display:flex;flex-direction:column;gap:10px;padding-left:12px" },
+    h("div", { class: "row" },
+      h("label", { text: "Dice la bienvenida" }),
+      toggle(settings.voiceGreeting, (v) => { settings.voiceGreeting = v; void save(); }),
+      h("span", { class: "hint", text: "tu nombre y el momento del día al iniciar" }),
+    ),
+    h("div", { class: "row" },
+      h("label", { text: "Avisa de los agentes" }),
+      toggle(settings.voiceEvents, (v) => { settings.voiceEvents = v; void save(); }),
+      h("span", { class: "hint", text: "sesión terminada, permisos, preguntas y errores de Claude Code y los demás agentes" }),
+    ),
+    h("div", { class: "row" },
+      h("label", { text: "Lee las respuestas del chat" }),
+      toggle(settings.voiceReplies, (v) => { settings.voiceReplies = v; void save(); }),
+      h("span", { class: "hint", text: "las respuestas largas se cortan en la primera frase o dos; con ElevenLabs gastan crédito" }),
+    ),
+    h("div", { class: "hint", text: "«Oye Mochi» también habla (el saludo y «Abriendo Claude Code») cuando la voz está activada. Cada respuesta del chat tiene además un botón de altavoz que usa la voz gratis de Windows." }),
+  );
+  optionsBox.style.display = settings.voiceEnabled ? "" : "none";
+
   // Listening: the wake phrase, and the shortcut that pauses it.
   const groqNote = h("div", { class: "hint" });
   void Bridge.secretPresent("groq-api-key").then((has) => {
@@ -449,17 +470,23 @@ function voiceSection(present: Record<string, boolean>): HTMLElement {
     eleven,
     h("div", { class: "row" },
       h("label", { text: "Mochi habla" }),
-      toggle(settings.voiceGreeting, (v) => {
-        settings.voiceGreeting = v;
+      toggle(settings.voiceEnabled, (v) => {
+        settings.voiceEnabled = v;
+        if (v && !settings.voiceGreeting && !settings.voiceEvents) {
+          // First time: start with the useful ones; replies stay off (they can be long and cost credit).
+          settings.voiceGreeting = true;
+          settings.voiceEvents = true;
+        }
         void save();
+        optionsBox.style.display = v ? "" : "none";
         if (v) {
           State.settings = { ...State.settings, ...settings };
           speak(settings.userName.trim() ? `Hola ${settings.userName.trim()}` : "Hola");
         }
       }),
-      h("span", { class: "hint", text: "dice tu nombre y el momento del día al iniciar" }),
+      h("span", { class: "hint", text: "activa la voz de Mochi; sin esto no dice nada por sí solo" }),
     ),
-    h("div", { class: "hint", text: "Mochi solo habla con frases cortas suyas: la bienvenida, el saludo de «Oye Mochi» y confirmaciones como «Abriendo Claude Code». Las respuestas del chat no se leen solas, así no gastas crédito; cada una tiene un botón de altavoz que usa la voz gratis de Windows." }),
+    optionsBox,
     h("div", { class: "row" },
       h("label", { text: "Escuchar «Oye Mochi»" }),
       toggle(settings.wakeWord, (v) => { settings.wakeWord = v; void save(); }),

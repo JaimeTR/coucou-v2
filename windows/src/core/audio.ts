@@ -52,6 +52,11 @@ export class Segmenter {
     return this.active != null;
   }
 
+  /** What has been said so far in the utterance in progress, or null. */
+  snapshot(): Float32Array | null {
+    return this.active ? join(this.active) : null;
+  }
+
   reset() {
     this.ring = [];
     this.ringSamples = 0;

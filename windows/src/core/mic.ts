@@ -54,7 +54,14 @@ export function toWav(samples: Float32Array, rate: number): Uint8Array {
  * Listens until the person says something and stops talking. Resolves with the
  * recording, or null if nobody spoke within `waitMs`. `cancel()` ends it early.
  */
-export function recordOnce(opts: { waitMs?: number; maxMs?: number } = {}) {
+export function recordOnce(
+  opts: {
+    waitMs?: number;
+    maxMs?: number;
+    /** Called every ~1.5 s while the person is talking, with everything said so far. */
+    onPartial?: (wav: Uint8Array) => void;
+  } = {},
+) {
   let finish: (wav: Uint8Array | null) => void = () => {};
   const done = new Promise<Uint8Array | null>((resolve) => (finish = resolve));
   let mic: Mic | null = null;
@@ -63,23 +70,33 @@ export function recordOnce(opts: { waitMs?: number; maxMs?: number } = {}) {
     if (over) return;
     over = true;
     window.clearTimeout(timer);
+    window.clearInterval(partials);
     mic?.stop();
     finish(wav);
   };
   const timer = window.setTimeout(() => end(null), opts.waitMs ?? 8000);
+  // The text can follow the voice: hand over what has been said so far, now and then.
+  const partials = window.setInterval(() => {
+    if (over || !opts.onPartial || !mic || !segmenter) return;
+    const so_far = segmenter.snapshot();
+    if (so_far && so_far.length > mic.sampleRate * 0.8) opts.onPartial(toWav(so_far, mic.sampleRate));
+  }, 1500);
 
   openMic((frame) => {
     if (!segmenter || over) return;
     const utterance = segmenter.push(frame);
+    // Once somebody is talking, the "nobody spoke" timeout no longer applies.
+    if (segmenter.speaking) window.clearTimeout(timer);
     if (utterance && mic) end(toWav(utterance, mic.sampleRate));
   }).then(
     (m) => {
       mic = m;
-      segmenter = new Segmenter({ sampleRate: m.sampleRate, silenceMs: 1100, maxMs: opts.maxMs ?? 20000 });
+      segmenter = new Segmenter({ sampleRate: m.sampleRate, silenceMs: 1000, maxMs: opts.maxMs ?? 20000 });
       if (over) m.stop();
     },
     (err) => {
       window.clearTimeout(timer);
+      window.clearInterval(partials);
       over = true;
       finish(null);
       failure = err instanceof Error ? err : new Error(String(err));

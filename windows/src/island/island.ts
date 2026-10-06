@@ -10,7 +10,7 @@ import {
   type IslandMode, type IslandViewName,
 } from "../core/layout";
 import { Sound } from "../core/sound";
-import { speak } from "../core/voice";
+import { speakAuto } from "../core/voice";
 import { WakeListener } from "./listen";
 import { parseIntent } from "../core/intent";
 import { helloLine, runLaunch } from "./voiceCommands";
@@ -322,7 +322,7 @@ export class Island {
                     systemLanguage: navigator.language || "en",
                   });
                   // Mochi says it aloud, if asked: the name and the time of day.
-                  if (s.voiceGreeting) speak(`${lines.title}. ${lines.sub.split(" · ")[0]}.`);
+                  speakAuto("greeting", `${lines.title}. ${lines.sub.split(" · ")[0]}.`);
                   return lines;
                 }
               : null,
@@ -1097,7 +1097,7 @@ export class Island {
         State.pendingVoice = { record: true };
         State.notify();
       };
-      if (!speak(helloLine(), listen)) listen();
+      if (!speakAuto("assistant", helloLine(), listen)) listen();
     },
     onProblem: (message) => {
       // It stops itself rather than failing again on every phrase.

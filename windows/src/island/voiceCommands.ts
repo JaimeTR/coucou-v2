@@ -5,7 +5,7 @@ import { Bridge } from "../core/bridge";
 import { t } from "../core/i18n";
 import type { Intent, Target } from "../core/intent";
 import { State } from "../core/state";
-import { speak } from "../core/voice";
+import { speakAuto } from "../core/voice";
 
 const NAMES: Record<Target, string> = {
   claude: "Claude Code",
@@ -47,7 +47,7 @@ export async function runLaunch(intent: Extract<Intent, { kind: "launch" }>): Pr
       break;
   }
   const worked = ok === true;
-  speak(worked ? t(`Abriendo ${NAMES[target]}`) : t(`No pude abrir ${NAMES[target]}`));
+  speakAuto("assistant", worked ? t(`Abriendo ${NAMES[target]}`) : t(`No pude abrir ${NAMES[target]}`));
   return worked;
 }
 

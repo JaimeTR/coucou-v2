@@ -5,7 +5,7 @@ import { h, svg, clear } from "./dom";
 import { ICONS } from "./icons";
 import { Bridge, type ChatContext } from "../core/bridge";
 import { Sound } from "../core/sound";
-import { speak, stopSpeaking, voiceAvailable } from "../core/voice";
+import { speak, speakAuto, stopSpeaking, voiceAvailable } from "../core/voice";
 import { recordOnce } from "../core/mic";
 import { uiLanguage } from "../core/i18n";
 import { parseIntent } from "../core/intent";
@@ -108,6 +108,7 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
       State.chatHistory.push({ id: nextId++, role: "assistant", content: reply.text });
       State.stateOverride = null;
       Sound.play("finish");
+      speakAuto("replies", reply.text);
     } catch (err) {
       State.stateOverride = null;
       State.noteMessage = String(err).replace(/^Error:\s*/, "");
@@ -131,7 +132,24 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
     }
     if (sending) return;
     stopSpeaking();
-    const session = recordOnce({ waitMs: 8000 });
+    // The words appear as they are said: Whisper re-reads what has been spoken so
+    // far, one request at a time, and the field shows the latest reading.
+    let partialBusy = false;
+    let partialsLeft = 6;
+    const session = recordOnce({
+      waitMs: 8000,
+      onPartial: (partial) => {
+        if (partialBusy || partialsLeft <= 0 || recording !== session) return;
+        partialBusy = true;
+        partialsLeft--;
+        void Bridge.voiceTranscribe(Array.from(partial), "audio/wav", uiLanguage())
+          .then((text) => {
+            if (recording === session && text.trim()) input.value = text.trim();
+          })
+          .catch(() => (partialsLeft = 0)) // a limit or a bad key: the final reading will say so
+          .finally(() => (partialBusy = false));
+      },
+    });
     recording = session;
     State.micBusy = true;
     mic.classList.add("rec");

@@ -6,6 +6,7 @@
 import { Bridge, onEvent } from "../core/bridge";
 import { Sound } from "../core/sound";
 import { applyLanguage, t } from "../core/i18n";
+import { speakAuto } from "../core/voice";
 import { State, type AskQuestion, type PlanUsage, type PlanWindow } from "../core/state";
 import { computeDiff, diffStepLabel } from "./diff";
 import { matchRule, ruleFor } from "./rules";
@@ -143,6 +144,8 @@ function approvalTarget(tool: string, input: Record<string, unknown>): string {
 
 /** A Windows toast for something that needs a person, when the setting is on. */
 function toast(title: string, body: string) {
+  // The title is the short phrase ("Claude Code terminó"); the body can be a command.
+  speakAuto("events", t(title));
   if (!State.settings.nativeNotifications) return;
   void Bridge.notify(t(title), t(body));
 }

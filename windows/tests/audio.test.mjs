@@ -67,3 +67,12 @@ test("what follows the name becomes the question", () => {
   assert.equal(matchWake("Oye Mochi, ¿qué hora es?").rest, "qué hora es?");
   assert.equal(matchWake("oye mochi").rest, "");
 });
+
+test("what has been said so far can be read while the person is still talking", () => {
+  const seg = new Segmenter({ sampleRate: RATE, silenceMs: 500 });
+  assert.equal(seg.snapshot(), null, "nothing yet");
+  for (let i = 0; i < 4; i++) seg.push(frame(0.3));
+  const so_far = seg.snapshot();
+  assert.ok(so_far && so_far.length >= 4 * 1600);
+  assert.equal(seg.speaking, true);
+});

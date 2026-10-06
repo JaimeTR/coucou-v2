@@ -167,6 +167,10 @@ export interface Settings {
   greetingLanguage: "auto" | "es" | "en";
   /** Mochi says the welcome aloud. */
   voiceGreeting: boolean;
+  /** Master switch for Mochi's automatic phrases. */
+  voiceEnabled: boolean;
+  /** Agent news is spoken: finished, permission, question, error. */
+  voiceEvents: boolean;
   /** Who speaks: the voices Windows has, or ElevenLabs. */
   voiceEngine: "system" | "elevenlabs";
   elevenVoice: string;
@@ -212,6 +216,8 @@ export const DEFAULT_SETTINGS: Settings = {
   greetingTemplate: "Hola {name}",
   greetingLanguage: "auto",
   voiceGreeting: false,
+  voiceEnabled: false,
+  voiceEvents: false,
   voiceEngine: "system",
   elevenVoice: "21m00Tcm4TlvDq8ikWAM",
   elevenModel: "eleven_multilingual_v2",
