@@ -1738,11 +1738,11 @@ input[type="range"]::-webkit-slider-thumb {
 .gp-group {
   position: absolute;
   left: 396px;
-  top: 52px;
+  top: 46px;
   width: 214px;
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 5px;
 }
 
 .gp-item {
@@ -1778,4 +1778,27 @@ input[type="range"]::-webkit-slider-thumb {
 
 .gp-item:hover .gp-v {
   color: var(--ink);
+}
+
+
+.gp-go {
+  pointer-events: auto;
+  align-self: flex-start;
+  height: 22px;
+  padding: 0 10px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--ink);
+  font: 500 11px var(--font);
+  cursor: default;
+  transition: background 0.12s ease-out, transform 0.08s ease-out;
+}
+
+.gp-go:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.gp-go:active {
+  transform: scale(0.97);
 }

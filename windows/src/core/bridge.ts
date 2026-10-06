@@ -82,6 +82,7 @@ export const Bridge = {
 
   /** "Open terminal" → opens the folder in VS Code when `code` is on PATH. */
   openInVSCode: (path: string | null) => call<boolean>("open_in_vscode", { path }),
+  continueClaude: (path: string) => call<boolean>("continue_claude", { path }),
 
   // ── "Always allow" rules ──────────────────────────────────────────────────
   rulesList: () => call<Rule[]>("rules_list"),

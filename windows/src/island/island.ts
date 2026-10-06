@@ -374,6 +374,13 @@ export class Island {
             h("span", { class: "gp-v", text: last.ago ? `${last.name} · ${last.ago}` : last.name }),
           ),
         );
+        group.append(
+          h(
+            "button",
+            { class: "gp-go", title: "Abre una terminal en el proyecto con claude --continue", onclick: () => this.continueLast(last.path) },
+            "Continuar donde lo dejé →",
+          ),
+        );
       }
       if (rows.pending) {
         const target = rows.pending.target;
@@ -400,6 +407,15 @@ export class Island {
     Sound.play("blip");
     void refreshProjects();
     void Bridge.openInVSCode(path);
+    this.fsm.forceHome();
+  }
+
+  /** Resume the last Claude Code conversation of that project in a new terminal. */
+  private continueLast(path: string) {
+    this.greeting.interrupt();
+    Sound.play("blip");
+    void Bridge.continueClaude(path);
+    State.setFocus("integration_claude");
     this.fsm.forceHome();
   }
 

@@ -285,6 +285,29 @@ fn open_in_vscode(path: Option<String>) -> bool {
     false
 }
 
+/// "Continue where I left off": a new terminal window in the project folder
+/// running `claude --continue`, which resumes that folder's latest conversation.
+/// The folder is handed over as the working directory, never inside a command
+/// line, so nothing in its name can be read as shell syntax.
+#[tauri::command]
+fn continue_claude(path: String) -> bool {
+    let p = std::path::Path::new(&path);
+    if !(p.is_absolute() && p.is_dir()) {
+        return false;
+    }
+    #[cfg(windows)]
+    {
+        let mut cmd = Command::new("cmd");
+        cmd.current_dir(p)
+            .args(["/c", "start", "Claude Code", "claude", "--continue"]);
+        return platform::no_console(&mut cmd).spawn().is_ok();
+    }
+    #[cfg(not(windows))]
+    {
+        false
+    }
+}
+
 /// "Open terminal": brings forward the window of the terminal this session runs
 /// in, given the process chain coucou-hook captured. False means "no window
 /// found", and the island falls back to opening the folder in VS Code.
@@ -667,6 +690,7 @@ pub fn run() {
             reposition,
             open_url,
             open_in_vscode,
+            continue_claude,
             open_file_in_vscode,
             focus_terminal,
             quit_app,
