@@ -167,6 +167,8 @@ export interface Settings {
   greetingLanguage: "auto" | "es" | "en";
   /** Mochi says the welcome aloud. */
   voiceGreeting: boolean;
+  /** Opens and closes the island from anywhere, e.g. "Ctrl+Alt+C". */
+  toggleShortcut: string;
   /** Chat replies are read aloud as they arrive. */
   voiceReplies: boolean;
   /** Interface language; "auto" follows the system. */
@@ -202,6 +204,7 @@ export const DEFAULT_SETTINGS: Settings = {
   greetingTemplate: "Hola {name}",
   greetingLanguage: "auto",
   voiceGreeting: false,
+  toggleShortcut: "Ctrl+Alt+C",
   voiceReplies: false,
   language: "auto",
   chatProvider: "anthropic",

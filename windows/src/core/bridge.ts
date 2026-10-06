@@ -84,6 +84,7 @@ export const Bridge = {
   openInVSCode: (path: string | null) => call<boolean>("open_in_vscode", { path }),
   openAgentApp: (agent: "opencode" | "gemini" | "antigravity" | "antigravity-ide") => call<boolean>("open_agent_app", { agent }),
   setUiLanguage: (lang: "es" | "en") => call<void>("set_ui_language", { lang }),
+  setToggleShortcut: (accel: string) => callOrThrow<string>("set_toggle_shortcut", { accel }),
   launchAgent: (agent: "claude" | "opencode" | "gemini" | "agy", path: string | null, resume: boolean) =>
     call<boolean>("launch_agent", { agent, path, resume }),
 

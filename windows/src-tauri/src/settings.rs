@@ -70,6 +70,10 @@ pub struct Settings {
     /// Global keyboard shortcuts to approve / deny without focusing anything.
     #[serde(default = "default_true")]
     pub global_shortcuts: bool,
+    /// The key (or two) that opens and closes the island from anywhere,
+    /// e.g. "Ctrl+Alt+C" or "F8".
+    #[serde(default = "default_toggle_shortcut")]
+    pub toggle_shortcut: String,
 }
 
 fn default_true() -> bool {
@@ -78,6 +82,10 @@ fn default_true() -> bool {
 
 fn default_greeting_template() -> String {
     "Hola {name}".into()
+}
+
+pub fn default_toggle_shortcut() -> String {
+    "Ctrl+Alt+C".into()
 }
 
 fn default_start_pill() -> String {
@@ -143,6 +151,7 @@ impl Default for Settings {
             plan_gauge: false,
             native_notifications: true,
             global_shortcuts: true,
+            toggle_shortcut: default_toggle_shortcut(),
         }
     }
 }

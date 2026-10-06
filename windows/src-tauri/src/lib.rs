@@ -102,8 +102,55 @@ fn deny_shortcut() -> Shortcut {
     Shortcut::new(Some(Modifiers::CONTROL | Modifiers::ALT), Code::KeyN)
 }
 
-fn toggle_shortcut() -> Shortcut {
-    Shortcut::new(Some(Modifiers::CONTROL | Modifiers::ALT), Code::KeyC)
+/// "Ctrl+Alt+C", "F8", "Ctrl+Space": one or more modifiers and a key, or an F key
+/// alone. A bare letter would take that letter away from every other program.
+fn parse_toggle(accel: &str) -> Result<Shortcut, String> {
+    let accel = accel.trim();
+    let shortcut: Shortcut = accel
+        .parse()
+        .map_err(|_| format!("«{accel}» no es una combinación válida"))?;
+    let function_key = matches!(
+        shortcut.key,
+        Code::F1 | Code::F2 | Code::F3 | Code::F4 | Code::F5 | Code::F6 | Code::F7 | Code::F8
+            | Code::F9 | Code::F10 | Code::F11 | Code::F12
+    );
+    if shortcut.mods.is_empty() && !function_key {
+        return Err("Añade Ctrl, Alt o Shift, o usa una tecla F1 a F12".into());
+    }
+    Ok(shortcut)
+}
+
+/// The saved combination, or the default when it cannot be read.
+fn toggle_shortcut(app: &AppHandle) -> Shortcut {
+    let saved = app.state::<Shared>().settings.lock().unwrap().toggle_shortcut.clone();
+    parse_toggle(&saved)
+        .or_else(|_| parse_toggle(&settings::default_toggle_shortcut()))
+        .expect("the default shortcut is valid")
+}
+
+/// Settings → "Atajo para abrir Coucou": tries the new combination, keeps the old
+/// one when it is taken, and saves it only when it worked.
+#[tauri::command]
+fn set_toggle_shortcut(app: AppHandle, shared: State<Shared>, accel: String) -> Result<String, String> {
+    let wanted = parse_toggle(&accel)?;
+    let enabled = shared.settings.lock().unwrap().global_shortcuts;
+    let old = toggle_shortcut(&app);
+    if wanted != old && enabled {
+        let keys = app.global_shortcut();
+        keys.register(wanted).map_err(|_| "Otra aplicación ya usa esa combinación".to_string())?;
+        let _ = keys.unregister(old);
+    }
+    let accel = accel.trim().to_string();
+    let snapshot = {
+        let mut current = shared.settings.lock().unwrap();
+        current.toggle_shortcut = accel.clone();
+        current.clone()
+    };
+    if let Err(err) = settings::save(&snapshot) {
+        eprintln!("[coucou] could not save settings: {err}");
+    }
+    let _ = app.emit("settings-changed", snapshot);
+    Ok(accel)
 }
 
 fn register_shortcut(app: &AppHandle, shortcut: Shortcut, label: &str) {
@@ -140,9 +187,9 @@ fn set_decision_shortcuts(app: AppHandle, shared: State<Shared>, active: bool) {
 /// The permanent one follows the setting; the other two only ever follow a card.
 fn apply_shortcut_setting(app: &AppHandle, enabled: bool) {
     if enabled {
-        register_shortcut(app, toggle_shortcut(), "Ctrl+Alt+C");
+        register_shortcut(app, toggle_shortcut(app), "the open shortcut");
     } else {
-        unregister_shortcut(app, toggle_shortcut());
+        unregister_shortcut(app, toggle_shortcut(app));
         unregister_shortcut(app, allow_shortcut());
         unregister_shortcut(app, deny_shortcut());
     }
@@ -715,7 +762,7 @@ pub fn run() {
                         "allow"
                     } else if shortcut == &deny_shortcut() {
                         "deny"
-                    } else if shortcut == &toggle_shortcut() {
+                    } else if shortcut == &toggle_shortcut(app) {
                         "toggle"
                     } else {
                         return;
@@ -779,6 +826,7 @@ pub fn run() {
             open_settings_window,
             set_paused,
             set_ui_language,
+            set_toggle_shortcut,
         ])
         .setup(move |app| {
             let handle = app.handle().clone();
@@ -809,4 +857,21 @@ pub fn run() {
         })
         .run(tauri::generate_context!())
         .expect("error while running Coucou");
+}
+
+#[cfg(test)]
+mod shortcut_tests {
+    use super::*;
+
+    #[test]
+    fn the_open_shortcut_takes_one_or_two_keys_but_never_a_bare_letter() {
+        assert!(parse_toggle("Ctrl+Alt+C").is_ok());
+        assert!(parse_toggle("F8").is_ok());
+        assert!(parse_toggle("Ctrl+Space").is_ok());
+        assert!(parse_toggle("Alt+Shift+1").is_ok());
+        assert!(parse_toggle("C").is_err(), "a bare letter would break typing everywhere");
+        assert!(parse_toggle("Space").is_err());
+        assert!(parse_toggle("nonsense+++").is_err());
+        assert!(parse_toggle(&settings::default_toggle_shortcut()).is_ok());
+    }
 }

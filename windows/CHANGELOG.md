@@ -27,6 +27,7 @@ Coucou v2 is [JaimeTR](https://github.com/JaimeTR)'s fork of [Coucou by Louis Ra
 - The Gemini CLI card also launches Antigravity: its desktop app, the Antigravity IDE and the `agy` CLI. OpenCode and Gemini offer their desktop app (Gemini: web) next to the terminal.
 
 **Spanish and English, and a voice**
+- **Configurable "open Coucou" key**: Settings → General → "Abrir Coucou con". Click, press the keys you want — an F key alone (`F8`) or one to three modifiers plus a key (`Ctrl+Space`, `Ctrl+Alt+C`) — and it opens or closes the island from any program, including when it is hidden. A bare letter is refused, and a combination another program already owns is reported and the old one kept. "Restablecer" brings back `Ctrl+Alt+C`.
 - **Interface language**: Settings → Personalización → "Idioma de la interfaz" (automatic, Español, English). The island, Settings, notifications, the file-drop canvas, the tray menu and most error messages switch live, without a restart. Spanish is the source language; English comes from a dictionary (`src/core/en.ts`) applied to the page, so adding a language later means adding a dictionary.
 - **Mochi's voice**: "Mochi habla" says your name and the time of day on start; "Leer las respuestas" reads chat replies aloud, and every reply has a speaker button. It uses the voices Windows already has (the "Natural" ones when installed), in the interface language. Off by default; nothing leaves the PC.
 

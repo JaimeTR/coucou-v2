@@ -9,5 +9,5 @@
     "isolatedModules": false
   },
   "include": [],
-  "files": ["src/island/diff.ts", "src/island/rules.ts", "src/island/greetingText.ts", "src/island/greetingPanel.ts", "src/core/translate.ts", "src/core/en.ts", "src/core/i18n.ts", "src/core/voice.ts"]
+  "files": ["src/island/diff.ts", "src/island/rules.ts", "src/island/greetingText.ts", "src/island/greetingPanel.ts", "src/core/translate.ts", "src/core/en.ts", "src/core/i18n.ts", "src/core/voice.ts", "src/core/accelerator.ts"]
 }

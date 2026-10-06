@@ -43,7 +43,7 @@ Coucou v2 turns Mochi into a small personal assistant. Everything below is new o
 | **Answer Claude's questions** | `AskUserQuestion` prompts show their options in the island (keys 1–4, "Other…", or reply in the terminal). |
 | **Always allow** | The **Always** button on a permission card remembers a narrow, per-project rule (exact command or a read-only subcommand, files under one folder, one host). Never for `.git`, `.claude`, `.ssh`, `.env`. Listed and removable in Settings. |
 | **Jump to the right terminal** | "Open terminal" brings forward the window of the terminal or VS Code that session runs in. |
-| **Global shortcuts** | `Ctrl+Alt+Y` allow · `Ctrl+Alt+N` deny (only while a request is up) · `Ctrl+Alt+C` open or close the island. |
+| **Global shortcuts** | `Ctrl+Alt+Y` allow · `Ctrl+Alt+N` deny (only while a request is up) · `Ctrl+Alt+C` open or close the island — that last one is yours to change (one key like `F8`, or two like `Ctrl+Space`) in Settings → General → "Abrir Coucou con". |
 | **Windows notifications** | A toast when Claude needs permission, asks something, or finishes while the island is closed. |
 | **Chat with Claude, DEVMARK AI, Gemini or Groq** | Pick who answers under Settings → Proveedor de chat. DEVMARK AI is the company's private model (see [below](#devmark-ai-chat-provider)); Gemini and Groq use your own key. If a provider retires the configured model, Coucou switches to one your key can use. |
 

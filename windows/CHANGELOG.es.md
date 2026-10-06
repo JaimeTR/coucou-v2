@@ -28,6 +28,7 @@ Coucou v2 es el fork de [JaimeTR](https://github.com/JaimeTR) de [Coucou, de Lou
 - La tarjeta de VS Code dice "Terminal conectada" en lugar del aviso largo.
 
 **Español e inglés, y una voz**
+- **Tecla configurable para abrir Coucou**: Ajustes → General → "Abrir Coucou con". Haz clic, pulsa las teclas que quieras (una tecla F sola, como `F8`, o de uno a tres modificadores más una tecla, como `Ctrl+Espacio` o `Ctrl+Alt+C`) y abre o cierra la isla desde cualquier programa, también cuando está oculta. Una letra sola se rechaza, y si otro programa ya usa la combinación se avisa y se mantiene la anterior. "Restablecer" devuelve `Ctrl+Alt+C`.
 - **Idioma de la interfaz**: Ajustes → Personalización → "Idioma de la interfaz" (automático, Español, English). La isla, Ajustes, las notificaciones, el lienzo de soltar archivos, el menú de la bandeja y casi todos los mensajes de error cambian al instante, sin reiniciar. El español es el idioma de origen; el inglés sale de un diccionario (`src/core/en.ts`) aplicado a la página, así que añadir otro idioma es añadir un diccionario.
 - **La voz de Mochi**: "Mochi habla" dice tu nombre y el momento del día al iniciar; "Leer las respuestas" lee en voz alta las respuestas del chat, y cada respuesta tiene su botón de altavoz. Usa las voces que Windows ya trae (las "Natural" si están instaladas), en el idioma de la interfaz. Desactivado por defecto; nada sale del PC.
 

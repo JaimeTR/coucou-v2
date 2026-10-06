@@ -6,6 +6,7 @@ import "./settings.css";
 import { Bridge, onEvent, type AgentStatus, type DetectedTool, type HookStatus } from "../core/bridge";
 import { applyLanguage } from "../core/i18n";
 import { speak } from "../core/voice";
+import { captureAccelerator } from "../core/accelerator";
 import { greetingLines } from "../island/greetingText";
 import { DEFAULT_SETTINGS, type Settings } from "../core/state";
 import { h, clear } from "../views/dom";
@@ -1180,9 +1181,61 @@ function generalSection(): HTMLElement {
     h("div", { class: "row" },
       h("label", { text: "Atajos globales" }),
       toggle(settings.globalShortcuts, (v) => { settings.globalShortcuts = v; void save(); }),
-      h("span", { class: "hint", text: "Ctrl+Alt+Y permitir · Ctrl+Alt+N denegar (solo mientras hay una petición) · Ctrl+Alt+C abrir o cerrar" }),
+      h("span", { class: "hint", text: "Ctrl+Alt+Y permitir · Ctrl+Alt+N denegar (solo mientras hay una petición)" }),
     ),
+    shortcutRow(),
   );
+}
+
+/** "Abrir Coucou con": click, then press the keys you want (Esc cancels). */
+function shortcutRow(): HTMLElement {
+  const button = h("button", { class: "btn secondary", style: "min-width:150px" }) as HTMLButtonElement;
+  const note = h("span", { class: "hint" });
+  const reset = h("button", { class: "link-btn", text: "Restablecer" });
+  let capturing = false;
+
+  const show = () => {
+    button.textContent = capturing ? "Pulsa las teclas…" : settings.toggleShortcut;
+    reset.style.display = settings.toggleShortcut === "Ctrl+Alt+C" ? "none" : "";
+  };
+  const apply = async (accel: string) => {
+    try {
+      settings.toggleShortcut = await Bridge.setToggleShortcut(accel);
+      note.textContent = "Listo: ya abre y cierra la isla desde cualquier programa.";
+    } catch (err) {
+      note.textContent = String(err).replace(/^Error:\s*/, "");
+    }
+    show();
+  };
+  const onKey = (e: KeyboardEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const got = captureAccelerator(e);
+    if (got.kind === "wait") return;
+    stop();
+    if (got.kind === "ok") void apply(got.accel);
+    else if (got.kind === "error") note.textContent = got.message;
+  };
+  const stop = () => {
+    capturing = false;
+    window.removeEventListener("keydown", onKey, true);
+    show();
+  };
+  button.addEventListener("click", () => {
+    if (capturing) return stop();
+    capturing = true;
+    note.textContent = "Una tecla F, o Ctrl, Alt o Shift con otra tecla. Esc cancela.";
+    window.addEventListener("keydown", onKey, true);
+    show();
+  });
+  button.addEventListener("blur", () => capturing && stop());
+  reset.addEventListener("click", () => void apply("Ctrl+Alt+C"));
+  show();
+  void onEvent<Settings>("settings-changed", (s) => {
+    settings.toggleShortcut = s.toggleShortcut ?? settings.toggleShortcut;
+    show();
+  });
+  return h("div", { class: "row" }, h("label", { text: "Abrir Coucou con" }), button, reset, note);
 }
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
