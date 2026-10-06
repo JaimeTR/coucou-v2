@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- No Dock icon: the island and the menu-bar item are the whole app. -->
+  <key>LSUIElement</key>
+  <true/>
+  <!-- Only used if you switch on voice input ("Oye Mochi" or the chat's microphone). -->
+  <key>NSMicrophoneUsageDescription</key>
+  <string>Coucou uses the microphone only when you talk to Mochi.</string>
+</dict>
+</plist>

@@ -12,7 +12,7 @@ Approve permissions, watch your agents work, drop a file, chat with Claude — a
 
 Windows y Linux · Windows/Linux: [README](windows/README.md) · [en español](windows/README.es.md) · [CHANGELOG](windows/CHANGELOG.md) · [en español](windows/CHANGELOG.es.md)
 
-[![Version](https://img.shields.io/badge/version-0.2.0-0A84FF)](windows/CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.3.0-0A84FF)](windows/CHANGELOG.md)
 ![macOS 15+](https://img.shields.io/badge/macOS-15%2B-black?logo=apple)
 ![Windows 10/11](https://img.shields.io/badge/Windows-10%2F11-0078D4?logo=windows&logoColor=white)
 ![Linux](https://img.shields.io/badge/Linux-AppImage%20%7C%20deb%20%7C%20rpm-FCC624?logo=linux&logoColor=black)

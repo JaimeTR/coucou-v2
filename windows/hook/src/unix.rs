@@ -1,4 +1,5 @@
-//! The Linux transport: a Unix socket in the user's runtime directory.
+//! The Unix transport (Linux and macOS): a Unix socket in the user's private
+//! runtime directory (`$XDG_RUNTIME_DIR` on Linux, `$TMPDIR` on macOS).
 //!
 //! `$XDG_RUNTIME_DIR` is private to the user (mode 0700), so nobody else can
 //! even reach the socket. We still check, once connected, that the process on
@@ -6,8 +7,11 @@
 //! pipe server's SID, for the same price.
 
 use std::io;
+#[cfg(target_os = "linux")]
 use std::os::unix::ffi::OsStrExt;
-use std::os::unix::io::{AsRawFd, FromRawFd};
+use std::os::unix::io::AsRawFd;
+#[cfg(target_os = "linux")]
+use std::os::unix::io::FromRawFd;
 use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
@@ -17,6 +21,24 @@ use crate::CONNECT_TIMEOUT;
 /// Our parent, our grandparent and so on, nearest first, read from /proc.
 /// (Bringing a terminal window forward is not done on Linux yet; the chain is
 /// still sent so the app can use it when it can.)
+#[cfg(target_os = "macos")]
+pub fn ancestor_pids() -> Vec<u32> {
+    // No /proc here: ask ps for each parent in turn.
+    let mut chain = Vec::new();
+    let mut pid = std::process::id();
+    while chain.len() < 16 {
+        let Ok(out) = std::process::Command::new("ps").args(["-o", "ppid=", "-p", &pid.to_string()]).output() else { break };
+        let Some(parent) = String::from_utf8_lossy(&out.stdout).trim().parse::<u32>().ok() else { break };
+        if parent <= 1 || chain.contains(&parent) {
+            break;
+        }
+        chain.push(parent);
+        pid = parent;
+    }
+    chain
+}
+
+#[cfg(target_os = "linux")]
 pub fn ancestor_pids() -> Vec<u32> {
     let mut chain = Vec::new();
     let mut pid = std::process::id();
@@ -41,6 +63,13 @@ pub fn ancestor_pids() -> Vec<u32> {
 /// variable is missing (a hook started from a stripped-down environment). The
 /// directory must be ours and closed to everyone else, or there is no relay.
 /// Must match `platform::relay_socket_path()` in the app exactly.
+#[cfg(target_os = "macos")]
+fn socket_path() -> Option<PathBuf> {
+    let dir = std::env::var_os("TMPDIR").map(PathBuf::from).filter(|p| p.is_absolute())?;
+    is_private_dir(&dir).then(|| dir.join("coucou.sock"))
+}
+
+#[cfg(target_os = "linux")]
 fn socket_path() -> Option<PathBuf> {
     let dir = std::env::var_os("XDG_RUNTIME_DIR")
         .map(PathBuf::from)
@@ -82,6 +111,14 @@ pub fn connect() -> Option<UnixStream> {
 /// A non-blocking connect, so a full backlog answers EAGAIN at once instead of
 /// parking us until the app gets round to accepting. Blocking again afterwards:
 /// the main thread's budget bounds every read and write.
+#[cfg(target_os = "macos")]
+fn try_connect(path: &Path) -> io::Result<UnixStream> {
+    // macOS has no SOCK_NONBLOCK; a plain connect is enough (the main thread's
+    // budget bounds every read and write).
+    UnixStream::connect(path)
+}
+
+#[cfg(target_os = "linux")]
 fn try_connect(path: &Path) -> io::Result<UnixStream> {
     let fd = unsafe {
         libc::socket(libc::AF_UNIX, libc::SOCK_STREAM | libc::SOCK_CLOEXEC | libc::SOCK_NONBLOCK, 0)
@@ -119,6 +156,13 @@ fn try_connect(path: &Path) -> io::Result<UnixStream> {
 
 /// True when the process serving the socket runs as the same user we do.
 /// A failure to answer is treated as "not ours", as on Windows.
+#[cfg(target_os = "macos")]
+fn server_is_same_user(stream: &UnixStream) -> bool {
+    let (mut uid, mut gid) = (0 as libc::uid_t, 0 as libc::gid_t);
+    unsafe { libc::getpeereid(stream.as_raw_fd(), &mut uid, &mut gid) == 0 && uid == libc::getuid() }
+}
+
+#[cfg(target_os = "linux")]
 fn server_is_same_user(stream: &UnixStream) -> bool {
     let mut cred: libc::ucred = unsafe { std::mem::zeroed() };
     let mut len = std::mem::size_of::<libc::ucred>() as libc::socklen_t;

@@ -101,14 +101,14 @@ pub fn start(app: AppHandle) {
     });
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(unix)]
 pub fn start(app: AppHandle) {
     use std::os::unix::fs::PermissionsExt;
     use tokio::net::UnixListener;
 
     tauri::async_runtime::spawn(async move {
         let Some(path) = crate::platform::relay_socket_path() else {
-            log::line("no private runtime directory ($XDG_RUNTIME_DIR) — Claude Code hooks are inactive");
+            log::line("no private runtime directory for the relay socket — Claude Code hooks are inactive");
             return;
         };
         // A socket file left behind by a crash answers nothing and can go. One
@@ -164,7 +164,7 @@ impl Relay for NamedPipeServer {
 }
 
 /// Dropping the stream closes it; the relay reads up to our newline first.
-#[cfg(target_os = "linux")]
+#[cfg(unix)]
 impl Relay for tokio::net::UnixStream {}
 
 async fn handle(app: AppHandle, mut pipe: impl Relay) {

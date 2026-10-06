@@ -48,9 +48,9 @@ mod win;
 #[cfg(windows)]
 use win::{ancestor_pids, connect};
 
-#[cfg(target_os = "linux")]
+#[cfg(unix)]
 mod unix;
-#[cfg(target_os = "linux")]
+#[cfg(unix)]
 use unix::{ancestor_pids, connect};
 
 /// Events that fire dozens of times a minute carry no process chain: the island

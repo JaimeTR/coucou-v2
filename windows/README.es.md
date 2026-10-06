@@ -177,6 +177,10 @@ problemas de los sondeos. Se queda en tu equipo.
   VS Code (si `code` está en tu `PATH`).
 - Cal.com muestra las próximas reservas como lista, no como el calendario de Mac.
 
+## macOS (experimental)
+
+La misma app de Tauri tiene una capa para macOS (`src-tauri/src/platform/macos.rs`), que compila y prueba en un Mac de GitHub el workflow `.github/workflows/macos.yml`; ejecútalo a mano para obtener un `.dmg`. Todavía no se ha ejecutado en un Mac real; la app nativa en Swift de `NotchBuddy/` sigue siendo la recomendada en Mac. Diferencias: sin icono en el Dock, secretos en el Llavero, archivos en `~/Library/Application Support/Coucou`, agentes lanzados en Terminal y el relay de Claude Code por un socket Unix en `$TMPDIR`.
+
 ## Linux
 
 La misma app se compila para Linux: todo lo que cambia está en

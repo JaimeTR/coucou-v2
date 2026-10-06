@@ -179,6 +179,10 @@ problems. It stays on your machine.
   (when `code` is on your `PATH`) if that window can't be found.
 - Cal.com shows the next bookings as a list rather than the Mac's calendar.
 
+## macOS (experimental)
+
+The same Tauri app has a macOS layer (`src-tauri/src/platform/macos.rs`), built and tested on a Mac runner by `.github/workflows/macos.yml` — run it by hand to get a `.dmg`. It has not been run on real hardware yet; the native Swift app in `NotchBuddy/` remains the recommended one on a Mac. Differences: no Dock icon, secrets in the Keychain, files in `~/Library/Application Support/Coucou`, agents started in Terminal, and the Claude Code relay over a Unix socket in `$TMPDIR`.
+
 ## Linux
 
 The same app builds for Linux: everything that differs lives in

@@ -15,6 +15,11 @@ mod linux;
 #[cfg(target_os = "linux")]
 pub use self::linux::*;
 
+#[cfg(target_os = "macos")]
+mod macos;
+#[cfg(target_os = "macos")]
+pub use self::macos::*;
+
 /// Wall-clock time in the user's time zone, for log lines and backup names.
 pub struct LocalTime {
     pub year: u32,

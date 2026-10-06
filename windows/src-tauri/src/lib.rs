@@ -384,6 +384,12 @@ fn open_in_vscode(path: Option<String>) -> bool {
     false
 }
 
+/// `open -a <name>`: starts an installed Mac application. False when there is none.
+#[cfg(target_os = "macos")]
+fn open_mac_app(name: &str) -> bool {
+    Command::new("open").args(["-a", name]).status().map(|s| s.success()).unwrap_or(false)
+}
+
 /// Starts a per-user program installed under `%LOCALAPPDATA%Programs`.
 #[cfg(windows)]
 fn open_local_program(folder: &str, exe: &str) -> bool {
@@ -403,6 +409,10 @@ fn open_agent_app(agent: String) -> bool {
             platform::open_url("https://gemini.google.com/app");
             true
         }
+        #[cfg(target_os = "macos")]
+        "opencode" => open_mac_app("OpenCode"),
+        #[cfg(target_os = "macos")]
+        "antigravity" | "antigravity-ide" => open_mac_app("Antigravity"),
         #[cfg(windows)]
         "opencode" => open_local_program("@opencode-aidesktop", "OpenCode.exe"),
         #[cfg(windows)]
@@ -456,7 +466,28 @@ fn launch_agent(agent: String, path: Option<String>, resume: bool) -> bool {
         }
         return platform::no_console(&mut cmd).spawn().is_ok();
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "macos")]
+    {
+        // A new Terminal window in the folder. The folder and the command reach
+        // the shell as separate AppleScript strings; nothing from a path is ever
+        // parsed as shell syntax because it goes through `quoted form of`.
+        let mut line = String::from(program);
+        if resume {
+            for a in resume_args {
+                line.push(' ');
+                line.push_str(a);
+            }
+        }
+        let script = format!(
+            "tell application \"Terminal\"\nactivate\ndo script \"cd \" & quoted form of (system attribute \"COUCOU_DIR\") & \" && {line}\"\nend tell"
+        );
+        return Command::new("osascript")
+            .env("COUCOU_DIR", &dir)
+            .args(["-e", &script])
+            .spawn()
+            .is_ok();
+    }
+    #[cfg(not(any(windows, target_os = "macos")))]
     {
         let _ = (program, resume_args, resume, dir);
         false
@@ -917,6 +948,9 @@ pub fn run() {
             voice_transcribe,
         ])
         .setup(move |app| {
+            // No Dock icon, no menu bar: the island and the tray are the whole app.
+            #[cfg(target_os = "macos")]
+            app.set_activation_policy(tauri::ActivationPolicy::Accessory);
             let handle = app.handle().clone();
             tray::build(&handle)?;
             // Before the island: see create_settings_window.

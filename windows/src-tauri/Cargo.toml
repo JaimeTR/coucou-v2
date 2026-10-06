@@ -38,6 +38,15 @@ windows = { version = "0.61", features = [
   "Win32_UI_WindowsAndMessaging",
 ] }
 
+[target.'cfg(target_os = "macos")'.dependencies]
+# The login keychain.
+keyring = { version = "3", features = ["apple-native"] }
+libc = "0.2"
+# A transparent island window needs Apple's private window API on macOS.
+tauri = { version = "2", features = ["macos-private-api"] }
+# The cursor position and button state, for click-through (platform/macos.rs).
+core-graphics = "0.24"
+
 [target.'cfg(target_os = "linux")'.dependencies]
 # Secret Service (GNOME Keyring, KWallet) over D-Bus, encrypted in transit.
 keyring = { version = "3", features = ["sync-secret-service", "crypto-rust"] }
