@@ -2,7 +2,7 @@
   "name": "coucou-windows",
   "private": true,
   "author": "JaimeTR",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "type": "module",
   "scripts": {
     "dev": "vite",

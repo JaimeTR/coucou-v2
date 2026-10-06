@@ -4,7 +4,7 @@
 
 Coucou v2 is [JaimeTR](https://github.com/JaimeTR)'s fork of [Coucou by Louis Raillé](https://github.com/Louis-CFM/coucou) (MIT). The macOS release notes stay in the root [CHANGELOG.md](../CHANGELOG.md).
 
-## 0.2.0 — October 5, 2026
+## 0.3.0 — October 6, 2026
 
 **A personal assistant**
 - Mochi greets you by name when Coucou starts — *"Hola Jaime Tarazona"* — with the time of day. The name comes from your Windows account (falling back to your git identity), can be changed in Settings → Personalization, and the greeting text and language (automatic, Español, English) are editable.
