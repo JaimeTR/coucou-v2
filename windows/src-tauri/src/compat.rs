@@ -11,6 +11,7 @@
 // As everywhere in Coucou, the key stays in the Credential Manager (or in an
 // environment variable, if you prefer) and never reaches the page.
 
+use std::collections::HashMap;
 use std::sync::Mutex;
 use std::time::Duration;
 
@@ -225,10 +226,25 @@ pub async fn send(
         }
     };
 
-    let body = build_body(model, MAX_TOKENS, messages);
-    let response = match post(p, &key, &body).await {
+    // A model the provider has retired answers 404. Models come and go, so
+    // instead of leaving the chat dead, use one the key can actually reach.
+    let remembered = FALLBACK.lock().unwrap().get(&(p.id, model.to_string())).cloned();
+    let used = remembered.unwrap_or_else(|| model.to_string());
+    let body = build_body(&used, MAX_TOKENS, messages.clone());
+    let result = match post(p, &key, &body).await {
+        Err((Some(404), _)) => match working_model(p, &key, &used).await {
+            Some(other) => {
+                crate::log::line(format!("{}: model {used} not found, using {other}", p.id));
+                FALLBACK.lock().unwrap().insert((p.id, model.to_string()), other.clone());
+                post(p, &key, &build_body(&other, MAX_TOKENS, messages)).await
+            }
+            None => Err((Some(404), explain_error(p, 404, ""))),
+        },
+        other => other,
+    };
+    let response = match result {
         Ok(v) => v,
-        Err(err) => {
+        Err((_, err)) => {
             chat.history.lock().unwrap().pop(); // keep the history what the model saw
             return Err(err);
         }
@@ -241,17 +257,47 @@ pub async fn send(
     Ok(ChatReply { text: reply })
 }
 
-async fn post(p: &Provider, key: &str, body: &Value) -> Result<Value, String> {
-    let client = client()?;
+/// Models that stopped working, mapped to the one used in their place.
+static FALLBACK: std::sync::LazyLock<Mutex<HashMap<(&'static str, String), String>>> =
+    std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
+
+/// The best chat model among `ids`: the provider's usual picks first, then any
+/// that is not for speech, audio, safety or embeddings.
+fn pick_model(ids: &[String], not: &str) -> Option<String> {
+    const PREFER: &[&str] = &["gpt-oss-120b", "llama-3.3-70b", "gpt-oss-20b", "llama-3.1-8b", "gemini-2.5-flash", "flash"];
+    const SKIP: &[&str] = &["whisper", "guard", "tts", "playai", "orpheus", "embed", "image", "live", "audio", "vision-preview"];
+    let usable: Vec<&String> = ids
+        .iter()
+        .filter(|id| id.as_str() != not && !SKIP.iter().any(|w| id.to_lowercase().contains(w)))
+        .collect();
+    for want in PREFER {
+        if let Some(id) = usable.iter().find(|id| id.to_lowercase().contains(want)) {
+            return Some((*id).clone());
+        }
+    }
+    usable.first().map(|id| (*id).clone())
+}
+
+async fn working_model(p: &Provider, key: &str, not: &str) -> Option<String> {
+    let response = client().ok()?.get(format!("{}/models", p.base)).bearer_auth(key).send().await.ok()?;
+    if !response.status().is_success() {
+        return None;
+    }
+    pick_model(&model_ids(&response.json::<Value>().await.ok()?), not)
+}
+
+/// The error carries the HTTP status when there was one.
+async fn post(p: &Provider, key: &str, body: &Value) -> Result<Value, (Option<u16>, String)> {
+    let client = client().map_err(|e| (None, e))?;
     let url = format!("{}/chat/completions", p.base);
     let mut attempt = 0u32;
     loop {
         let response = client.post(&url).bearer_auth(key).json(body).send().await.map_err(|e| {
-            if e.is_timeout() {
+            (None, if e.is_timeout() {
                 format!("{} tardó demasiado en responder. Prueba con una pregunta más corta.", p.name)
             } else {
                 format!("Error de red al hablar con {}: {e}", p.name)
-            }
+            })
         })?;
         let status = response.status();
         let retry_after = response
@@ -259,9 +305,9 @@ async fn post(p: &Provider, key: &str, body: &Value) -> Result<Value, String> {
             .get("retry-after")
             .and_then(|v| v.to_str().ok())
             .and_then(|v| v.trim().parse::<u64>().ok());
-        let text = response.text().await.map_err(|e| e.to_string())?;
+        let text = response.text().await.map_err(|e| (None, e.to_string()))?;
         if status.is_success() {
-            return serde_json::from_str(&text).map_err(|e| format!("Respuesta no válida de {}: {e}", p.name));
+            return serde_json::from_str(&text).map_err(|e| (None, format!("Respuesta no válida de {}: {e}", p.name)));
         }
         if let Some(wait) = retry_delay(status.as_u16(), retry_after, attempt) {
             crate::log::line(format!("{} {status} — retrying in {}s", p.id, wait.as_secs()));
@@ -269,7 +315,7 @@ async fn post(p: &Provider, key: &str, body: &Value) -> Result<Value, String> {
             attempt += 1;
             continue;
         }
-        return Err(explain_error(p, status.as_u16(), &text));
+        return Err((Some(status.as_u16()), explain_error(p, status.as_u16(), &text)));
     }
 }
 
@@ -360,6 +406,14 @@ mod tests {
         for status in [400, 401, 403, 404, 422] {
             assert_eq!(retry_delay(status, None, 0), None, "{status}");
         }
+    }
+
+    #[test]
+    fn a_retired_model_is_replaced_by_a_usable_chat_model() {
+        let ids: Vec<String> = ["whisper-large-v3", "llama-guard-4", "llama-3.3-70b-versatile", "openai/gpt-oss-120b", "playai-tts"]
+            .iter().map(|s| s.to_string()).collect();
+        assert_eq!(pick_model(&ids, "llama-3.3-70b-versatile").as_deref(), Some("openai/gpt-oss-120b"));
+        assert_eq!(pick_model(&ids[..2], "x"), None, "speech and safety models are never picked");
     }
 
     #[test]
