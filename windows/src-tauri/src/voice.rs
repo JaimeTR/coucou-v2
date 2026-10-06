@@ -28,8 +28,8 @@ const TIMEOUT: Duration = Duration::from_secs(60);
 pub const DEFAULT_VOICE: &str = "21m00Tcm4TlvDq8ikWAM";
 pub const DEFAULT_MODEL: &str = "eleven_multilingual_v2";
 const STT_MODELS: &[&str] = &["whisper-large-v3-turbo", "whisper-large-v3"];
-/// A reply read aloud costs characters; keep one utterance short.
-const MAX_SPOKEN_CHARS: usize = 1_200;
+/// ElevenLabs charges per character and is only for Mochi's own short phrases.
+const MAX_SPOKEN_CHARS: usize = 300;
 /// Groq accepts 25 MB; a spoken question is a small fraction of that.
 const MAX_AUDIO_BYTES: usize = 8 * 1024 * 1024;
 

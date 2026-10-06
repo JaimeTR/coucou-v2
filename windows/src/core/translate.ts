@@ -27,6 +27,7 @@ const EXTRA: ReadonlyArray<readonly [string, string]> = [
   ["{0} está listo.", "{0} is ready."],
   ["{0} (borrador)", "{0} (draft)"],
   ["Idioma de la interfaz", "Interface language"],
+  ["Mochi solo habla con frases cortas suyas: la bienvenida, el saludo de «Oye Mochi» y confirmaciones como «Abriendo Claude Code». Las respuestas del chat no se leen solas, así no gastas crédito; cada una tiene un botón de altavoz que usa la voz gratis de Windows.", "Mochi only speaks short phrases of its own: the welcome, the “Oye Mochi” greeting and confirmations like “Opening Claude Code”. Chat replies are not read automatically, so you don't spend credit; each one has a speaker button that uses Windows' free voice."],
   ["Abriendo {0}", "Opening {0}"],
   ["No pude abrir {0}", "I couldn't open {0}"],
   ["Hola {0}, ¿qué quieres hacer hoy? ¿Te ayudo con algo?", "Hi {0}, what do you want to do today? Can I help with something?"],

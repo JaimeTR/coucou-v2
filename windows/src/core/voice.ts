@@ -27,6 +27,12 @@ export function isSpeaking(): boolean {
   return speaking;
 }
 
+/** A phrase longer than this never goes to ElevenLabs: it is charged per character. */
+const SHORT = 240;
+
+/** What ElevenLabs already said this session, so a repeated phrase costs nothing. */
+const spoken = new Map<string, string>();
+
 let player: HTMLAudioElement | null = null;
 
 function stopPlayer() {
@@ -58,7 +64,8 @@ function speakSystem(said: string, onEnd?: () => void): boolean {
 /** Says `said` with ElevenLabs; if that fails, with the system voice, so Mochi is never mute. */
 function speakEleven(said: string, onEnd?: () => void): boolean {
   speaking = true;
-  void Bridge.voiceSpeak(said).then(
+  const cached = spoken.get(said);
+  void (cached ? Promise.resolve(cached) : Bridge.voiceSpeak(said).then((mp3) => (spoken.set(said, mp3), mp3))).then(
     (mp3) => {
       if (!speaking) return; // stopped while it was being made
       stopPlayer();
@@ -87,9 +94,12 @@ function speakEleven(said: string, onEnd?: () => void): boolean {
 }
 
 /** Says `text` aloud, replacing whatever was being said. Returns false when it cannot. */
-export function speak(text: string, onEnd?: () => void): boolean {
-  const said = speakable(text);
+export function speak(text: string, onEnd?: () => void, opts: { free?: boolean } = {}): boolean {
+  const said = speakable(text, opts.free ? 600 : SHORT);
   if (!said) return false;
   stopSpeaking();
-  return State.settings.voiceEngine === "elevenlabs" ? speakEleven(said, onEnd) : speakSystem(said, onEnd);
+  // ElevenLabs is for Mochi's own short phrases (the welcome, "Abriendo Claude
+  // Code"); anything long goes to the free system voice.
+  const premium = State.settings.voiceEngine === "elevenlabs" && !opts.free;
+  return premium ? speakEleven(said, onEnd) : speakSystem(said, onEnd);
 }

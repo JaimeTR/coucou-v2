@@ -38,10 +38,12 @@ function bubble(message: ChatMessage): HTMLElement {
       listen.classList.remove("on");
       return;
     }
+    // Reading a reply is manual and always with the free system voice: long text
+    // would eat the ElevenLabs credit.
     on = speak(message.content, () => {
       on = false;
       listen.classList.remove("on");
-    });
+    }, { free: true });
     listen.classList.toggle("on", on);
   });
   return h("div", { class: "chat-row" }, reply, listen);
@@ -106,7 +108,6 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
       State.chatHistory.push({ id: nextId++, role: "assistant", content: reply.text });
       State.stateOverride = null;
       Sound.play("finish");
-      if (State.settings.voiceReplies) speak(reply.text);
     } catch (err) {
       State.stateOverride = null;
       State.noteMessage = String(err).replace(/^Error:\s*/, "");
