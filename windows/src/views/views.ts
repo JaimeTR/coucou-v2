@@ -89,12 +89,12 @@ function stack(padLeft: number, padRight: number, ...children: Node[]): HTMLElem
 // ── Header ────────────────────────────────────────────────────────────────────
 
 export function buildHeader(actions: ViewActions): ViewHost {
-  const tabHome = h("button", { class: "tab", title: "Overview", onclick: () => go("overview") }, svg(ICONS.house, 13));
-  const tabChat = h("button", { class: "tab", title: "Ask", onclick: () => go("prompt") }, svg(ICONS.bubble, 13));
-  const tabDrop = h("button", { class: "tab", title: "Drop", onclick: () => go("upload") }, svg(ICONS.plus, 13));
+  const tabHome = h("button", { class: "tab", title: "Resumen", onclick: () => go("overview") }, svg(ICONS.house, 13));
+  const tabChat = h("button", { class: "tab", title: "Preguntar", onclick: () => go("prompt") }, svg(ICONS.bubble, 13));
+  const tabDrop = h("button", { class: "tab", title: "Soltar archivo", onclick: () => go("upload") }, svg(ICONS.plus, 13));
 
-  const gearBtn = h("button", { title: "Settings", onclick: () => go("settings") }, svg(ICONS.gear, 14));
-  const soundBtn = h("button", { title: "Mute", onclick: () => actions.toggleSound() }, svg(ICONS.speakerOn, 14));
+  const gearBtn = h("button", { title: "Ajustes", onclick: () => go("settings") }, svg(ICONS.gear, 14));
+  const soundBtn = h("button", { title: "Silenciar", onclick: () => actions.toggleSound() }, svg(ICONS.speakerOn, 14));
 
   function go(v: IslandViewName) {
     actions.blip();
@@ -109,7 +109,7 @@ export function buildHeader(actions: ViewActions): ViewHost {
     "button",
     {
       class: "plan-pill",
-      title: "Claude plan usage",
+      title: "Uso del plan de Claude",
       onclick: () => {
         actions.blip();
         State.showingPlanDetail = !State.showingPlanDetail;
@@ -166,7 +166,7 @@ function buildOverview(actions: ViewActions): ViewHost {
   const leftBody = h("div", { class: "left-body" });
   const jump = h(
     "button",
-    { class: "icon-btn jump", title: "Open", onclick: () => actions.openTarget() },
+    { class: "icon-btn jump", title: "Abrir", onclick: () => actions.openTarget() },
     svg(ICONS.arrowUpRight, 8),
   );
   const left = card(null, leftBody, jump);
@@ -258,7 +258,7 @@ function buildOverview(actions: ViewActions): ViewHost {
         who.append(
           dot(task.color, 7),
           h("span", { class: "name", text: task.name }),
-          h("span", { class: "tool", text: task.source === "claudeCode" ? "Claude Code" : task.source === "agent" ? "Agent" : "n8n" }),
+          h("span", { class: "tool", text: task.source === "claudeCode" ? "Claude Code" : task.source === "agent" ? "Agente" : "n8n" }),
         );
         if (task.steps.length > 1) {
           who.append(h("span", {
@@ -350,11 +350,11 @@ function buildEmpty(actions: ViewActions): ViewHost {
     h(
       "div",
       { style: "display:flex;flex-direction:column;gap:5px" },
-      h("div", { class: "title", text: "Nothing running right now." }),
-      h("div", { class: "sub", text: "Drop a file or window, or ask me anything." }),
+      h("div", { class: "title", text: "No hay nada en marcha ahora." }),
+      h("div", { class: "sub", text: "Suelta un archivo o una ventana, o pregúntame lo que quieras." }),
     ),
     h("div", { class: "grow" }),
-    btn("Ask Claude", "primary", () => actions.setView("prompt")),
+    btn("Preguntar a Claude", "primary", () => actions.setView("prompt")),
   );
   return { el: h("div", { class: "view" }, card(null, body)), sync() {} };
 }
@@ -371,7 +371,7 @@ function buildApproval(actions: ViewActions): ViewHost {
     el,
     sync() {
       clear(who);
-      who.append(agentWho(State.focusTask, "needs permission"));
+      who.append(agentWho(State.focusTask, "pide permiso"));
       // The whole point of approving here rather than in the terminal: this line
       // is the command, the file path or the URL being authorised, not just the
       // name of the tool asking.
@@ -386,13 +386,13 @@ function buildApproval(actions: ViewActions): ViewHost {
       rowKey = key;
       clear(row);
       const always = rule
-        ? btn("Always", "secondary", () => actions.decide("always"))
+        ? btn("Siempre", "secondary", () => actions.decide("always"))
         : null;
-      if (always && rule) always.title = `Always allow: ${rule.label}`;
+      if (always && rule) always.title = `Permitir siempre: ${rule.label}`;
       row.append(
-        btn("Deny", "secondary", () => actions.decide("deny"), "N"),
+        btn("Denegar", "secondary", () => actions.decide("deny"), "N"),
         ...(always ? [always] : []),
-        btn("Allow", "primary", () => actions.decide("allow"), "Y"),
+        btn("Permitir", "primary", () => actions.decide("allow"), "Y"),
       );
     },
   };
@@ -402,11 +402,11 @@ function buildApproval(actions: ViewActions): ViewHost {
 
 function buildError(actions: ViewActions): ViewHost {
   const who = h("div");
-  const title = h("div", { class: "title", text: "Workflow stopped." });
+  const title = h("div", { class: "title", text: "El flujo se detuvo." });
   const detail = h("div", { class: "detail" });
   const row = h("div", { class: "actions" },
-    btn("Retry", "primary", () => actions.setView(State.defaultView())),
-    btn("Open in n8n", "secondary", () => actions.openUrl("")),
+    btn("Reintentar", "primary", () => actions.setView(State.defaultView())),
+    btn("Abrir en n8n", "secondary", () => actions.openUrl("")),
   );
   const el = h("div", { class: "view" }, card("red", stack(116, 16, who, title, detail, row)));
   return {
@@ -414,9 +414,9 @@ function buildError(actions: ViewActions): ViewHost {
     sync() {
       const task = State.focusTask;
       clear(who);
-      who.append(agentWho(task, task?.source === "n8n" ? "n8n" : task?.source === "agent" ? "Agent" : "Claude Code"));
-      title.textContent = task?.source === "n8n" ? "Workflow stopped." : task?.source === "agent" ? "Stopped on an error." : "Session stopped on an error.";
-      detail.textContent = task?.steps.at(-1) ?? "No detail available.";
+      who.append(agentWho(task, task?.source === "n8n" ? "n8n" : task?.source === "agent" ? "Agente" : "Claude Code"));
+      title.textContent = task?.source === "n8n" ? "El flujo se detuvo." : task?.source === "agent" ? "Se detuvo por un error." : "La sesión se detuvo por un error.";
+      detail.textContent = task?.steps.at(-1) ?? "Sin más detalles.";
     },
   };
 }
@@ -427,8 +427,8 @@ function buildFinished(actions: ViewActions): ViewHost {
   const who = h("div");
   const title = h("div", { class: "title" });
   const row = h("div", { class: "actions" },
-    btn("Open terminal", "primary", () => actions.openTerminal()),
-    btn("OK", "secondary", () => actions.collapse()),
+    btn("Abrir terminal", "primary", () => actions.openTerminal()),
+    btn("Listo", "secondary", () => actions.collapse()),
   );
   const el = h("div", { class: "view" }, card("green", stack(116, 16, who, title, row)));
   return {
@@ -436,8 +436,8 @@ function buildFinished(actions: ViewActions): ViewHost {
     sync() {
       clear(who);
       const task = State.focusTask;
-      who.append(agentWho(task, task?.source === "agent" ? "finished" : "Claude Code finished"));
-      title.textContent = State.focusTask?.steps.at(-1) ?? "Session finished";
+      who.append(agentWho(task, task?.source === "agent" ? "terminó" : "Claude Code terminó"));
+      title.textContent = State.focusTask?.steps.at(-1) ?? "Sesión terminada";
     },
   };
 }
@@ -448,8 +448,8 @@ function buildConfused(): ViewHost {
   const body = h(
     "div",
     { class: "stack", style: "padding:0 18px 0 128px" },
-    h("div", { class: "title", text: "Too many hits at once." }),
-    h("div", { class: "sub", text: "Give me a sec — back to work in three seconds." }),
+    h("div", { class: "title", text: "Demasiados toques a la vez." }),
+    h("div", { class: "sub", text: "Dame un segundo: vuelvo al trabajo en tres segundos." }),
   );
   return { el: h("div", { class: "view" }, card("pink", body)), sync() {} };
 }
@@ -485,7 +485,7 @@ function buildSettings(actions: ViewActions): ViewHost {
   const rows = h(
     "div",
     { class: "settings-rows" },
-    h("div", { class: "settings-row" }, soundSwitch, h("span", { text: "Sound" }), volume),
+    h("div", { class: "settings-row" }, soundSwitch, h("span", { text: "Sonido" }), volume),
     h(
       "div",
       { class: "settings-row" },
@@ -502,7 +502,7 @@ function buildSettings(actions: ViewActions): ViewHost {
       h("button", {
         class: "link-btn",
         style: "color:#8e939c;font-size:11.5px",
-        text: "Settings…",
+        text: "Ajustes…",
         onclick: () => actions.openSettingsWindow(),
       }),
     ),
@@ -518,7 +518,7 @@ function buildSettings(actions: ViewActions): ViewHost {
       soundSwitch.classList.toggle("on", s.soundEnabled);
       volume.value = String(s.soundVolume);
       volume.style.opacity = s.soundEnabled ? "1" : "0.4";
-      autoLabel.textContent = `Auto-close · ${Math.round(s.autoCloseInterval)}s`;
+      autoLabel.textContent = `Cierre automático · ${Math.round(s.autoCloseInterval)}s`;
       segButtons.forEach((b, i) => b.classList.toggle("on", s.autoCloseInterval === [10, 15, 30][i]));
       clear(claudeBadge);
       claudeBadge.append(
@@ -565,8 +565,8 @@ export function buildViews(
   map.set("uploading", buildUploading());
   map.set("choose", buildChoose(actions));
   // Not in the Windows v1: sending a file by email, window attach + web result.
-  map.set("mail", buildPlaceholder("Sending by email isn't in this version.", ""));
-  map.set("searching", buildPlaceholder("Claude is searching…", ""));
-  map.set("result", buildPlaceholder("Result", ""));
+  map.set("mail", buildPlaceholder("El envío por correo no está en esta versión.", ""));
+  map.set("searching", buildPlaceholder("Claude está buscando…", ""));
+  map.set("result", buildPlaceholder("Resultado", ""));
   return map;
 }

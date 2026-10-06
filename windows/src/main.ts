@@ -24,6 +24,7 @@ async function main() {
   }
   island.applySettings();
   State.loadIntegrationTasks();
+  State.applyStartPill();
   if (boot && !boot.cursorPoll) island.followPageCursor();
 
   await onEvent<{ x: number; y: number }>("cursor", ({ x, y }) => island.onCursor(x, y));
@@ -72,9 +73,12 @@ async function main() {
       State.chatHistory = [];
       void Bridge.chatReset();
     }
+    const startChanged = s.startPill !== State.settings.startPill;
     State.settings = { ...State.settings, ...s };
     island.applySettings();
     State.loadIntegrationTasks();
+    // A new "first pill" applies right away when the island is not open on something else.
+    if (startChanged && State.mode !== "expanded") State.applyStartPill();
     void refreshConfigured();
   });
 

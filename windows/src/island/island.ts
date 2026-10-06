@@ -46,6 +46,8 @@ export class Island {
   private botCanvas!: HTMLCanvasElement;
   private botGlow!: HTMLElement;
   private greetingCanvas!: HTMLCanvasElement;
+  /** The "where do we start?" chips, laid over the greeting's left half. */
+  private picker!: HTMLElement;
   private miniGrid!: HTMLElement;
   private countdown!: HTMLElement;
   private wakeStrip!: HTMLElement;
@@ -227,6 +229,7 @@ export class Island {
     this.botGlow = h("div", { id: "bot-glow" });
     this.botCanvas = h("canvas", { id: "bot-canvas" });
     this.greetingCanvas = h("canvas", { id: "greeting-canvas" });
+    this.picker = h("div", { id: "greeting-picker" });
     this.miniGrid = h("div", { id: "mini-grid" });
     this.countdown = h("div", { id: "countdown" });
 
@@ -252,6 +255,7 @@ export class Island {
       "div",
       { id: "island-clip" },
       this.greetingCanvas,
+      this.picker,
       this.uploadCanvas.el,
       this.contentEl,
     );
@@ -297,18 +301,23 @@ export class Island {
           break;
         case "coucou": {
           this.expand("greeting");
-          // A personal touch: Mochi says your name, the time of day and the date.
+          // A personal touch: Mochi says your name, the time of day and the date,
+          // and offers to start wherever you want (the chips on the left).
           const s = State.settings;
-          this.greeting.setLines(
+          const chips = s.greetingEnabled && s.greetingPicker ? this.fillPicker() : 0;
+          this.greeting.setContent(
             s.greetingEnabled
-              ? greetingLines({
-                  name: s.userName.trim() || State.detectedName,
-                  template: s.greetingTemplate,
-                  language: s.greetingLanguage,
-                  now: new Date(),
-                  systemLanguage: navigator.language || "en",
-                })
+              ? () =>
+                  greetingLines({
+                    name: s.userName.trim() || State.detectedName,
+                    template: s.greetingTemplate,
+                    language: s.greetingLanguage,
+                    now: new Date(),
+                    systemLanguage: navigator.language || "en",
+                    facts: this.greetingFacts(),
+                  })
               : null,
+            chips > 1,
           );
           this.greeting.start();
           break;
@@ -320,6 +329,53 @@ export class Island {
 
   launch() {
     this.fsm.launch();
+  }
+
+  // ── Welcome: where do we start? ─────────────────────────────────────────────
+
+  /** What the third line of the welcome says; read when it is time to show it. */
+  private greetingFacts() {
+    return {
+      claudeConnected: State.integrations.integration_claude?.configured ?? State.settings.hooksInstalled,
+      lastProject: State.claudeProjects[0]?.name,
+    };
+  }
+
+  /**
+   * One chip per pill, the preferred one first and highlighted. Returns how many:
+   * with a single pill there is nothing to choose and no picker is shown.
+   */
+  private fillPicker(): number {
+    const tasks = State.tasks.slice(0, 6);
+    const preferred = State.settings.startPill;
+    const ordered = [...tasks].sort((a, b) => Number(b.id === preferred) - Number(a.id === preferred));
+    this.picker.replaceChildren();
+    if (ordered.length < 2) return ordered.length;
+    const chips = h("div", { class: "gp-chips" });
+    for (const t of ordered) {
+      const chip = h(
+        "button",
+        {
+          class: t.id === preferred ? "gp-chip first" : "gp-chip",
+          title: `Empezar en ${t.name}`,
+          onclick: () => this.startOn(t.id),
+        },
+        h("i", { class: "dot", style: `width:7px;height:7px;background:${t.color}` }),
+        h("span", { text: t.name }),
+      );
+      chips.append(chip);
+    }
+    this.picker.append(h("div", { class: "gp-label", text: "¿Por dónde empezamos?" }), chips);
+    return ordered.length;
+  }
+
+  /** A chip was chosen: open the island on that pill instead of closing to the compact one. */
+  startOn(id: string) {
+    this.greeting.interrupt();
+    State.setFocus(id);
+    Sound.play("blip");
+    if (id === "integration_claude" || id === "agent_vscode") void refreshProjects();
+    this.fsm.forceHome();
   }
 
   // ── Mode / view ─────────────────────────────────────────────────────────────
@@ -550,6 +606,7 @@ export class Island {
     this.miniGrid.style.left = `${w - 40 - 14.5}px`;
     this.miniGrid.style.top = `${hh / 2 - 14.5}px`;
     this.greetingCanvas.style.left = `${(w - EXPANDED_W) / 2}px`;
+    this.picker.style.left = `${(w - EXPANDED_W) / 2}px`;
     this.uploadCanvas.el.style.left = `${(w - EXPANDED_W) / 2}px`;
 
     const rect = { x: (PANEL_W - w) / 2, y: 0, w, h: hh };
@@ -912,6 +969,7 @@ export class Island {
     this.contentEl.style.opacity = expanded && !greetingActive ? "1" : "0";
     this.contentEl.style.pointerEvents = expanded && !greetingActive ? "auto" : "none";
     this.greetingCanvas.style.display = greetingActive ? "block" : "none";
+    this.picker.style.display = greetingActive && this.picker.childElementCount > 0 ? "block" : "none";
 
     this.header.sync();
     for (const [name, view] of this.views) {

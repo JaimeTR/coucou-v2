@@ -82,20 +82,20 @@ function lastPathComponent(p: string): string {
 
 /** frenchStep() — same labels as the macOS app. */
 const TOOL_LABELS: Record<string, string> = {
-  Bash: "Exécute",
-  Read: "Lit",
-  Write: "Écrit",
-  Edit: "Modifie",
-  Glob: "Cherche",
-  Grep: "Recherche",
-  WebSearch: "Recherche web",
-  WebFetch: "Récupère",
-  TodoWrite: "Tâches",
-  Task: "Agent",
-  LS: "Liste",
-  MultiEdit: "Modifie",
+  Bash: "Ejecuta",
+  Read: "Lee",
+  Write: "Escribe",
+  Edit: "Modifica",
+  Glob: "Busca",
+  Grep: "Busca texto",
+  WebSearch: "Busca en la web",
+  WebFetch: "Descarga",
+  TodoWrite: "Tareas",
+  Task: "Agente",
+  LS: "Lista",
+  MultiEdit: "Modifica",
   NotebookEdit: "Notebook",
-  PowerShell: "Exécute",
+  PowerShell: "Ejecuta",
 };
 
 function stepLabel(tool: string, input: Record<string, unknown>): string {
@@ -377,7 +377,7 @@ function handleHook(island: Island, payload: HookPayload) {
 
     case "PostToolUseFailure":
       State.updateTask(agentId, "working");
-      State.appendStep(agentId, "⚠ failed");
+      State.appendStep(agentId, "⚠ falló");
       break;
 
     case "Notification": {
@@ -400,7 +400,7 @@ function handleHook(island: Island, payload: HookPayload) {
       // A toast only when the island is not already open to say it.
       if (State.mode !== "expanded") {
         toast(
-          `${isExternalAgent ? State.tasks.find((t) => t.id === agentId)?.name ?? validAgent : "Claude Code"} finished`,
+          `${isExternalAgent ? State.tasks.find((t) => t.id === agentId)?.name ?? validAgent : "Claude Code"} terminó`,
           payload.message ?? projectName,
         );
       }
@@ -416,7 +416,7 @@ function handleHook(island: Island, payload: HookPayload) {
       if (isExternalAgent) ensurePill();
       if (State.mode !== "expanded") {
         toast(
-          `${isExternalAgent ? State.tasks.find((t) => t.id === agentId)?.name ?? validAgent : "Claude Code"} stopped on an error`,
+          `${isExternalAgent ? State.tasks.find((t) => t.id === agentId)?.name ?? validAgent : "Claude Code"} se detuvo por un error`,
           payload.message ?? projectName,
         );
       }
@@ -456,11 +456,11 @@ function handleHook(island: Island, payload: HookPayload) {
       break;
 
     case "SubagentStart":
-      State.appendStep(agentId, "+ subagent");
+      State.appendStep(agentId, "+ subagente");
       break;
 
     case "SubagentStop":
-      State.appendStep(agentId, "• subagent done");
+      State.appendStep(agentId, "• subagente listo");
       break;
 
     case "PermissionRequest": {
@@ -491,7 +491,7 @@ function handleHook(island: Island, payload: HookPayload) {
         void Bridge.log(`auto-allowed ${tool} by rule ${covered.id} (${covered.label})`);
         void Bridge.approvalDecision(requestId, "allow");
         upsert(projectName, cwd);
-        State.appendStep(CLAUDE_ID, `✓ Always allowed · ${covered.label}`);
+        State.appendStep(CLAUDE_ID, `✓ Permitido siempre · ${covered.label}`);
         break;
       }
 
@@ -518,7 +518,7 @@ function handleHook(island: Island, payload: HookPayload) {
       // line is synchronous, so the card really is up by the time it lands.
       if (requestId) void Bridge.approvalAck(requestId);
       void Bridge.setDecisionShortcuts(true);
-      toast("Claude Code needs permission", State.pendingApproval.command);
+      toast("Claude Code pide permiso", State.pendingApproval.command);
       State.updateTask(CLAUDE_ID, "approval");
       State.isPinned = true;
       Sound.play("approval");
@@ -579,7 +579,7 @@ function handleQuestion(
   if (questionTimeout != null) window.clearTimeout(questionTimeout);
   State.pendingQuestion = { requestId, sessionId: payload.session_id ?? "", questions };
   void Bridge.approvalAck(requestId);
-  toast("Claude Code has a question", questions[0].question);
+  toast("Claude Code tiene una pregunta", questions[0].question);
   State.updateTask(CLAUDE_ID, "question");
   State.isPinned = true;
   Sound.play("question");

@@ -3,7 +3,17 @@
 
 export type GreetingLanguage = "auto" | "es" | "en";
 
+/** What Coucou knows at the moment it greets you: the third line of the welcome. */
+export interface GreetingFacts {
+  /** Claude Code's hooks are installed. */
+  claudeConnected: boolean;
+  /** The project you used Claude Code in last, when known. */
+  lastProject?: string;
+}
+
 export interface GreetingInput {
+  /** What is known about the setup; leaves the status line out when absent. */
+  facts?: GreetingFacts;
   /** The name to greet; empty greets without one. */
   name: string;
   /** `{name}` is replaced by the name. */
@@ -19,6 +29,21 @@ export interface GreetingLines {
   title: string;
   /** "Buenas tardes · lunes, 5 de octubre" */
   sub: string;
+  /** "Claude Code conectado · último proyecto: coucou", or empty. */
+  status: string;
+}
+
+/** The one-line state of things: is Claude Code hooked in, and where you left off. */
+export function greetingStatus(facts: GreetingFacts | undefined, lang: "es" | "en"): string {
+  if (!facts) return "";
+  if (!facts.claudeConnected) {
+    return lang === "es" ? "Claude Code sin conectar · mira Ajustes" : "Claude Code not connected · see Settings";
+  }
+  const project = facts.lastProject?.trim();
+  if (lang === "es") {
+    return project ? `Claude Code conectado · último proyecto: ${project}` : "Claude Code conectado";
+  }
+  return project ? `Claude Code connected · last project: ${project}` : "Claude Code connected";
 }
 
 /** The template a fresh install has; in English it reads "Hello {name}". */
@@ -88,5 +113,5 @@ export function greetingLines(input: GreetingInput): GreetingLines {
   if (date) date = date.charAt(0).toUpperCase() + date.slice(1);
   const sub = date ? `${phrase} · ${date}` : phrase;
 
-  return { title, sub };
+  return { title, sub, status: greetingStatus(input.facts, lang) };
 }

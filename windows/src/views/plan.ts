@@ -34,7 +34,7 @@ export function primaryPercent(plan: PlanUsage | null, nowMs = Date.now()): numb
 export function untilReset(resetsAt: number | null, nowMs = Date.now()): string {
   if (resetsAt == null) return "";
   const seconds = Math.round(resetsAt - nowMs / 1000);
-  if (seconds <= 0) return "now";
+  if (seconds <= 0) return "ya";
   const minutes = Math.floor(seconds / 60);
   const days = Math.floor(minutes / 1440);
   const hours = Math.floor((minutes % 1440) / 60);
@@ -59,7 +59,7 @@ function windowRow(label: { short: string; long: string }, w: PlanWindow | null)
     }),
     h("span", {
       class: "plan-reset",
-      title: w?.resetsAt != null ? `Resets in ${untilReset(w.resetsAt)}` : "",
+      title: w?.resetsAt != null ? `Se reinicia en ${untilReset(w.resetsAt)}` : "",
       text: w?.resetsAt != null ? `↻ ${untilReset(w.resetsAt)}` : "",
     }),
   );
@@ -72,7 +72,7 @@ export function miniUsage(plan: PlanUsage): HTMLElement {
     const color = planColor(percent);
     return h(
       "span",
-      { class: "plan-mini-group", title: w?.resetsAt != null ? `Resets in ${untilReset(w.resetsAt)}` : "" },
+      { class: "plan-mini-group", title: w?.resetsAt != null ? `Se reinicia en ${untilReset(w.resetsAt)}` : "" },
       h("span", { class: "plan-mini-label", text: label }),
       h("span", { class: "plan-bar mini" }, h("i", { style: `width:${percent ?? 0}%;background:${color}` })),
       h("span", { class: "plan-mini-pct", style: `color:${color}`, text: percent == null ? "—" : `${Math.round(percent)}%` }),
@@ -90,16 +90,16 @@ export function renderPlanCard(plan: PlanUsage, onBack: () => void): HTMLElement
     h(
       "div",
       { class: "int-head" },
-      h("button", { class: "int-back", title: "Back", onclick: onBack }, svg(ICONS.chevronLeft, 10, { stroke: 2.4 })),
+      h("button", { class: "int-back", title: "Volver", onclick: onBack }, svg(ICONS.chevronLeft, 10, { stroke: 2.4 })),
       dot(color, 7),
-      h("b", { text: "Claude plan" }),
-      h("span", { text: "usage" }),
+      h("b", { text: "Plan de Claude" }),
+      h("span", { text: "uso" }),
     ),
     h(
       "div",
       { class: "plan-rows" },
-      windowRow({ short: "5h", long: "5-hour window" }, plan.fiveHour),
-      windowRow({ short: "7d", long: "7-day window" }, plan.sevenDay),
+      windowRow({ short: "5h", long: "Ventana de 5 horas" }, plan.fiveHour),
+      windowRow({ short: "7d", long: "Ventana de 7 días" }, plan.sevenDay),
     ),
   );
 }

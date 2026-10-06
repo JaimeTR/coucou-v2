@@ -1,7 +1,7 @@
 // The words of the launch greeting.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { greetingLines, fillTemplate, partOfDay, resolveLanguage, DEFAULT_TEMPLATE } from "../.test-build/greetingText.js";
+import { greetingLines, greetingStatus, fillTemplate, partOfDay, resolveLanguage, DEFAULT_TEMPLATE } from "../.test-build/greetingText.js";
 
 const at = (h) => new Date(2026, 9, 5, h, 30); // Monday 5 October 2026
 
@@ -47,4 +47,21 @@ test("without a name the greeting still reads well", () => {
   assert.equal(fillTemplate("{name}, bienvenido", ""), "bienvenido");
   assert.equal(fillTemplate("", "Ana"), "Hola Ana");
   assert.equal(greetingLines({ ...base, name: "  ", now: at(9) }).title, "Hola");
+});
+
+test("the status line says whether Claude Code is connected and where you left off", () => {
+  assert.equal(greetingStatus(undefined, "es"), "");
+  assert.equal(
+    greetingStatus({ claudeConnected: true, lastProject: "coucou" }, "es"),
+    "Claude Code conectado · último proyecto: coucou",
+  );
+  assert.equal(greetingStatus({ claudeConnected: true }, "es"), "Claude Code conectado");
+  assert.equal(greetingStatus({ claudeConnected: false, lastProject: "x" }, "es"), "Claude Code sin conectar · mira Ajustes");
+  assert.equal(
+    greetingStatus({ claudeConnected: true, lastProject: "app" }, "en"),
+    "Claude Code connected · last project: app",
+  );
+  const g = greetingLines({ ...base, now: at(10), facts: { claudeConnected: true, lastProject: "coucou" } });
+  assert.equal(g.status, "Claude Code conectado · último proyecto: coucou");
+  assert.equal(greetingLines({ ...base, now: at(10) }).status, "");
 });

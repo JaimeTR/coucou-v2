@@ -30,6 +30,8 @@ const T = {
   autoLeave: 4.9,
   /** Words need a moment to be read: a greeting that speaks stays this much longer. */
   readTime: 1.0,
+  /** With the "where do we start?" chips there is something to reach for and click. */
+  pickTime: 4.5,
   COLLAPSE: 0.34,
 };
 
@@ -504,6 +506,9 @@ function drawWords(x: CanvasRenderingContext2D, lines: GreetingLines, alpha: num
   x.textBaseline = "alphabetic";
   const rise = (1 - alpha) * 6;
 
+  // Three lines when there is a status to give, two otherwise.
+  const rows = lines.status ? { title: 78, sub: 99, status: 120 } : { title: 86, sub: 108, status: 0 };
+
   // The name is the point: as large as fits, never below 13 px.
   let size = 20;
   x.font = `600 ${size}px ${FONT}`;
@@ -512,11 +517,17 @@ function drawWords(x: CanvasRenderingContext2D, lines: GreetingLines, alpha: num
     x.font = `600 ${size}px ${FONT}`;
   }
   x.fillStyle = "#F5F6F8";
-  x.fillText(fitEllipsis(x, lines.title, TEXT_W), TEXT_X, 86 + rise);
+  x.fillText(fitEllipsis(x, lines.title, TEXT_W), TEXT_X, rows.title + rise);
 
   x.font = `400 12.5px ${FONT}`;
   x.fillStyle = "#9398A1";
-  x.fillText(fitEllipsis(x, lines.sub, TEXT_W), TEXT_X, 108 + rise);
+  x.fillText(fitEllipsis(x, lines.sub, TEXT_W), TEXT_X, rows.sub + rise);
+
+  if (lines.status) {
+    x.font = `400 11.5px ${FONT}`;
+    x.fillStyle = "#6B7079";
+    x.fillText(fitEllipsis(x, lines.status, TEXT_W), TEXT_X, rows.status + rise);
+  }
   x.restore();
 }
 
@@ -533,21 +544,36 @@ export class Greeting {
   private timers: number[] = [];
   /** What Mochi says; null leaves the greeting as a wordless wave. */
   private lines: GreetingLines | null = null;
+  /** Asked for the words once, when it is time to show them — so the status line
+   *  reflects what has loaded by then, not what was known at launch. */
+  private provider: (() => GreetingLines | null) | null = null;
+  /** Chips to choose where to start are on screen, so the greeting waits for them. */
+  private picker = false;
 
   onComplete: (() => void) | null = null;
 
-  /** Set before `start()`: the words to show once Mochi has finished waving. */
-  setLines(lines: GreetingLines | null) {
-    this.lines = lines;
+  /**
+   * Set before `start()`. `provider` builds the words when Mochi has finished
+   * waving; `picker` says the "where do we start?" chips are being offered.
+   */
+  setContent(provider: (() => GreetingLines | null) | null, picker: boolean) {
+    this.provider = provider;
+    this.lines = null;
+    this.picker = picker && provider != null;
   }
 
   /** When the greeting ends by itself, and the last moment hovering can keep it. */
+  private get extra(): number {
+    if (!this.provider) return 0;
+    return this.picker ? T.pickTime : T.readTime;
+  }
+
   private get endAt(): number {
-    return T.end + (this.lines ? T.readTime : 0);
+    return T.end + this.extra;
   }
 
   private get leaveAt(): number {
-    return T.autoLeave + (this.lines ? T.readTime : 0);
+    return T.autoLeave + this.extra;
   }
 
   start() {
@@ -619,6 +645,7 @@ export class Greeting {
     }
 
     // Under Mochi, so a hand that swings over the words is in front of them.
+    if (!this.lines && this.provider && t >= T.text0) this.lines = this.provider();
     if (this.lines && p.card > 0) {
       const a = seg(t, T.text0, T.text0 + 0.3) * p.card;
       if (a > 0.01) drawWords(x, this.lines, a);

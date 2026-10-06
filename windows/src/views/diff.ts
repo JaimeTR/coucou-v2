@@ -12,10 +12,10 @@ export function buildDiff(actions: Pick<ViewActions, "closeDiff" | "openFile">):
   const name = h("b", { class: "diff-name" });
   const added = h("span", { class: "d-add" });
   const removed = h("span", { class: "d-del" });
-  const open = h("button", { class: "icon-btn", title: "Open in VS Code" }, svg(ICONS.arrowUpRight, 8));
+  const open = h("button", { class: "icon-btn", title: "Abrir en VS Code" }, svg(ICONS.arrowUpRight, 8));
   const back = h(
     "button",
-    { class: "diff-back", title: "Back", onclick: () => actions.closeDiff() },
+    { class: "diff-back", title: "Volver", onclick: () => actions.closeDiff() },
     svg(ICONS.chevronLeft, 10, { stroke: 2.4 }),
     name,
     added,
@@ -42,11 +42,11 @@ export function buildDiff(actions: Pick<ViewActions, "closeDiff" | "openFile">):
       clear(body);
       const diff = id ? State.diffs.get(id) : undefined;
       if (!diff) {
-        name.textContent = "Diff";
+        name.textContent = "Cambios";
         added.textContent = "";
         removed.textContent = "";
         openPath = "";
-        body.append(h("div", { class: "diff-note", text: "That diff is no longer in memory." }));
+        body.append(h("div", { class: "diff-note", text: "Esos cambios ya no están en memoria." }));
         return;
       }
       openPath = diff.path;
@@ -54,7 +54,7 @@ export function buildDiff(actions: Pick<ViewActions, "closeDiff" | "openFile">):
       added.textContent = `+${diff.added}`;
       removed.textContent = `−${diff.removed}`;
       if (diff.tooLarge || !diff.lines) {
-        body.append(h("div", { class: "diff-note", text: "Diff too large" }));
+        body.append(h("div", { class: "diff-note", text: "Cambios demasiado grandes" }));
         return;
       }
       const marks = { add: "+", del: "−", ctx: " ", gap: "" } as const;

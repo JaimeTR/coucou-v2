@@ -157,6 +157,10 @@ export interface Settings {
   model: string;
   /** The name Mochi greets you by; empty means the one detected on this PC. */
   userName: string;
+  /** Which pill opens first (its id). */
+  startPill: string;
+  /** Offer "where do we start?" chips on the welcome screen. */
+  greetingPicker: boolean;
   /** Say hello (with your name) when Coucou starts. */
   greetingEnabled: boolean;
   /** `{name}` is replaced by your name. */
@@ -184,6 +188,8 @@ export const DEFAULT_SETTINGS: Settings = {
   hooksInstalled: false,
   model: "claude-opus-5",
   userName: "",
+  startPill: "integration_claude",
+  greetingPicker: true,
   greetingEnabled: true,
   greetingTemplate: "Hola {name}",
   greetingLanguage: "auto",
@@ -376,6 +382,12 @@ class AppState {
     });
     if (!this.focusId) this.focusId = "integration_claude";
     this.notify();
+  }
+
+  /** Focus the pill the person chose to see first, when it is one of the active ones. */
+  applyStartPill() {
+    const wanted = this.settings.startPill;
+    if (this.tasks.some((t) => t.id === wanted)) this.setFocus(wanted);
   }
 
   removeTask(id: string) {

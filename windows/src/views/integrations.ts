@@ -15,10 +15,10 @@ export function timeAgo(value: unknown): string {
   const date = typeof value === "number" ? new Date(value) : new Date(String(value));
   const diff = (Date.now() - date.getTime()) / 1000;
   if (!Number.isFinite(diff)) return "";
-  if (diff < 60) return "just now";
-  if (diff < 3600) return `${Math.floor(diff / 60)}m`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h`;
-  return `${Math.floor(diff / 86400)}d`;
+  if (diff < 60) return "ahora";
+  if (diff < 3600) return `${Math.floor(diff / 60)} min`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)} h`;
+  return `${Math.floor(diff / 86400)} d`;
 }
 
 function header(color: string, name: string, kind: string, extra?: Node): HTMLElement {
@@ -63,8 +63,8 @@ function idleCard(task: AgentTask, openSettings: () => void): HTMLElement {
   // Other agents are connected from Settings → Agents, not with a key.
   const isAgent = task.source === "agent";
   const missing =
-    task.id === "integration_claude" ? "Hooks not installed" : isAgent ? "Not connected" : "Key not configured";
-  const label = error ?? (configured ? (isAgent ? "Connected · waiting for activity" : "Connected · loading…") : missing);
+    task.id === "integration_claude" ? "Hooks sin instalar" : isAgent ? "Sin conectar" : "Clave sin configurar";
+  const label = error ?? (configured ? (isAgent ? "Conectado · esperando actividad" : "Conectado · cargando…") : missing);
   const statusColor = error || !configured ? "#F4505E" : "#22C55E";
 
   const actions = h("div", { class: "int-actions" });
@@ -73,7 +73,7 @@ function idleCard(task: AgentTask, openSettings: () => void): HTMLElement {
       h("button", {
         class: "link-btn",
         style: `color:${task.color}b3`,
-        text: "Open Visual Studio Code",
+        text: "Abrir Visual Studio Code",
         onclick: () => void Bridge.openInVSCode(task.sessionCwd ?? null),
       }),
     );
@@ -82,7 +82,7 @@ function idleCard(task: AgentTask, openSettings: () => void): HTMLElement {
       h("button", {
         class: "link-btn",
         style: `color:${task.color}d9`,
-        text: "Open n8n",
+        text: "Abrir n8n",
         onclick: () => void Bridge.openN8n(),
       }),
     );
@@ -91,7 +91,7 @@ function idleCard(task: AgentTask, openSettings: () => void): HTMLElement {
       h("button", {
         class: "link-btn",
         style: `color:${task.color}d9`,
-        text: `Open ${task.name}`,
+        text: `Abrir ${task.name}`,
         onclick: () => void Bridge.openUrl(OPEN_URLS[task.id]),
       }),
     );
@@ -103,20 +103,20 @@ function idleCard(task: AgentTask, openSettings: () => void): HTMLElement {
       h("button", {
         class: "link-btn",
         style: `color:${task.color}d9`,
-        text: "Refresh",
+        text: "Actualizar",
         onclick: () => void Bridge.refreshIntegration(task.id),
       }),
     );
   } else {
     actions.append(
-      h("button", { class: "link-btn", style: "color:#8e939c", text: "Settings…", onclick: openSettings }),
+      h("button", { class: "link-btn", style: "color:#8e939c", text: "Ajustes…", onclick: openSettings }),
     );
   }
 
   return h(
     "div",
     { class: "int-card" },
-    header(task.color, task.name, isAgent ? "Agent" : "Integration"),
+    header(task.color, task.name, isAgent ? "Agente" : "Integración"),
     h("div", { class: "int-status" }, dot(statusColor, 5), h("span", { text: label })),
     actions,
   );
@@ -153,13 +153,13 @@ function projectLinks(projects: ProjectInfo[], color: string, max = 3): HTMLElem
  */
 function claudeCard(task: AgentTask, openSettings: () => void): HTMLElement {
   const connected = State.integrations[task.id]?.configured ?? false;
-  const card = h("div", { class: "int-card" }, header(task.color, "Claude Code", connected ? "Connected" : "Not connected"));
+  const card = h("div", { class: "int-card" }, header(task.color, "Claude Code", connected ? "Conectado" : "Sin conectar"));
 
   if (!connected) {
     card.append(
-      h("div", { class: "int-status" }, dot("#F4505E", 5), h("span", { text: "Hooks not installed" })),
+      h("div", { class: "int-status" }, dot("#F4505E", 5), h("span", { text: "Hooks sin instalar" })),
       h("div", { class: "int-actions" },
-        h("button", { class: "link-btn", style: "color:#8e939c", text: "Settings…", onclick: openSettings }),
+        h("button", { class: "link-btn", style: "color:#8e939c", text: "Ajustes…", onclick: openSettings }),
       ),
     );
     return card;
@@ -169,13 +169,13 @@ function claudeCard(task: AgentTask, openSettings: () => void): HTMLElement {
     card.append(miniUsage(State.plan));
   } else {
     card.append(
-      h("div", { class: "int-sub", text: "Usage appears after the plan relay is installed" }),
+      h("div", { class: "int-sub", text: "El uso aparece al instalar el relay del plan" }),
     );
   }
   if (State.claudeProjects.length > 0) {
     card.append(projectLinks(State.claudeProjects, task.color));
   } else {
-    card.append(h("div", { class: "int-sub", text: "No projects yet" }));
+    card.append(h("div", { class: "int-sub", text: "Aún no hay proyectos" }));
   }
   return card;
 }
@@ -191,13 +191,13 @@ function vscodeCard(task: AgentTask, openSettings: () => void): HTMLElement {
   const card = h(
     "div",
     { class: "int-card" },
-    header(task.color, "VS Code", claudeHere ? "Claude Code running here" : connected ? "Terminal alerts on" : "Projects"),
+    header(task.color, "VS Code", claudeHere ? "Claude Code corre aquí" : connected ? "Avisos de terminal activados" : "Proyectos"),
   );
 
   if (State.vscodeProjects.length > 0) {
     card.append(projectLinks(State.vscodeProjects, task.color));
   } else {
-    card.append(h("div", { class: "int-sub", text: "No recent projects found" }));
+    card.append(h("div", { class: "int-sub", text: "No hay proyectos recientes" }));
   }
 
   const actions = h("div", { class: "int-actions" });
@@ -205,13 +205,13 @@ function vscodeCard(task: AgentTask, openSettings: () => void): HTMLElement {
     h("button", {
       class: "link-btn",
       style: `color:${task.color}d9`,
-      text: "Open VS Code",
+      text: "Abrir VS Code",
       onclick: () => void Bridge.openInVSCode(null),
     }),
   );
   if (!connected) {
     actions.append(
-      h("button", { class: "link-btn", style: "color:#8e939c", text: "Terminal alerts…", onclick: openSettings }),
+      h("button", { class: "link-btn", style: "color:#8e939c", text: "Avisos de terminal…", onclick: openSettings }),
     );
   }
   card.append(actions);
@@ -230,7 +230,7 @@ function vercelCard(onDetail: () => void): HTMLElement {
     if (i === 0) {
       const more = h(
         "button",
-        { class: "int-more", title: "Details", onclick: onDetail },
+        { class: "int-more", title: "Detalles", onclick: onDetail },
         svg(ICONS.ellipsis, 8),
       );
       rows.append(listRow(accent, true, name, ago, more));
@@ -238,19 +238,19 @@ function vercelCard(onDetail: () => void): HTMLElement {
       rows.append(listRow(accent, false, name, ago));
     }
   });
-  return h("div", { class: "int-card" }, header("#7C5CFF", "Vercel", "Deployments"), rows);
+  return h("div", { class: "int-card" }, header("#7C5CFF", "Vercel", "Despliegues"), rows);
 }
 
 function vercelDetail(onBack: () => void): HTMLElement {
   const d = arr("integration_vercel", "deployments")[0] ?? {};
   const success = d.state === "READY";
   const accent = success ? "#22C55E" : "#F4505E";
-  const status = success ? "Ready" : d.state === "CANCELED" ? "Canceled" : "Error";
+  const status = success ? "Listo" : d.state === "CANCELED" ? "Cancelado" : "Error";
   const body = h("div", { class: "int-detail-body" });
   if (d.commitMessage) body.append(h("div", { class: "int-commit", text: String(d.commitMessage) }));
   const meta = h("div", { class: "int-meta" });
   if (d.branch) meta.append(h("span", { text: String(d.branch) }));
-  meta.append(h("span", { text: `${timeAgo(d.createdAt)} ago` }));
+  meta.append(h("span", { text: ((t) => (t === "ahora" ? t : `hace ${t}`))(timeAgo(d.createdAt)) }));
   body.append(meta);
   if (d.url) {
     body.append(
@@ -269,7 +269,7 @@ function vercelDetail(onBack: () => void): HTMLElement {
       { class: "int-detail-head" },
       h("button", { class: "int-back", onclick: onBack }, svg(ICONS.chevronLeft, 10, { stroke: 2.4 })),
       dot(accent, 6),
-      h("b", { text: String(d.projectName ?? "Deployment") }),
+      h("b", { text: String(d.projectName ?? "Despliegue") }),
       h("span", { class: "int-badge", style: `color:${accent};background:${accent}24`, text: status }),
     ),
     body,
@@ -298,7 +298,7 @@ function resendCard(): HTMLElement {
     if (i === 0 && e.subject) cells.push(h("span", { class: "int-sub", text: String(e.subject) }));
     rows.append(listRow(accent, i === 0, ...cells));
   });
-  return h("div", { class: "int-card" }, header("#22C55E", "Resend", "Emails", extra), rows);
+  return h("div", { class: "int-card" }, header("#22C55E", "Resend", "Correos", extra), rows);
 }
 
 // ── GitHub ────────────────────────────────────────────────────────────────────
@@ -366,11 +366,11 @@ function worstCi(prs: PrItem[]): string {
 
 const GITHUB_SECTIONS: Record<GithubSection, { title: string; color: (p: Pulse) => string; url: string }> = {
   review: {
-    title: "Review requested",
+    title: "Revisiones pedidas",
     color: (p) => (p.toReview.length > 0 ? "#F5A524" : "#4B5563"),
     url: "https://github.com/pulls/review-requested",
   },
-  mine: { title: "My pull requests", color: (p) => worstCi(p.mine), url: "https://github.com/pulls" },
+  mine: { title: "Mis pull requests", color: (p) => worstCi(p.mine), url: "https://github.com/pulls" },
   copilot: {
     title: "Copilot",
     color: (p) => (p.copilot.length > 0 || p.copilotReviewedMine > 0 ? COPILOT_COLOR : "#4B5563"),
@@ -392,12 +392,12 @@ function githubCard(onDetail: () => void): HTMLElement {
 
   if (!pulse) {
     // Repository stats still work without pull request access: say why the rest is missing.
-    const why = typeof d.pulseError === "string" ? d.pulseError : "Loading pull requests…";
+    const why = typeof d.pulseError === "string" ? d.pulseError : "Cargando pull requests…";
     return h(
       "div",
       { class: "int-card" },
       header(GITHUB_RED, "GitHub", kind),
-      h("div", { class: "int-stats" }, statRow(ICONS.stack, "#6B7079", "Repositories", String(repos))),
+      h("div", { class: "int-stats" }, statRow(ICONS.stack, "#6B7079", "Repositorios", String(repos))),
       h("div", { class: "int-sub", text: why }),
     );
   }
@@ -419,7 +419,7 @@ function githubCard(onDetail: () => void): HTMLElement {
     );
 
   const copilotLabel =
-    pulse.copilotReviewedMine > 0 ? `Copilot · reviewed ${pulse.copilotReviewedMine} of yours` : "Copilot pull requests";
+    pulse.copilotReviewedMine > 0 ? `Copilot · revisó ${pulse.copilotReviewedMine} tuyos` : "Pull requests de Copilot";
   return h(
     "div",
     { class: "int-card" },
@@ -427,8 +427,8 @@ function githubCard(onDetail: () => void): HTMLElement {
     h(
       "div",
       { class: "int-rows tight" },
-      row("review", "Review requested", pulse.toReview.length),
-      row("mine", "My pull requests", pulse.mine.length),
+      row("review", "Revisiones pedidas", pulse.toReview.length),
+      row("mine", "Mis pull requests", pulse.mine.length),
       row("copilot", copilotLabel, pulse.copilot.length),
     ),
   );
@@ -449,24 +449,24 @@ function githubDetail(onBack: () => void): HTMLElement {
         "button",
         {
           class: "int-row gh-pr",
-          title: `${p.repo}#${p.number} · ${p.title}${p.isDraft ? " (draft)" : ""}`,
+          title: `${p.repo}#${p.number} · ${p.title}${p.isDraft ? " (borrador)" : ""}`,
           onclick: () => void Bridge.openUrl(p.url),
         },
         dot(ciColor(p.ci), 5),
-        h("span", { class: "int-name", text: p.isDraft ? `Draft · ${p.title}` : p.title }),
+        h("span", { class: "int-name", text: p.isDraft ? `Borrador · ${p.title}` : p.title }),
         // Copilot's own work, and mine that Copilot reviewed, carry its colour.
         p.isCopilot || p.copilotReviewed ? dot(COPILOT_COLOR, 4) : "",
         h("span", { class: "int-ago", text: repo }),
       ),
     );
   }
-  if (prs.length === 0) rows.append(h("div", { class: "int-empty", text: "Nothing here" }));
+  if (prs.length === 0) rows.append(h("div", { class: "int-empty", text: "Nada por aquí" }));
   else if (prs.length > 3) {
     rows.append(
       h("button", {
         class: "link-btn",
         style: `color:${color}d9;text-align:left;padding:2px 8px`,
-        text: `${prs.length - 3} more on GitHub`,
+        text: `${prs.length - 3} más en GitHub`,
         onclick: () => void Bridge.openUrl(section.url),
       }),
     );
@@ -502,7 +502,7 @@ function stripeCard(): HTMLElement {
         "div",
         { class: "int-row" },
         dot(accent, 5),
-        h("span", { class: "int-name", text: String(p.description ?? "Payment") }),
+        h("span", { class: "int-name", text: String(p.description ?? "Pago") }),
         h("span", {
           class: "int-amount",
           style: "color:#22c55e",
@@ -515,7 +515,7 @@ function stripeCard(): HTMLElement {
   return h(
     "div",
     { class: "int-card" },
-    header("#0570DE", "Stripe", "Payments"),
+    header("#0570DE", "Stripe", "Pagos"),
     h("div", { class: "int-balance" }, h("span", { text: balance }), h("i", { text: currency })),
     rows,
   );
@@ -538,12 +538,12 @@ function notionCard(): HTMLElement {
         p.emoji
           ? h("span", { class: "int-emoji", text: String(p.emoji) })
           : h("i", { class: "int-emoji" }, svg(ICONS.doc, 9)),
-        h("span", { class: "int-name", text: String(p.title ?? "Untitled") }),
+        h("span", { class: "int-name", text: String(p.title ?? "Sin título") }),
         h("span", { class: "int-ago", text: timeAgo(p.lastEditedAt) }),
       ),
     );
   }
-  return h("div", { class: "int-card" }, header("#E8E8E8", "Notion", "Recent"), rows);
+  return h("div", { class: "int-card" }, header("#E8E8E8", "Notion", "Recientes"), rows);
 }
 
 // ── Cal.com ───────────────────────────────────────────────────────────────────
@@ -554,7 +554,7 @@ function calcomCard(): HTMLElement {
     .sort((a, b) => new Date(String(a.start)).getTime() - new Date(String(b.start)).getTime());
   const rows = h("div", { class: "int-rows tight" });
   if (bookings.length === 0) {
-    rows.append(h("div", { class: "int-empty", text: "No calls scheduled" }));
+    rows.append(h("div", { class: "int-empty", text: "No hay llamadas programadas" }));
   }
   for (const b of bookings.slice(0, 3)) {
     const when = new Date(String(b.start));
@@ -566,11 +566,11 @@ function calcomCard(): HTMLElement {
         { class: "int-row" },
         dot("#C9956A", 4),
         h("span", { class: "int-time", text: `${day} ${time}` }),
-        h("span", { class: "int-name", text: String(b.title ?? "Meeting") }),
+        h("span", { class: "int-name", text: String(b.title ?? "Reunión") }),
       ),
     );
   }
-  return h("div", { class: "int-card" }, header("#C9956A", "Cal.com", "Schedule"), rows);
+  return h("div", { class: "int-card" }, header("#C9956A", "Cal.com", "Agenda"), rows);
 }
 
 // ── n8n ───────────────────────────────────────────────────────────────────────
@@ -583,7 +583,7 @@ function n8nCard(task: AgentTask, onDetail: () => void, openSettings: () => void
   return h(
     "div",
     { class: "int-card" },
-    header("#F29B38", "n8n", "Workflow"),
+    header("#F29B38", "n8n", "Flujo"),
     h(
       "div",
       { class: "int-actions" },
@@ -618,14 +618,14 @@ function n8nDetail(task: AgentTask, onBack: () => void): HTMLElement {
       h("span", {
         class: "int-badge",
         style: `color:${accent};background:${accent}24`,
-        text: success ? "Success" : "Failed",
+        text: success ? "Correcto" : "Falló",
       }),
     ),
     detail
       ? h("pre", { class: "int-detail-text", text: detail })
       : h("div", {
           class: "int-status",
-          text: success ? "Completed successfully." : "No error details available.",
+          text: success ? "Completado con éxito." : "Sin detalles del error.",
         }),
   );
 }

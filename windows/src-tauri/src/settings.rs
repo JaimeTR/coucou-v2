@@ -26,6 +26,12 @@ pub struct Settings {
     /// Say hello (with your name) when Coucou starts.
     #[serde(default = "default_true")]
     pub greeting_enabled: bool,
+    /// Which pill opens first (its id, e.g. "integration_claude").
+    #[serde(default = "default_start_pill")]
+    pub start_pill: String,
+    /// Offer "where do we start?" chips on the welcome screen.
+    #[serde(default = "default_true")]
+    pub greeting_picker: bool,
     /// What the greeting says; `{name}` is replaced by your name.
     #[serde(default = "default_greeting_template")]
     pub greeting_template: String,
@@ -58,6 +64,10 @@ fn default_true() -> bool {
 
 fn default_greeting_template() -> String {
     "Hola {name}".into()
+}
+
+fn default_start_pill() -> String {
+    "integration_claude".into()
 }
 
 fn default_greeting_language() -> String {
@@ -95,6 +105,8 @@ impl Default for Settings {
             hooks_installed: false,
             model: default_model(),
             user_name: String::new(),
+            start_pill: default_start_pill(),
+            greeting_picker: true,
             greeting_enabled: true,
             greeting_template: default_greeting_template(),
             greeting_language: default_greeting_language(),

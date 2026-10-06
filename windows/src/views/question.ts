@@ -26,7 +26,7 @@ export function buildQuestion(actions: Pick<ViewActions, "answerQuestion">): Vie
     { class: "stack", style: "padding:4px 16px 4px 116px" },
     stubWho,
     stubTitle,
-    h("div", { class: "sub", text: "Answer in your terminal — this one isn't waiting on Coucou." }),
+    h("div", { class: "sub", text: "Responde en tu terminal: esta no espera a Coucou." }),
   );
 
   // ── The live question ───────────────────────────────────────────────────────
@@ -37,14 +37,14 @@ export function buildQuestion(actions: Pick<ViewActions, "answerQuestion">): Vie
   const other = h("input", {
     class: "q-other",
     type: "text",
-    placeholder: "Other…",
+    placeholder: "Otra respuesta…",
     autocomplete: "off",
     spellcheck: "false",
   }) as HTMLInputElement;
-  const next = h("button", { class: "btn primary q-next", text: "Next" }) as HTMLButtonElement;
+  const next = h("button", { class: "btn primary q-next", text: "Siguiente" }) as HTMLButtonElement;
   const terminal = h("button", {
     class: "link-btn q-terminal",
-    text: "Reply in terminal",
+    text: "Responder en la terminal",
     onclick: () => actions.answerQuestion(null),
   });
   const footer = h("div", { class: "q-footer" }, terminal, h("div", { class: "grow" }), next);
@@ -135,7 +135,7 @@ export function buildQuestion(actions: Pick<ViewActions, "answerQuestion">): Vie
     who.append(
       dot(State.focusTask?.color ?? "#F5F6F8", 8),
       h("span", { class: "n", text: State.focusTask?.name ?? "Claude Code" }),
-      h("span", { text: q.header ? `asks · ${q.header}` : "asks a question" }),
+      h("span", { text: q.header ? `pregunta · ${q.header}` : "hace una pregunta" }),
     );
     counter.textContent = pending.questions.length > 1 ? `${index + 1}/${pending.questions.length}` : "";
     title.textContent = q.question;
@@ -164,7 +164,7 @@ export function buildQuestion(actions: Pick<ViewActions, "answerQuestion">): Vie
     const last = index + 1 >= pending.questions.length;
     // A single choice answers with a click, so only multiple choice needs a button.
     next.style.display = q.multiSelect ? "" : "none";
-    next.textContent = last ? "Send" : "Next";
+    next.textContent = last ? "Enviar" : "Siguiente";
     refreshPicks();
   }
 
@@ -189,8 +189,8 @@ export function buildQuestion(actions: Pick<ViewActions, "answerQuestion">): Vie
         clear(stubWho);
         const task = State.focusTask;
         if (task) stubWho.append(dot(task.color, 8), h("span", { class: "n", text: task.name }));
-        stubWho.append(h("span", { text: "Claude Code is asking a question" }));
-        stubTitle.textContent = task?.steps.at(-1) ?? "Claude needs an answer.";
+        stubWho.append(h("span", { text: "Claude Code hace una pregunta" }));
+        stubTitle.textContent = task?.steps.at(-1) ?? "Claude necesita una respuesta.";
         return;
       }
       // A new question starts from the top; the same one keeps what was picked.

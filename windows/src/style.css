@@ -1711,3 +1711,82 @@ input[type="range"]::-webkit-slider-thumb {
 .gh-row .int-name {
   flex: 1 1 auto;
 }
+
+/* ── Welcome: where do we start? ────────────────────────────────────────── */
+
+#greeting-picker {
+  position: absolute;
+  top: 0;
+  width: 640px;
+  height: 150px;
+  pointer-events: none;
+  opacity: 0;
+  animation: gp-in 0.35s ease-out 2.5s both;
+}
+
+@keyframes gp-in {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.gp-label {
+  position: absolute;
+  left: 26px;
+  top: 47px;
+  font: 600 11px var(--font);
+  color: var(--dim-2);
+  letter-spacing: 0.01em;
+}
+
+.gp-chips {
+  position: absolute;
+  left: 24px;
+  top: 66px;
+  width: 250px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px;
+}
+
+.gp-chip {
+  pointer-events: auto;
+  height: 20px;
+  padding: 0 9px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #c5c8cd;
+  font: 500 11px var(--font);
+  cursor: default;
+  min-width: 0;
+  transition: background 0.12s ease-out, border-color 0.12s ease-out, transform 0.08s ease-out;
+}
+
+.gp-chip span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gp-chip:hover {
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.28);
+}
+
+.gp-chip:active {
+  transform: scale(0.96);
+}
+
+.gp-chip.first {
+  border-color: rgba(255, 255, 255, 0.34);
+  color: var(--ink);
+}
