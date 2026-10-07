@@ -807,7 +807,7 @@ async fn chat_send(
     query: String,
     context: Option<ChatContext>,
 ) -> Result<ChatReply, String> {
-    let (provider, model, dm_model, dm_tokens, gemini_model, groq_model) = {
+    let (provider, model, dm_model, dm_tokens, gemini_model, groq_model, local_url, local_model) = {
         let s = shared.settings.lock().unwrap();
         (
             s.chat_provider.clone(),
@@ -816,12 +816,18 @@ async fn chat_send(
             s.devmark_max_tokens,
             s.gemini_model.clone(),
             s.groq_model.clone(),
+            s.local_url.clone(),
+            s.local_model.clone(),
         )
     };
     match provider.as_str() {
         "devmark" => devmark::send(&devmark_chat, &dm_model, dm_tokens, query, context).await,
-        "gemini" => compat::send(&compat_chat, &compat::GEMINI, &gemini_model, query, context).await,
-        "groq" => compat::send(&compat_chat, &compat::GROQ, &groq_model, query, context).await,
+        "gemini" => compat::send(&compat_chat, &compat::GEMINI, compat::GEMINI.base, &gemini_model, query, context).await,
+        "groq" => compat::send(&compat_chat, &compat::GROQ, compat::GROQ.base, &groq_model, query, context).await,
+        "local" => {
+            let base = compat::local_base(&local_url)?;
+            compat::send(&compat_chat, &compat::LOCAL, &base, &local_model, query, context).await
+        }
         _ => claude::send(&chat, &model, query, context).await,
     }
 }
@@ -840,14 +846,19 @@ fn chat_reset(
 
 /// Settings → Chat provider → "Test connection": no text is generated.
 #[tauri::command]
-async fn provider_test(id: String) -> devmark::Check {
-    match id.as_str() {
+async fn provider_test(shared: State<'_, Shared>, id: String) -> Result<devmark::Check, String> {
+    let local_url = shared.settings.lock().unwrap().local_url.clone();
+    Ok(match id.as_str() {
         "devmark" => devmark::check().await,
+        "local" => match compat::local_base(&local_url) {
+            Ok(base) => compat::check(&compat::LOCAL, &base).await,
+            Err(message) => devmark::Check { ok: false, message },
+        },
         other => match compat::provider(other) {
-            Some(p) => compat::check(p).await,
+            Some(p) => compat::check(p, p.base).await,
             None => devmark::Check { ok: false, message: format!("proveedor desconocido: {other}") },
         },
-    }
+    })
 }
 
 /// Copies a dropped file into the inbox and reports its name back.

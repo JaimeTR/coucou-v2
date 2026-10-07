@@ -104,6 +104,11 @@ pub struct Settings {
     pub gemini_model: String,
     #[serde(default = "default_groq_model")]
     pub groq_model: String,
+    /// A model on your own computer (Ollama, LM Studio…): its address and model.
+    #[serde(default = "default_local_url")]
+    pub local_url: String,
+    #[serde(default = "default_local_model")]
+    pub local_model: String,
     #[serde(default = "default_devmark_max_tokens")]
     pub devmark_max_tokens: u32,
     /// Show the plan usage pill in the island's header.
@@ -259,6 +264,14 @@ fn default_gemini_model() -> String {
     crate::compat::DEFAULT_GEMINI_MODEL.to_string()
 }
 
+fn default_local_url() -> String {
+    crate::compat::DEFAULT_LOCAL_URL.to_string()
+}
+
+fn default_local_model() -> String {
+    crate::compat::DEFAULT_LOCAL_MODEL.to_string()
+}
+
 fn default_groq_model() -> String {
     crate::compat::DEFAULT_GROQ_MODEL.to_string()
 }
@@ -314,6 +327,8 @@ impl Default for Settings {
             devmark_max_tokens: default_devmark_max_tokens(),
             gemini_model: default_gemini_model(),
             groq_model: default_groq_model(),
+            local_url: default_local_url(),
+            local_model: default_local_model(),
             plan_gauge: false,
             native_notifications: true,
             global_shortcuts: true,

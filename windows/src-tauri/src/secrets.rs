@@ -19,6 +19,7 @@ pub const KNOWN_KEYS: &[&str] = &[
     "notion-api-key",
     "calcom-api-key",
     "sync-code",
+    "local-api-key",
 ];
 
 /// The token of a custom pill: "custom-<slug>-token".

@@ -1,10 +1,13 @@
 // Chat providers that speak the OpenAI "chat completions" protocol: Gemini
-// (Google AI Studio) and Groq. Both authenticate with `Authorization: Bearer`
-// and answer in the same shape, so one client serves them; what differs is the
-// base URL, the key, and the model.
+// (Google AI Studio), Groq, and a model running on your own computer (Ollama,
+// LM Studio or anything that copies that protocol). All answer in the same
+// shape, so one client serves them; what differs is the base URL, the key, and
+// the model.
 //
 //   Gemini  https://generativelanguage.googleapis.com/v1beta/openai/
 //   Groq    https://api.groq.com/openai/v1
+//   Local   http://127.0.0.1:11434/v1 (Ollama) or :1234/v1 (LM Studio): your
+//           address, no key needed, nothing leaves your network.
 //
 // (DEVMARK AI has its own client, devmark.rs, because of its stricter limits.)
 //
@@ -29,6 +32,8 @@ pub struct Provider {
     pub key: &'static str,
     /// Environment variable that also works.
     pub env: &'static str,
+    /// Works without a key (a model on your own computer).
+    pub keyless: bool,
 }
 
 pub const GEMINI: Provider = Provider {
@@ -37,6 +42,7 @@ pub const GEMINI: Provider = Provider {
     base: "https://generativelanguage.googleapis.com/v1beta/openai",
     key: "gemini-api-key",
     env: "GEMINI_API_KEY",
+    keyless: false,
 };
 
 pub const GROQ: Provider = Provider {
@@ -45,22 +51,39 @@ pub const GROQ: Provider = Provider {
     base: "https://api.groq.com/openai/v1",
     key: "groq-api-key",
     env: "GROQ_API_KEY",
+    keyless: false,
+};
+
+/// A model on your own computer. `base` is only the default: the address comes
+/// from Settings (`local_url`). An API key is optional, for servers that ask one.
+pub const LOCAL: Provider = Provider {
+    id: "local",
+    name: "Modelo local",
+    base: "http://127.0.0.1:11434/v1",
+    key: "local-api-key",
+    env: "LOCAL_API_KEY",
+    keyless: true,
 };
 
 /// The model names are only defaults: Settings lets you type any model the
 /// provider offers, and "Test connection" lists what your key can use.
 pub const DEFAULT_GEMINI_MODEL: &str = "gemini-3.8-flash";
 pub const DEFAULT_GROQ_MODEL: &str = "llama-3.3-70b-versatile";
+pub const DEFAULT_LOCAL_URL: &str = "http://127.0.0.1:11434/v1";
+pub const DEFAULT_LOCAL_MODEL: &str = "llama3.2";
 
 pub fn provider(id: &str) -> Option<&'static Provider> {
     match id {
         "gemini" => Some(&GEMINI),
         "groq" => Some(&GROQ),
+        "local" => Some(&LOCAL),
         _ => None,
     }
 }
 
 const TIMEOUT: Duration = Duration::from_secs(90);
+/// A local model may have to load into memory before its first word.
+const LOCAL_TIMEOUT: Duration = Duration::from_secs(240);
 const MAX_TOKENS: u32 = 1024;
 /// Generous for both, and still well inside their context windows.
 const MAX_MESSAGES: usize = 60;
@@ -71,7 +94,7 @@ You can help with anything: questions, coding, research, recommendations, everyd
 Respond in the user's language. Be clear and complete without padding. \
 No markdown formatting (no **, no ##, no bullet dashes). Use plain text with line breaks.";
 
-/// Plain-text history, shared by Gemini and Groq (the conversation starts over
+/// Plain-text history, shared by Gemini, Groq and the local model (the conversation starts over
 /// whenever the provider changes, which the app already guarantees).
 #[derive(Default)]
 pub struct CompatChat {
@@ -91,6 +114,46 @@ fn api_key(p: &Provider) -> Option<String> {
 }
 
 // ── Pure pieces (tested below) ────────────────────────────────────────────────
+
+/// The address of a model server on your network, cleaned up. Plain http is
+/// only for this computer or your own network (loopback, 10.x, 172.16-31.x,
+/// 192.168.x, *.local); anywhere else it must be https, so a chat is never sent
+/// in the clear across the internet.
+pub fn local_base(raw: &str) -> Result<String, String> {
+    let url = raw.trim().trim_end_matches('/');
+    let (https, rest) = if let Some(r) = url.strip_prefix("https://") {
+        (true, r)
+    } else if let Some(r) = url.strip_prefix("http://") {
+        (false, r)
+    } else {
+        return Err("La dirección debe empezar por http:// o https:// (por ejemplo http://127.0.0.1:11434/v1).".into());
+    };
+    let authority = rest.split(['/', '?', '#']).next().unwrap_or("");
+    if authority.is_empty() || authority.contains('@') {
+        return Err("La dirección no es válida.".into());
+    }
+    let host = if let Some(v6) = authority.strip_prefix('[') {
+        v6.split(']').next().unwrap_or("").to_string()
+    } else {
+        authority.split(':').next().unwrap_or("").to_lowercase()
+    };
+    let private = host == "localhost"
+        || host == "::1"
+        || host.ends_with(".local")
+        || host.starts_with("127.")
+        || host.starts_with("10.")
+        || host.starts_with("192.168.")
+        || host
+            .strip_prefix("172.")
+            .and_then(|r| r.split('.').next())
+            .and_then(|n| n.parse::<u8>().ok())
+            .map(|n| (16..=31).contains(&n))
+            .unwrap_or(false);
+    if !https && !private {
+        return Err("Fuera de tu red la dirección debe ser https://. Con http:// solo se permite este equipo o tu red local.".into());
+    }
+    Ok(url.to_string())
+}
 
 /// The system prompt plus as much of the newest history as fits. The newest
 /// message is always kept; if even that is too long, the person is told.
@@ -176,19 +239,33 @@ fn model_ids(response: &Value) -> Vec<String> {
 
 // ── The network ───────────────────────────────────────────────────────────────
 
-fn client() -> Result<reqwest::Client, String> {
-    reqwest::Client::builder().timeout(TIMEOUT).build().map_err(|e| e.to_string())
+fn client(p: &Provider) -> Result<reqwest::Client, String> {
+    let timeout = if p.keyless { LOCAL_TIMEOUT } else { TIMEOUT };
+    reqwest::Client::builder().timeout(timeout).build().map_err(|e| e.to_string())
+}
+
+/// A request with the key when there is one: a local server usually has none.
+fn with_key(req: reqwest::RequestBuilder, key: Option<&str>) -> reqwest::RequestBuilder {
+    match key {
+        Some(k) => req.bearer_auth(k),
+        None => req,
+    }
 }
 
 /// One chat turn.
 pub async fn send(
     chat: &CompatChat,
     p: &Provider,
+    base: &str,
     model: &str,
     query: String,
     context: Option<ChatContext>,
 ) -> Result<ChatReply, String> {
-    let key = api_key(p).ok_or_else(|| format!("Falta la clave de {}. Añádela en Ajustes.", p.name))?;
+    let key = api_key(p);
+    if key.is_none() && !p.keyless {
+        return Err(format!("Falta la clave de {}. Añádela en Ajustes.", p.name));
+    }
+    let key = key.as_deref();
     let Ok(_turn) = chat.busy.try_lock() else {
         return Err(format!("{} sigue respondiendo el mensaje anterior: espera a que termine.", p.name));
     };
@@ -231,12 +308,12 @@ pub async fn send(
     let remembered = FALLBACK.lock().unwrap().get(&(p.id, model.to_string())).cloned();
     let used = remembered.unwrap_or_else(|| model.to_string());
     let body = build_body(&used, MAX_TOKENS, messages.clone());
-    let result = match post(p, &key, &body).await {
-        Err((Some(404), _)) => match working_model(p, &key, &used).await {
+    let result = match post(p, base, key, &body).await {
+        Err((Some(404), _)) => match working_model(p, base, key, &used).await {
             Some(other) => {
                 crate::log::line(format!("{}: model {used} not found, using {other}", p.id));
                 FALLBACK.lock().unwrap().insert((p.id, model.to_string()), other.clone());
-                post(p, &key, &build_body(&other, MAX_TOKENS, messages)).await
+                post(p, base, key, &build_body(&other, MAX_TOKENS, messages)).await
             }
             None => Err((Some(404), explain_error(p, 404, ""))),
         },
@@ -278,8 +355,8 @@ fn pick_model(ids: &[String], not: &str) -> Option<String> {
     usable.first().map(|id| (*id).clone())
 }
 
-async fn working_model(p: &Provider, key: &str, not: &str) -> Option<String> {
-    let response = client().ok()?.get(format!("{}/models", p.base)).bearer_auth(key).send().await.ok()?;
+async fn working_model(p: &Provider, base: &str, key: Option<&str>, not: &str) -> Option<String> {
+    let response = with_key(client(p).ok()?.get(format!("{base}/models")), key).send().await.ok()?;
     if !response.status().is_success() {
         return None;
     }
@@ -287,14 +364,16 @@ async fn working_model(p: &Provider, key: &str, not: &str) -> Option<String> {
 }
 
 /// The error carries the HTTP status when there was one.
-async fn post(p: &Provider, key: &str, body: &Value) -> Result<Value, (Option<u16>, String)> {
-    let client = client().map_err(|e| (None, e))?;
-    let url = format!("{}/chat/completions", p.base);
+async fn post(p: &Provider, base: &str, key: Option<&str>, body: &Value) -> Result<Value, (Option<u16>, String)> {
+    let client = client(p).map_err(|e| (None, e))?;
+    let url = format!("{base}/chat/completions");
     let mut attempt = 0u32;
     loop {
-        let response = client.post(&url).bearer_auth(key).json(body).send().await.map_err(|e| {
+        let response = with_key(client.post(&url), key).json(body).send().await.map_err(|e| {
             (None, if e.is_timeout() {
                 format!("{} tardó demasiado en responder. Prueba con una pregunta más corta.", p.name)
+            } else if p.keyless && e.is_connect() {
+                format!("No se puede llegar a {base}. ¿Está abierto Ollama o LM Studio, con su servidor encendido?")
             } else {
                 format!("Error de red al hablar con {}: {e}", p.name)
             })
@@ -321,27 +400,33 @@ async fn post(p: &Provider, key: &str, body: &Value) -> Result<Value, (Option<u1
 
 /// "Test connection": asks for the model list with the saved key. Generates no
 /// text, so it costs nothing, and it shows which models the key can use.
-pub async fn check(p: &Provider) -> Check {
-    let Some(key) = api_key(p) else {
+pub async fn check(p: &Provider, base: &str) -> Check {
+    let key = api_key(p);
+    if key.is_none() && !p.keyless {
         return Check { ok: false, message: format!("Aún no hay clave de {} guardada.", p.name) };
-    };
-    let client = match client() {
+    }
+    let client = match client(p) {
         Ok(c) => c,
         Err(e) => return Check { ok: false, message: e },
     };
-    match client.get(format!("{}/models", p.base)).bearer_auth(key).send().await {
+    match with_key(client.get(format!("{base}/models")), key.as_deref()).send().await {
         Ok(r) if r.status().is_success() => {
             let ids = model_ids(&r.json::<Value>().await.unwrap_or(Value::Null));
             let shown: Vec<&str> = ids.iter().take(6).map(String::as_str).collect();
             let more = if ids.len() > shown.len() { format!(" y {} más", ids.len() - shown.len()) } else { String::new() };
             let list = if shown.is_empty() { "sin modelos en la lista".to_string() } else { format!("{}{more}", shown.join(", ")) };
-            Check { ok: true, message: format!("Conectado a {}: clave aceptada. Modelos: {list}.", p.name) }
+            let accepted = if p.keyless { "servidor encontrado" } else { "clave aceptada" };
+            Check { ok: true, message: format!("Conectado a {}: {accepted}. Modelos: {list}.", p.name) }
         }
         Ok(r) => {
             let status = r.status().as_u16();
             let text = r.text().await.unwrap_or_default();
             Check { ok: false, message: explain_error(p, status, &text) }
         }
+        Err(e) if p.keyless => Check {
+            ok: false,
+            message: format!("No se puede llegar a {base}. ¿Está abierto Ollama o LM Studio, con su servidor encendido? ({e})"),
+        },
         Err(e) => Check { ok: false, message: format!("No se puede llegar a {}: {e}", p.name) },
     }
 }
@@ -361,8 +446,100 @@ mod tests {
         assert_ne!(GEMINI.key, GROQ.key);
         assert_ne!(GEMINI.env, GROQ.env);
         assert!(provider("anthropic").is_none() && provider("devmark").is_none());
+        assert!(provider("local").unwrap().keyless && !GROQ.keyless && !GEMINI.keyless);
+        assert!(crate::secrets::KNOWN_KEYS.contains(&LOCAL.key));
         // Keys are only ever read from names the secret store knows.
         assert!(crate::secrets::KNOWN_KEYS.contains(&GEMINI.key) && crate::secrets::KNOWN_KEYS.contains(&GROQ.key));
+    }
+
+    #[test]
+    fn a_local_address_is_cleaned_and_plain_http_stays_on_your_network() {
+        assert_eq!(local_base(" http://127.0.0.1:11434/v1/ ").unwrap(), "http://127.0.0.1:11434/v1");
+        assert!(local_base("http://localhost:1234/v1").is_ok());
+        assert!(local_base("http://[::1]:11434/v1").is_ok());
+        assert!(local_base("http://192.168.1.20:11434/v1").is_ok());
+        assert!(local_base("http://172.20.0.5:1234/v1").is_ok());
+        assert!(local_base("http://mi-pc.local:11434/v1").is_ok());
+        assert!(local_base("https://ia.mi-empresa.com/v1").is_ok());
+        // Not your network: never in the clear. 172.32 is public, not private.
+        assert!(local_base("http://ia.mi-empresa.com/v1").is_err());
+        assert!(local_base("http://8.8.8.8/v1").is_err());
+        assert!(local_base("http://172.32.0.1/v1").is_err());
+        // Not an address, or one that hides its real host behind credentials.
+        assert!(local_base("ollama").is_err());
+        assert!(local_base("ftp://127.0.0.1/v1").is_err());
+        assert!(local_base("http://127.0.0.1@evil.example/v1").is_err());
+        assert!(local_base("http://").is_err());
+    }
+
+    /// A stand-in for Ollama: answers the model list and one chat turn, and
+    /// reports whether the request carried an Authorization header.
+    fn fake_ollama() -> (String, std::sync::mpsc::Receiver<bool>) {
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let base = format!("http://127.0.0.1:{}/v1", listener.local_addr().unwrap().port());
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            for stream in listener.incoming().take(2) {
+                let mut stream = stream.unwrap();
+                let mut buf = [0u8; 8192];
+                let n = stream.read(&mut buf).unwrap_or(0);
+                let request = String::from_utf8_lossy(&buf[..n]).to_lowercase();
+                let _ = tx.send(request.contains("authorization:"));
+                let body = if request.starts_with("get /v1/models") {
+                    r#"{"data":[{"id":"llama3.2"},{"id":"qwen2.5-coder"}]}"#
+                } else {
+                    r#"{"choices":[{"message":{"role":"assistant","content":"Hola desde tu equipo"}}]}"#
+                };
+                let _ = write!(
+                    stream,
+                    "HTTP/1.1 200 OK
+content-type: application/json
+content-length: {}
+connection: close
+
+{body}",
+                    body.len()
+                );
+            }
+        });
+        (base, rx)
+    }
+
+    fn run<F: std::future::Future>(f: F) -> F::Output {
+        tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap().block_on(f)
+    }
+
+    #[test]
+    fn a_local_model_answers_without_a_key_and_is_listed() {
+        run(async {
+        let (base, saw_auth) = fake_ollama();
+        let check = check(&LOCAL, &base).await;
+        assert!(check.ok, "{}", check.message);
+        assert!(check.message.contains("llama3.2") && check.message.contains("servidor encontrado"), "{}", check.message);
+        assert!(!saw_auth.recv().unwrap(), "a keyless server is not sent a key");
+
+        let chat = CompatChat::default();
+        let reply = send(&chat, &LOCAL, &base, "llama3.2", "hola".into(), None).await.unwrap();
+        assert_eq!(reply.text, "Hola desde tu equipo");
+        assert!(!saw_auth.recv().unwrap());
+        });
+    }
+
+    #[test]
+    fn a_local_server_that_is_off_says_what_to_open() {
+        run(async {
+        // Nothing listens on this port.
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let base = format!("http://127.0.0.1:{}/v1", listener.local_addr().unwrap().port());
+        drop(listener);
+        let Err(err) = send(&CompatChat::default(), &LOCAL, &base, "m", "hola".into(), None).await else {
+            panic!("a server that is off cannot answer");
+        };
+        assert!(err.contains("Ollama") && err.contains("LM Studio"), "{err}");
+        let check = check(&LOCAL, &base).await;
+        assert!(!check.ok && check.message.contains("Ollama"), "{}", check.message);
+        });
     }
 
     #[test]

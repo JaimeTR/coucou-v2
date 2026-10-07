@@ -175,7 +175,9 @@ function setupSection(
       hasProviderKey,
       `Chat con ${chatProviderInfo(settings.chatProvider).name}`,
       hasProviderKey
-        ? "Clave guardada en el Administrador de credenciales de Windows."
+        ? chatProviderInfo(settings.chatProvider).keyless
+          ? "Corre en tu equipo: no necesita clave. “Probar conexión” (Chat e IA) comprueba que el programa esté abierto."
+          : "Clave guardada en el Administrador de credenciales de Windows."
         : settings.chatProvider !== "anthropic"
           ? "Pega tu clave en Proveedor de chat."
           : "Pega tu clave de la API de Anthropic en Claude, o elige otro proveedor (DEVMARK AI, Gemini, Groq) en Proveedor de chat.",
@@ -1105,13 +1107,15 @@ function rulesSection(initial: Rule[]): HTMLElement {
 
 /** An AI that can answer the chat besides Claude. */
 interface ProviderDef {
-  id: "devmark" | "gemini" | "groq";
+  id: "devmark" | "gemini" | "groq" | "local";
   /** As it reads in the drop-down. */
   name: string;
   /** Credential Manager entry for its key. */
   keyName: string;
   keyPlaceholder: string;
-  modelSetting: "devmarkModel" | "geminiModel" | "groqModel";
+  modelSetting: "devmarkModel" | "geminiModel" | "groqModel" | "localModel";
+  /** Runs on your own computer: an address instead of a key (the key is optional). */
+  local?: boolean;
   modelDefault: string;
   intro: string;
   /** Where a person gets a key. */
@@ -1136,12 +1140,25 @@ const PROVIDERS: ProviderDef[] = [
     intro: "Groq: respuestas muy rápidas con modelos abiertos (Llama y otros). Lee texto y código. Crea una clave en la consola de Groq; “Probar conexión” muestra los modelos disponibles.",
     getKeyUrl: "https://console.groq.com/keys",
   },
+  {
+    id: "local", name: "Modelo local (Ollama, LM Studio)", keyName: "local-api-key", keyPlaceholder: "solo si tu servidor la pide",
+    modelSetting: "localModel", modelDefault: "llama3.2", local: true,
+    intro: "Un modelo que corre en tu propio equipo, con Ollama o LM Studio: sin clave, gratis y nada sale de tu red. Abre el programa, descarga un modelo y enciende su servidor; luego “Probar conexión” muestra los modelos que tiene.",
+  },
+];
+
+/** Where each local program listens by default. */
+const LOCAL_PRESETS: { name: string; url: string; model: string }[] = [
+  { name: "Ollama", url: "http://127.0.0.1:11434/v1", model: "llama3.2" },
+  { name: "LM Studio", url: "http://127.0.0.1:1234/v1", model: "" },
 ];
 
 /** Name and key of whoever answers the chat now, for the setup checklist. */
-function chatProviderInfo(id: Settings["chatProvider"]): { name: string; keyName: string } {
+function chatProviderInfo(id: Settings["chatProvider"]): { name: string; keyName: string; keyless: boolean } {
   const p = PROVIDERS.find((x) => x.id === id);
-  return p ? { name: p.name.replace(/ \(.*\)$/, ""), keyName: p.keyName } : { name: "Claude", keyName: "anthropic-api-key" };
+  return p
+    ? { name: p.name.replace(/ \(.*\)$/, ""), keyName: p.keyName, keyless: !!p.local }
+    : { name: "Claude", keyName: "anthropic-api-key", keyless: false };
 }
 
 /** Which AI answers the chat, and the key, model and test of each one. */
@@ -1185,10 +1202,11 @@ function providerSection(present: Record<string, boolean>): HTMLElement {
       present[def.keyName] = has;
       state.textContent = has
         ? "Clave guardada en el Administrador de credenciales de Windows."
-        : "Aún no hay clave: pega la que te dieron.";
+        : def.local ? "No hace falta clave." : "Aún no hay clave: pega la que te dieron.";
       field.placeholder = has ? "••••••••••••  (guardada)" : def.keyPlaceholder;
       clearBtn.style.display = has ? "" : "none";
-      if (provider.value === def.id) dot.style.background = has ? "#22c55e" : "#f4505e";
+      // A model on your own computer is ready without a key.
+      if (provider.value === def.id) dot.style.background = has || def.local ? "#22c55e" : "#f4505e";
     }
 
     saveBtn.addEventListener("click", async () => {
@@ -1234,8 +1252,35 @@ function providerSection(present: Record<string, boolean>): HTMLElement {
     const rows: Node[] = [
       h("div", { class: "hint", text: def.intro }),
       state,
-      h("div", { class: "row" }, h("label", { text: "Clave API" }), field, saveBtn, clearBtn),
     ];
+    if (def.local) {
+      const url = h("input", {
+        type: "text", value: settings.localUrl, placeholder: "http://127.0.0.1:11434/v1", spellcheck: "false",
+      }) as HTMLInputElement;
+      url.addEventListener("change", () => {
+        settings.localUrl = url.value.trim() || LOCAL_PRESETS[0].url;
+        url.value = settings.localUrl;
+        void save();
+      });
+      const presets = LOCAL_PRESETS.map((p) =>
+        h("button", { text: p.name, onclick: () => {
+          settings.localUrl = p.url;
+          url.value = p.url;
+          if (p.model) {
+            settings.localModel = p.model;
+            model.value = p.model;
+          }
+          void save();
+        } }),
+      );
+      rows.push(
+        h("div", { class: "row" }, h("label", { text: "Dirección" }), url),
+        h("div", { class: "row" }, h("label", { text: "Usar los valores de" }), ...presets),
+        h("div", { class: "row" }, h("label", { text: "Clave (opcional)" }), field, saveBtn, clearBtn),
+      );
+    } else {
+      rows.push(h("div", { class: "row" }, h("label", { text: "Clave API" }), field, saveBtn, clearBtn));
+    }
     if (def.getKeyUrl) {
       rows.push(
         h("div", { class: "row" },
@@ -1291,7 +1336,7 @@ function providerSection(present: Record<string, boolean>): HTMLElement {
     for (const [id, block] of blocks) block.style.display = provider.value === id ? "" : "none";
     const def = PROVIDERS.find((p) => p.id === provider.value);
     dot.style.display = def ? "" : "none";
-    if (def) dot.style.background = present[def.keyName] ? "#22c55e" : "#f4505e";
+    if (def) dot.style.background = present[def.keyName] || def.local ? "#22c55e" : "#f4505e";
   };
   provider.addEventListener("change", () => {
     settings.chatProvider = provider.value as Settings["chatProvider"];
@@ -1778,7 +1823,7 @@ async function main() {
   const tools = (await Bridge.detectTools()) ?? [];
   const agents = (await Bridge.agentsStatus()) ?? [];
   const providerKey = chatProviderInfo(settings.chatProvider).keyName;
-  const hasProviderKey = (await Bridge.secretPresent(providerKey)) ?? false;
+  const hasProviderKey = chatProviderInfo(settings.chatProvider).keyless || ((await Bridge.secretPresent(providerKey)) ?? false);
 
   // One category at a time, picked in the sidebar. Every section is built once
   // and only moved in and out, so a half-typed field survives a switch.

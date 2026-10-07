@@ -221,10 +221,13 @@ export interface Settings {
   /** Interface language; "auto" follows the system. */
   language: "auto" | "es" | "en";
   /** Who answers the chat: Claude, DEVMARK AI, Gemini or Groq. */
-  chatProvider: "anthropic" | "devmark" | "gemini" | "groq";
+  chatProvider: "anthropic" | "devmark" | "gemini" | "groq" | "local";
   /** Models asked of Gemini and Groq. */
   geminiModel: string;
   groqModel: string;
+  /** A model on your own computer (Ollama, LM Studio…): its address and model. */
+  localUrl: string;
+  localModel: string;
   /** Model asked of DEVMARK AI, and the longest reply it may write. */
   devmarkModel: string;
   devmarkMaxTokens: number;
@@ -272,6 +275,8 @@ export const DEFAULT_SETTINGS: Settings = {
   chatProvider: "anthropic",
   geminiModel: "gemini-3.8-flash",
   groqModel: "llama-3.3-70b-versatile",
+  localUrl: "http://127.0.0.1:11434/v1",
+  localModel: "llama3.2",
   devmarkModel: "llama3.2:1b",
   devmarkMaxTokens: 400,
   planGauge: false,
