@@ -2,13 +2,19 @@ name: macOS (Coucou v2)
 
 # Builds and tests the Tauri app on a Mac: the same code as Windows and Linux,
 # with the macOS platform layer in windows/src-tauri/src/platform/macos.rs. It is
-# the only place that port is compiled, so a pull request that touches windows/
-# runs it. It never publishes anything; run it by hand to get the .dmg.
+# the only place that port is compiled, so a push or pull request that touches
+# windows/ runs it. It never publishes anything; run it by hand to get the .dmg.
 #
 # (The native Swift app in NotchBuddy/ has its own workflow, build.yml.)
 
 on:
   workflow_dispatch:
+  # The Mac is a first-class target now (same app as Windows): every change to it is compiled here.
+  push:
+    branches: [main]
+    paths:
+      - 'windows/**'
+      - '.github/workflows/macos.yml'
   pull_request:
     paths:
       - 'windows/**'
@@ -62,7 +68,7 @@ jobs:
         run: npm run pack
 
       - uses: actions/upload-artifact@v4
-        if: github.event_name == 'workflow_dispatch'
+        if: github.event_name != 'pull_request'
         with:
           name: Coucou-macOS
           path: windows/release/Coucou-macOS-*
