@@ -20,6 +20,17 @@ Coucou v2 es el fork de [JaimeTR](https://github.com/JaimeTR) de [Coucou, de Lou
 - **Posición de la isla**: fija arriba al centro o libre (arrástrala a donde quieras).
 - **Resumen semanal**: los lunes, «Tu semana» con tiempo, sesiones, archivos, líneas y comandos; también desde la bandeja.
 
+**Más Mochi**
+- **Mochi travieso** (Ajustes → Personalización): de vez en cuando se asoma por el borde izquierdo, derecho o inferior de la pantalla, hace una travesura (saludar, mirar a su alrededor, dormirse y despertar asustado, esconderse y salir en otro sitio, mandar corazones) y se esconde. Si le haces clic se enfada; si te acercas, a veces se asusta. No aparece sobre juegos, vídeos a pantalla completa ni con Coucou en pausa. Apagado por defecto; eliges cada cuánto.
+- **Guardarropa**: doce atuendos (gorros, gafas, lazo, bufanda, calabaza, orejas de conejo…) o **Automático**: gorro de Papá Noel en diciembre, sombrero de bruja en octubre, orejas de conejo en Pascua, gafas de sol en verano, gorro de fiesta en Año Nuevo.
+- **Baila con la música**: mientras suena algo (Spotify, el navegador, Music en Mac…) Mochi baila al ritmo. Solo mira si suena; nunca guarda ni envía qué.
+- **Modelos locales** (Ollama, LM Studio) como proveedor de chat: gratis, sin clave y nada sale de tu red.
+
+**Teléfono**
+- **Avisos** cuando un PC pide permiso o hace una pregunta, aunque la app esté cerrada (necesita tus credenciales de Expo/Apple/Firebase una vez; ver `mobile/README.md`).
+- **Face ID o huella** antes de enviar un «Permitir».
+- **Emparejar con un QR** (Ajustes → Sincronización → Mostrar QR para el teléfono).
+
 **Agentes**
 - **Copilot CLI** y **Muse Code** se conectan en Ajustes → Agentes.
 

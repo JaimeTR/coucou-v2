@@ -20,6 +20,17 @@ Coucou v2 is [JaimeTR](https://github.com/JaimeTR)'s fork of [Coucou by Louis Ra
 - **Island position**: fixed at the top centre, or free (drag it anywhere).
 - **Weekly recap**: on Mondays, "Your week" with time, sessions, files, lines and commands; also from the tray.
 
+**More Mochi**
+- **Mischievous Mochi** (Settings → Personalization): now and then it peeks out from the left, right or bottom edge of the screen, gets up to something (a wave, looking around, falling asleep and waking startled, hide and seek, hearts) and hides. Click it and it is annoyed; come near and it is sometimes scared. Never over games, full-screen videos or while Coucou is paused. Off by default; you choose how often.
+- **Wardrobe**: twelve outfits (hats, glasses, a bow, a scarf, a pumpkin, bunny ears…) or **Automatic**: Santa hat in December, witch hat in October, bunny ears at Easter, sunglasses in summer, party hat at New Year.
+- **Dances to the music**: while something plays (Spotify, the browser, Music on Mac…) Mochi dances to the beat. It only looks whether something plays; it never saves or sends what.
+- **Local models** (Ollama, LM Studio) as a chat provider: free, no key, and nothing leaves your network.
+
+**Phone**
+- **Alerts** when a PC asks permission or a question, even with the app closed (needs your own Expo/Apple/Firebase credentials once; see `mobile/README.md`).
+- **Face ID or fingerprint** before an "Allow" is sent.
+- **Pair by QR** (Settings → Sync → Show QR for the phone).
+
 **Agents**
 - **Copilot CLI** and **Muse Code** connect in Settings → Agents.
 
