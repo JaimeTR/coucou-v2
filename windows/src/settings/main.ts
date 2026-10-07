@@ -1679,7 +1679,7 @@ function generalSection(): HTMLElement {
       position,
       resetPosition,
     ),
-    h("div", { class: "hint", text: "En modo libre arrastra la isla a donde quieras: se queda ahí, redondeada, y no se esconde sola." }),
+    h("div", { class: "hint", text: "En modo libre arrastra la isla a donde quieras: se queda ahí, redondeada, y no se esconde sola. Si la sueltas junto al borde de arriba o de abajo se pega a él; junto al izquierdo o el derecho se pega en vertical y se abre desde ese lado." }),
     h("div", { class: "row" },
       h("label", { text: "Iniciar con Windows" }),
       toggle(settings.autostart, (v) => { settings.autostart = v; void save(); }),

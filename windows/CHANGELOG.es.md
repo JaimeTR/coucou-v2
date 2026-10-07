@@ -17,7 +17,7 @@ Coucou v2 es el fork de [JaimeTR](https://github.com/JaimeTR) de [Coucou, de Lou
 **Mochi**
 - Dice lo que siente (al hacerle clic, al marearse, al darle cariño), en Ajustes → Voz → «Dice lo que siente».
 - Avisa en voz de los errores también con la isla abierta, y de un deploy o CI que falla.
-- **Posición de la isla**: fija arriba al centro o libre (arrástrala a donde quieras).
+- **Posición de la isla**: fija arriba al centro o libre (arrástrala a donde quieras). En modo libre, si la sueltas junto al borde de arriba o de abajo se pega a él, y junto al izquierdo o el derecho se pega en vertical (una cápsula con Mochi de lado) y se abre desde ese lado; en cualquier otro sitio se queda donde la dejes.
 - **Resumen semanal**: los lunes, «Tu semana» con tiempo, sesiones, archivos, líneas y comandos; también desde la bandeja.
 
 **Más Mochi**

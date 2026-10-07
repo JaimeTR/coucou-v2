@@ -25,6 +25,7 @@ import { h } from "../views/dom";
 import { IslandStateMachine } from "./fsm";
 import { endQuestion, Recap } from "./hooks";
 import { startMusic } from "./music";
+import { isDock, placement, undockNudge } from "./dock";
 import { isOutfit, resolve, wear } from "../mochi/outfits";
 import { greetingLines } from "./greetingText";
 import { panelHasRows, panelRows } from "./greetingPanel";
@@ -668,12 +669,14 @@ export class Island {
   private applyGeometry() {
     const w = this.width.value;
     const hh = this.height.value;
-    const r = this.radius.value;
     this.islandEl.style.width = `${w}px`;
     this.islandEl.style.height = `${hh}px`;
-    // Dragged away from the top edge, the island is rounded all round.
-    this.islandEl.style.borderRadius = State.settings.islandPosition === "free" ? `${r}px` : `0 0 ${r}px ${r}px`;
-    this.islandEl.style.transform = `translateX(-50%)`;
+    // Fixed, floating, or left against an edge (see dock.ts).
+    const place = this.placement();
+    this.islandEl.style.left = `${place.left}px`;
+    this.islandEl.style.top = `${place.top}px`;
+    this.islandEl.style.transform = place.transform;
+    this.islandEl.style.borderRadius = place.radius;
     // These follow the island as it resizes, so they belong here rather than in
     // the state-driven DOM sync.
     this.miniGrid.style.left = `${w - 40 - 14.5}px`;
@@ -682,19 +685,23 @@ export class Island {
     this.picker.style.left = `${(w - EXPANDED_W) / 2}px`;
     this.uploadCanvas.el.style.left = `${(w - EXPANDED_W) / 2}px`;
 
-    const rect = { x: (PANEL_W - w) / 2, y: 0, w, h: hh };
+    const rect = place.rect;
     const p = this.pushedRect;
-    if (Math.abs(p.x - rect.x) > 0.5 || Math.abs(p.w - rect.w) > 0.5 || Math.abs(p.h - rect.h) > 0.5) {
+    if (Math.abs(p.x - rect.x) > 0.5 || Math.abs(p.y - rect.y) > 0.5 || Math.abs(p.w - rect.w) > 0.5 || Math.abs(p.h - rect.h) > 0.5) {
       this.pushedRect = rect;
       void Bridge.setIslandRect(rect.x, rect.y, rect.w, rect.h);
     }
   }
 
+  private placement() {
+    const free = State.settings.islandPosition === "free";
+    const dock = isDock(State.settings.islandDock) ? State.settings.islandDock : null;
+    return placement(dock, free, State.mode === "expanded", this.width.value, this.height.value, this.radius.value, PANEL_W, PANEL_H);
+  }
+
   /** Island rect in window coordinates (origin top-left of the 720×320 window). */
   private islandRect(): { x: number; y: number; w: number; h: number } {
-    const w = this.width.value;
-    const hh = this.height.value;
-    return { x: (PANEL_W - w) / 2, y: 0, w, h: hh };
+    return this.placement().rect;
   }
 
   // ── Window collapse (hidden → tiny wake strip, zero polling) ────────────────
@@ -832,7 +839,7 @@ export class Island {
     const move = (m: MouseEvent) => {
       if (Math.hypot(m.screenX - start.x, m.screenY - start.y) < 4) return;
       done();
-      void Bridge.startIslandDrag();
+      void this.startDrag();
     };
     const up = () => {
       done();
@@ -845,6 +852,16 @@ export class Island {
     window.addEventListener("mousemove", move);
     window.addEventListener("mouseup", up);
     return true;
+  }
+
+  /** A docked island floats again first, in place, then follows the pointer. */
+  private async startDrag() {
+    const dock = State.settings.islandDock;
+    if (isDock(dock)) {
+      const { dx, dy } = undockNudge(dock, State.mode === "expanded", this.width.value, this.height.value, this.radius.value, PANEL_W, PANEL_H);
+      await Bridge.undockIsland(dx, dy);
+    }
+    await Bridge.startIslandDrag();
   }
 
   private isBotHit(x: number, y: number): boolean {

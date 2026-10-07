@@ -172,6 +172,19 @@ pub fn apply_geometry(app: &AppHandle, pref: &str, collapsed: bool) {
             let max_y = mp.y + (ms.height as i32 - ph as i32).max(0);
             x = (mp.x + (ox * scale).round() as i32).clamp(mp.x, max_x);
             y = (mp.y + (oy * scale).round() as i32).clamp(mp.y, max_y);
+            // Left against an edge: flush with it, over the taskbar's free area.
+            if let Some(dock) = free_dock(app) {
+                let work = m.work_area();
+                let (wx, wy) = (work.position.x, work.position.y);
+                let (ww, wh) = (work.size.width as i32, work.size.height as i32);
+                match dock.as_str() {
+                    "top" => y = wy,
+                    "bottom" => y = wy + wh - ph as i32,
+                    "left" => x = wx,
+                    "right" => x = wx + ww - pw as i32,
+                    _ => {}
+                }
+            }
         }
     }
 
@@ -187,6 +200,35 @@ pub fn apply_geometry(app: &AppHandle, pref: &str, collapsed: bool) {
     // Moving across displays can rescale the window: re-assert the physical size.
     let _ = win.set_size(PhysicalSize::new(pw, ph));
     let _ = win.set_always_on_top(true);
+}
+
+/// How close (logical px) the island's shape must be to a screen edge when it is
+/// dropped for it to stick to that edge.
+pub const SNAP: f64 = 28.0;
+
+/// The screen edge an island rect (logical px, screen coordinates) is close
+/// enough to, if any, as `(left, top, right, bottom)` of the work area. The
+/// nearest edge wins; on a tie, top beats bottom beats left beats right.
+pub fn dock_for(rect: (f64, f64, f64, f64), work: (f64, f64, f64, f64)) -> Option<&'static str> {
+    let (x, y, w, h) = rect;
+    let (wl, wt, wr, wb) = work;
+    let near = [
+        ("top", y - wt),
+        ("bottom", wb - (y + h)),
+        ("left", x - wl),
+        ("right", wr - (x + w)),
+    ];
+    near.into_iter()
+        .filter(|(_, d)| *d <= SNAP)
+        .min_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal))
+        .map(|(edge, _)| edge)
+}
+
+/// Free mode: the edge the island is docked to.
+fn free_dock(app: &AppHandle) -> Option<String> {
+    let shared = app.try_state::<crate::Shared>()?;
+    let s = shared.settings.lock().unwrap();
+    if s.island_position == "free" { s.island_dock.clone() } else { None }
 }
 
 /// The dragged position, when the island is in free mode and has been dragged.
@@ -215,19 +257,68 @@ fn save_dropped_position(app: &AppHandle, win: &WebviewWindow) {
         ((pos.x - m.position().x) as f64 / scale).round(),
         ((pos.y - m.position().y) as f64 / scale).round(),
     );
+    // Where the island's own shape landed, on the screen, in logical px.
+    let rect = *shared.gate.rect.lock().unwrap();
+    let work = m.work_area();
+    let dock = (rect.w > 0.0).then(|| {
+        dock_for(
+            (pos.x as f64 / scale + rect.x, pos.y as f64 / scale + rect.y, rect.w, rect.h),
+            (
+                work.position.x as f64 / scale,
+                work.position.y as f64 / scale,
+                (work.position.x + work.size.width as i32) as f64 / scale,
+                (work.position.y + work.size.height as i32) as f64 / scale,
+            ),
+        )
+    }).flatten().map(str::to_string);
     let settings = {
         let mut s = shared.settings.lock().unwrap();
-        if s.island_offset == Some(offset) {
+        if s.island_offset == Some(offset) && s.island_dock == dock {
             return;
         }
         s.island_offset = Some(offset);
+        s.island_dock = dock;
         s.clone()
     };
     if let Err(err) = crate::settings::save(&settings) {
         eprintln!("[coucou] could not save settings: {err}");
     }
-    // Pulls it back on screen if it was dropped half off the display.
+    // Pulls it back on screen if it was dropped half off the display, and snaps it
+    // flush to the edge it was left against.
     apply_geometry(app, &pref, false);
+    // The page lays the island out differently against an edge.
+    let _ = app.emit("settings-changed", settings);
+}
+
+/// Takes the island off its edge before it is dragged away from it. The page
+/// says how far the island's shape moves when it goes back to floating
+/// (`nudge`, logical px), so it stays where the pointer is.
+pub fn undock(app: &AppHandle, nudge: (f64, f64)) {
+    let Some(shared) = app.try_state::<crate::Shared>() else { return };
+    let (pref, was_docked) = {
+        let s = shared.settings.lock().unwrap();
+        (s.screen.clone(), s.island_position == "free" && s.island_dock.is_some())
+    };
+    if !was_docked {
+        return;
+    }
+    let (Some(win), Some(m)) = (window(app), target_monitor(app, &pref)) else { return };
+    let Ok(pos) = win.outer_position() else { return };
+    let scale = m.scale_factor();
+    let settings = {
+        let mut s = shared.settings.lock().unwrap();
+        s.island_dock = None;
+        s.island_offset = Some((
+            ((pos.x - m.position().x) as f64 / scale + nudge.0).round(),
+            ((pos.y - m.position().y) as f64 / scale + nudge.1).round(),
+        ));
+        s.clone()
+    };
+    if let Err(err) = crate::settings::save(&settings) {
+        eprintln!("[coucou] could not save settings: {err}");
+    }
+    apply_geometry(app, &pref, false);
+    let _ = app.emit("settings-changed", settings);
 }
 
 /// Position, size and scale of the monitor the island lives on. Any change here
@@ -382,5 +473,48 @@ pub fn refresh_click_through(app: &AppHandle, gate: &PollGate) {
 pub fn set_ignore_cursor(app: &AppHandle, ignore: bool) {
     if let Some(win) = window(app) {
         let _ = win.set_ignore_cursor_events(ignore);
+    }
+}
+
+#[cfg(test)]
+mod dock_tests {
+    use super::*;
+
+    // A 2560x1392 work area (a 48 px taskbar under a 1440 screen).
+    const WORK: (f64, f64, f64, f64) = (0.0, 0.0, 2560.0, 1392.0);
+
+    #[test]
+    fn dropped_near_an_edge_the_island_sticks_to_it() {
+        assert_eq!(dock_for((1136.0, 4.0, 288.0, 32.0), WORK), Some("top"));
+        assert_eq!(dock_for((1136.0, 1392.0 - 32.0 - 10.0, 288.0, 32.0), WORK), Some("bottom"));
+        assert_eq!(dock_for((6.0, 600.0, 288.0, 32.0), WORK), Some("left"));
+        assert_eq!(dock_for((2560.0 - 288.0 - 20.0, 600.0, 288.0, 32.0), WORK), Some("right"));
+    }
+
+    #[test]
+    fn in_the_middle_or_just_too_far_it_floats() {
+        assert_eq!(dock_for((1136.0, 600.0, 288.0, 32.0), WORK), None);
+        assert_eq!(dock_for((1136.0, 30.0, 288.0, 32.0), WORK), None, "one px past the snap distance");
+        assert_eq!(dock_for((1136.0, 28.0, 288.0, 32.0), WORK), Some("top"), "exactly at it");
+    }
+
+    #[test]
+    fn dropped_half_off_the_screen_counts_as_against_the_edge() {
+        assert_eq!(dock_for((-40.0, 600.0, 288.0, 32.0), WORK), Some("left"));
+        assert_eq!(dock_for((1136.0, -10.0, 288.0, 32.0), WORK), Some("top"));
+    }
+
+    #[test]
+    fn in_a_corner_the_nearer_edge_wins_and_ties_go_top_first() {
+        assert_eq!(dock_for((20.0, 4.0, 288.0, 32.0), WORK), Some("top"));
+        assert_eq!(dock_for((4.0, 20.0, 288.0, 32.0), WORK), Some("left"));
+        assert_eq!(dock_for((10.0, 10.0, 288.0, 32.0), WORK), Some("top"));
+    }
+
+    #[test]
+    fn a_taskbar_on_the_side_moves_the_edge_not_the_rule() {
+        let work = (60.0, 0.0, 2560.0, 1440.0); // taskbar on the left
+        assert_eq!(dock_for((70.0, 600.0, 288.0, 32.0), work), Some("left"));
+        assert_eq!(dock_for((10.0, 600.0, 288.0, 32.0), work), Some("left"), "over the taskbar still counts as the left edge");
     }
 }

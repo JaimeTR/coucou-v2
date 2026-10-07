@@ -283,6 +283,7 @@ fn save_settings(app: AppHandle, mut settings: Settings) {
         // These belong to the island and to sync, not to the settings window,
         // whose copy may be older: keep ours.
         settings.island_offset = current.island_offset;
+        settings.island_dock = current.island_dock.clone();
         settings.sync_url = current.sync_url.clone();
         settings.sync_rev = current.sync_rev;
         settings.sync_device = current.sync_device.clone();
@@ -456,12 +457,19 @@ fn start_island_drag(app: AppHandle) {
     }
 }
 
+/// Free mode: the island leaves the edge it was docked to, ready to be dragged.
+#[tauri::command]
+fn undock_island(app: AppHandle, nudge_x: f64, nudge_y: f64) {
+    island::undock(&app, (nudge_x, nudge_y));
+}
+
 /// Back to the top centre; free mode stays free.
 #[tauri::command]
 fn reset_island_position(app: AppHandle, shared: State<Shared>) {
     let (pref, settings) = {
         let mut current = shared.settings.lock().unwrap();
         current.island_offset = None;
+        current.island_dock = None;
         (current.screen.clone(), current.clone())
     };
     if let Err(err) = settings::save(&settings) {
@@ -1062,6 +1070,7 @@ pub fn run() {
             focus_window,
             reposition,
             start_island_drag,
+            undock_island,
             sync_status,
             now_playing,
             pet_show,

@@ -63,6 +63,10 @@ pub struct Settings {
     /// top-left. None until the island is first dragged. Only Rust writes it.
     #[serde(default)]
     pub island_offset: Option<(f64, f64)>,
+    /// Free mode: the screen edge the island was left against — "top", "bottom",
+    /// "left" or "right" — or None while it floats. Only Rust writes it.
+    #[serde(default)]
+    pub island_dock: Option<String>,
     /// The sync server ("" = sync off). The account code itself is in the keychain.
     #[serde(default)]
     pub sync_url: String,
@@ -332,6 +336,7 @@ impl Default for Settings {
             voice_emotions: false,
             island_position: default_island_position(),
             island_offset: None,
+            island_dock: None,
             sync_url: String::new(),
             sync_rev: 0,
             sync_device: String::new(),

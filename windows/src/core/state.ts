@@ -200,6 +200,8 @@ export interface Settings {
   islandPosition: "fixed" | "free";
   /** Written by Rust when the island is dropped; read-only here. */
   islandOffset: [number, number] | null;
+  /** Free mode: the screen edge the island was left against, if any. Rust owns it. */
+  islandDock: "top" | "bottom" | "left" | "right" | null;
   /** Sync server ("" = off); the account code is in the keychain. Rust owns these. */
   syncUrl: string;
   syncRev: number;
@@ -267,6 +269,7 @@ export const DEFAULT_SETTINGS: Settings = {
   voiceEmotions: false,
   islandPosition: "fixed",
   islandOffset: null,
+  islandDock: null,
   syncUrl: "",
   syncRev: 0,
   syncDevice: "",

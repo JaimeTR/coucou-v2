@@ -81,6 +81,8 @@ export const Bridge = {
 
   /** Free mode: the window follows the mouse until the button is released. */
   startIslandDrag: () => call<void>("start_island_drag"),
+  /** Takes the island off its edge before a drag; `dx`, `dy` keep it where it is seen. */
+  undockIsland: (dx: number, dy: number) => call<void>("undock_island", { nudgeX: dx, nudgeY: dy }),
   resetIslandPosition: () => call<void>("reset_island_position"),
 
   openUrl: (url: string) => call<void>("open_url", { url }),

@@ -155,7 +155,7 @@ const EXTRA: ReadonlyArray<readonly [string, string]> = [
   ["Fija arriba al centro", "Fixed at the top centre"],
   ["Libre (arrástrala)", "Free (drag it)"],
   ["Volver arriba al centro", "Back to the top centre"],
-  ["En modo libre arrastra la isla a donde quieras: se queda ahí, redondeada, y no se esconde sola.", "In free mode, drag the island anywhere: it stays there, rounded, and doesn't hide by itself."],
+  ["En modo libre arrastra la isla a donde quieras: se queda ahí, redondeada, y no se esconde sola. Si la sueltas junto al borde de arriba o de abajo se pega a él; junto al izquierdo o el derecho se pega en vertical y se abre desde ese lado.", "In free mode, drag the island anywhere: it stays there, rounded, and doesn't hide by itself. Drop it near the top or bottom edge and it sticks to it; near the left or right edge it sticks vertically and opens from that side."],
   ["cuando le haces clic, se marea o le das cariño", "when you click it, it gets dizzy or you pet it"],
   ["¡Ay!", "Ouch!"],
   ["¡Oye!", "Hey!"],

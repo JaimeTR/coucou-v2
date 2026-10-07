@@ -17,7 +17,7 @@ Coucou v2 is [JaimeTR](https://github.com/JaimeTR)'s fork of [Coucou by Louis Ra
 **Mochi**
 - Says how it feels (clicked, dizzy, petted): Settings → Voice.
 - Speaks agent errors with the island open too, and a failed deploy or CI.
-- **Island position**: fixed at the top centre, or free (drag it anywhere).
+- **Island position**: fixed at the top centre, or free (drag it anywhere). In free mode, drop it near the top or bottom edge and it sticks to it, and near the left or right edge it sticks vertically (a capsule with Mochi sideways) and opens from that side; anywhere else it stays where you leave it.
 - **Weekly recap**: on Mondays, "Your week" with time, sessions, files, lines and commands; also from the tray.
 
 **More Mochi**
