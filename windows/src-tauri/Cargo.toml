@@ -14,7 +14,10 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = ["tray-icon"] }
+# macos-private-api: a transparent island window on macOS. Declared here, for every
+# platform, because tauri-build checks it against tauri.conf.json (which turns it on
+# for all of them; it only does anything on a Mac).
+tauri = { version = "2", features = ["tray-icon", "macos-private-api"] }
 tauri-plugin-single-instance = "2"
 tauri-plugin-autostart = "2"
 tauri-plugin-global-shortcut = "2"
@@ -46,8 +49,6 @@ windows = { version = "0.61", features = [
 # The login keychain.
 keyring = { version = "3", features = ["apple-native"] }
 libc = "0.2"
-# A transparent island window needs Apple's private window API on macOS.
-tauri = { version = "2", features = ["macos-private-api"] }
 # The cursor position and button state, for click-through (platform/macos.rs).
 core-graphics = "0.24"
 
