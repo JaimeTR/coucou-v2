@@ -82,6 +82,12 @@ pub struct Settings {
     /// What Mochi wears: "auto" (by the date), "none" or a piece (see mochi/outfits.ts).
     #[serde(default = "default_outfit")]
     pub mochi_outfit: String,
+    /// Mochi peeks out from the edges of the screen now and then (off by default).
+    #[serde(default)]
+    pub pet_enabled: bool,
+    /// How often: "rare", "normal" or "often".
+    #[serde(default = "default_pet_frequency")]
+    pub pet_frequency: String,
     /// Who speaks: "system" (the voices Windows has) or "elevenlabs".
     #[serde(default = "default_voice_engine")]
     pub voice_engine: String,
@@ -246,6 +252,10 @@ fn default_start_pill() -> String {
     "integration_claude".into()
 }
 
+fn default_pet_frequency() -> String {
+    "normal".into()
+}
+
 fn default_outfit() -> String {
     "auto".into()
 }
@@ -328,6 +338,8 @@ impl Default for Settings {
             updates: default_updates(),
             music_dance: true,
             mochi_outfit: default_outfit(),
+            pet_enabled: false,
+            pet_frequency: default_pet_frequency(),
             voice_engine: default_voice_engine(),
             eleven_voice: default_eleven_voice(),
             eleven_model: default_eleven_model(),

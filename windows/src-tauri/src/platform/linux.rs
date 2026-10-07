@@ -10,6 +10,11 @@
 //   * the cursor comes from the page's own mouse events, which only fire over
 //     the island — Mochi's eyes follow the pointer there, not across the screen.
 
+/// ponytail: no portable "full screen app" test on Linux; the pet may peek over one.
+pub fn user_is_busy() -> bool {
+    false
+}
+
 /// Any MPRIS player (Spotify, VLC, the browser…) through `playerctl`, when it is
 /// installed; without it nothing dances.
 pub fn now_playing() -> Option<super::NowPlaying> {

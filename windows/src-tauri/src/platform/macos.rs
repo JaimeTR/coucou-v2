@@ -167,6 +167,12 @@ fn main_scale() -> f64 {
     }
 }
 
+/// ponytail: macOS has no cheap "full screen app" test; the pet may peek over a
+/// full-screen app. NSApplication.presentationOptions of another app is private.
+pub fn user_is_busy() -> bool {
+    false
+}
+
 /// Music or Spotify, when one of them is open and playing. `osascript` asks
 /// only if the app is already running (`is running` never launches it); the first
 /// time, macOS asks the person to allow Coucou to control it.

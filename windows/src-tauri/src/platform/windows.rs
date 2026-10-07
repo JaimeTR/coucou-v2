@@ -248,6 +248,17 @@ pub fn current_user_sid() -> Option<String> {
 pub const CURSOR_POLL: bool = true;
 
 /// Cursor position in physical screen pixels.
+/// True when the person should not be interrupted: a full-screen game or video,
+/// a presentation, or Windows' own "busy" state (Focus assist).
+pub fn user_is_busy() -> bool {
+    use windows::Win32::UI::Shell::{
+        SHQueryUserNotificationState, QUNS_BUSY, QUNS_PRESENTATION_MODE, QUNS_RUNNING_D3D_FULL_SCREEN,
+    };
+    unsafe { SHQueryUserNotificationState() }
+        .map(|s| s == QUNS_BUSY || s == QUNS_RUNNING_D3D_FULL_SCREEN || s == QUNS_PRESENTATION_MODE)
+        .unwrap_or(false)
+}
+
 /// What the system media controls (the same ones the volume flyout shows —
 /// Spotify, the browser, the media player…) say is playing. Blocks for a few
 /// milliseconds: call it from a worker thread.

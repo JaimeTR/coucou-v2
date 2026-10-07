@@ -55,6 +55,10 @@ fn client() -> reqwest::Client {
 /// pausing Coucou has to mean pausing Coucou, not just hiding the island.
 pub static PAUSED: AtomicBool = AtomicBool::new(false);
 
+pub fn is_paused() -> bool {
+    PAUSED.load(Ordering::Relaxed)
+}
+
 pub fn set_paused(on: bool) {
     PAUSED.store(on, Ordering::Relaxed);
 }

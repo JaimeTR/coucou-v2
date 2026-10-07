@@ -11,6 +11,7 @@ mod identity;
 mod integrations;
 mod island;
 mod log;
+mod pet;
 mod pipe;
 mod platform;
 mod rules;
@@ -379,6 +380,24 @@ async fn update_install(app: AppHandle) -> Result<(), String> {
 }
 
 /// What is playing, for Mochi to dance to. Asked only while the island is up.
+/// The pet window slides in against an edge ("left", "right" or "bottom"), `along` (0..1) of the way.
+#[tauri::command]
+fn pet_show(app: AppHandle, edge: String, along: f64) -> Result<(), String> {
+    pet::show(&app, &edge, along)
+}
+
+#[tauri::command]
+fn pet_hide(app: AppHandle) {
+    pet::hide(&app);
+}
+
+/// Is this a good moment for the pet to appear? Not while paused, nor over a
+/// full-screen game, video or presentation.
+#[tauri::command]
+fn pet_allowed() -> bool {
+    !integrations::is_paused() && !platform::user_is_busy()
+}
+
 #[tauri::command]
 async fn now_playing() -> platform::NowPlaying {
     tauri::async_runtime::spawn_blocking(|| platform::now_playing().unwrap_or_default())
@@ -917,18 +936,22 @@ fn log_line(message: String) {
 /// for the *same* arguments as the island (see `additionalBrowserArgs` in
 /// tauri.conf.json) — a mismatch makes the second window come up blank, with no
 /// error anywhere.
-const BROWSER_ARGS: &str = "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --autoplay-policy=no-user-gesture-required";
+pub(crate) const BROWSER_ARGS: &str = "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --autoplay-policy=no-user-gesture-required";
 
 /// In a dev build the pages are served by Vite, so the second window needs the
 /// absolute dev URL; a bundled build resolves it inside the app bundle.
 fn settings_page_url(app: &AppHandle) -> WebviewUrl {
+    page_url(app, "settings.html")
+}
+
+pub(crate) fn page_url(app: &AppHandle, page: &str) -> WebviewUrl {
     #[cfg(dev)]
     if let Some(mut base) = app.config().build.dev_url.clone() {
-        base.set_path("/settings.html");
+        base.set_path(&format!("/{page}"));
         return WebviewUrl::External(base);
     }
     let _ = app;
-    WebviewUrl::App("settings.html".into())
+    WebviewUrl::App(page.into())
 }
 
 /// The settings window is created hidden at launch and only ever shown and
@@ -1036,6 +1059,9 @@ pub fn run() {
             start_island_drag,
             sync_status,
             now_playing,
+            pet_show,
+            pet_hide,
+            pet_allowed,
             update_check,
             update_install,
             sync_connect,
@@ -1095,6 +1121,7 @@ pub fn run() {
             tray::build(&handle)?;
             // Before the island: see create_settings_window.
             create_settings_window(&handle);
+            pet::create(&handle);
 
             if let Some(win) = island::window(&handle) {
                 platform::make_non_activating(&win);

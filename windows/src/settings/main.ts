@@ -697,6 +697,21 @@ function voiceSection(present: Record<string, boolean>): HTMLElement {
 
 // ── Personalization ───────────────────────────────────────────────────────────
 
+function petFrequencySelect(): HTMLSelectElement {
+  const select = h("select", {}) as HTMLSelectElement;
+  select.append(
+    h("option", { value: "rare", text: "Rara vez (cada 25–50 min)" }),
+    h("option", { value: "normal", text: "A veces (cada 8–20 min)" }),
+    h("option", { value: "often", text: "A menudo (cada 3–8 min)" }),
+  );
+  select.value = settings.petFrequency;
+  select.addEventListener("change", () => {
+    settings.petFrequency = select.value as Settings["petFrequency"];
+    void save();
+  });
+  return select;
+}
+
 function outfitSelect(): HTMLSelectElement {
   const select = h("select", {}) as HTMLSelectElement;
   for (const id of OUTFITS) select.append(h("option", { value: id, text: OUTFIT_NAMES[id] }));
@@ -818,6 +833,12 @@ function personalSection(detectedName: string): HTMLElement {
       h("label", { text: "Atuendo de Mochi" }),
       outfitSelect(),
       h("span", { class: "hint", text: "Automático: gorro de Papá Noel en diciembre, sombrero de bruja en octubre, orejas de conejo en Pascua, gafas de sol en verano, gorro de fiesta en Año Nuevo." }),
+    ),
+    h("div", { class: "row" },
+      h("label", { text: "Mochi travieso" }),
+      toggle(settings.petEnabled, (v) => { settings.petEnabled = v; void save(); }),
+      petFrequencySelect(),
+      h("span", { class: "hint", text: "De vez en cuando Mochi se asoma por un borde de la pantalla, hace una travesura y se esconde. Si le haces clic se enfada; si te acercas, a veces se asusta. No aparece sobre juegos, vídeos a pantalla completa ni con Coucou en pausa." }),
     ),
     h("div", { class: "row" },
       h("label", { text: "Baila con la música" }),

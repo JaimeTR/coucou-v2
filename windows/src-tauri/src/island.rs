@@ -115,7 +115,7 @@ fn monitor_contains(m: &Monitor, x: f64, y: f64) -> bool {
 }
 
 /// The display the island lives on: the primary one, or the one under the cursor.
-fn target_monitor(app: &AppHandle, pref: &str) -> Option<Monitor> {
+pub(crate) fn target_monitor(app: &AppHandle, pref: &str) -> Option<Monitor> {
     let monitors = app.available_monitors().ok()?;
     if pref == "cursor" {
         if let Some((cx, cy)) = cursor_physical() {

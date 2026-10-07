@@ -210,6 +210,9 @@ export interface Settings {
   musicDance: boolean;
   /** What Mochi wears: "auto" follows the date. */
   mochiOutfit: string;
+  /** Mochi peeks out from the screen's edges now and then. */
+  petEnabled: boolean;
+  petFrequency: "rare" | "normal" | "often";
   /** Who speaks: the voices Windows has, or ElevenLabs. */
   voiceEngine: "system" | "elevenlabs";
   elevenVoice: string;
@@ -270,6 +273,8 @@ export const DEFAULT_SETTINGS: Settings = {
   updates: "auto",
   musicDance: true,
   mochiOutfit: "auto",
+  petEnabled: false,
+  petFrequency: "normal",
   voiceEngine: "system",
   elevenVoice: "21m00Tcm4TlvDq8ikWAM",
   elevenModel: "eleven_multilingual_v2",

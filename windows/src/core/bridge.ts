@@ -108,6 +108,11 @@ export const Bridge = {
   rulesAdd: (draft: RuleDraft) => callOrThrow<Rule>("rules_add", { ...draft }),
   rulesRemove: (id: string) => callOrThrow<void>("rules_remove", { id }),
 
+  // ── Mochi the pet (its own small window) ────────────────────────────────────
+  petShow: (edge: "left" | "right" | "bottom", along: number) => callOrThrow<void>("pet_show", { edge, along }),
+  petHide: () => call<void>("pet_hide"),
+  petAllowed: async () => (await call<boolean>("pet_allowed")) ?? false,
+
   /** What the computer is playing (system media controls); for Mochi's dance. */
   nowPlaying: () => call<{ playing: boolean; title: string; artist: string }>("now_playing"),
 
