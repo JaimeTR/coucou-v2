@@ -8,7 +8,7 @@
 
 Approve Claude Code permissions, watch your session work, drop a file, chat with Claude, keep an eye on your services — without leaving what you're doing.
 
-*Coucou v2 is [JaimeTR](https://github.com/JaimeTR)'s fork of [Coucou by Louis Raillé](https://github.com/Louis-CFM/coucou) (MIT).*
+*Coucou v2 is [JaimeTR](https://github.com/JaimeTR)'s fork of [Coucou by Louis Raillé](https://github.com/Louis-CFM/coucou). The code is MIT; the names Coucou and Mochi, the character, the icon and the sounds are Louis Raillé's (see [LICENSE-ASSETS.md](../LICENSE-ASSETS.md)).*
 
 **English** · [Español](README.es.md)
 
@@ -39,7 +39,7 @@ Coucou v2 turns Mochi into a small personal assistant. Everything below is new o
 | **Only the pills you use** | A fresh install shows GitHub only; the other pills (Vercel, Resend…) are opt-in under Settings → Integrations. |
 | **GitHub + Copilot** | One pill for what needs you: review requests, your PRs with their CI, and **GitHub Copilot**'s pull requests and reviews. Click a row to list them; each opens on GitHub. |
 | **Claude Code and VS Code, apart** | The **Claude Code** pill is only Claude Code (connection, plan usage, recent projects, live sessions). **VS Code** has its own pill (recent projects, Claude running inside it, alerts for long commands in its terminal). |
-| **More agents** | **Gemini CLI** and **OpenCode** each get a pill (Settings → Agents). Connecting shows the exact change first. From their cards you start them in a terminal or in their desktop app, or pick up the last session (**Continuar**); the Gemini card also opens **Antigravity** (app, IDE and `agy` CLI). |
+| **More agents** | **Gemini CLI**, **OpenCode**, **Copilot CLI** and **Muse Code** each get a pill (Settings → Agents). Connecting shows the exact change first. From their cards you start them in a terminal or in their desktop app, or pick up the last session (**Continuar**); the Gemini card also opens **Antigravity** (app, IDE and `agy` CLI). |
 | **Plan usage gauge** | A pill in the header with how much of your Claude plan is used (5-hour and 7-day), through a statusLine relay that keeps your own status line working. |
 | **Live diff** | Edits show `+N −M` in the ticker; click one to read the diff, ↗ opens the file in VS Code. |
 | **Answer Claude's questions** | `AskUserQuestion` prompts show their options in the island (keys 1–4, "Other…", or reply in the terminal). |
@@ -169,20 +169,19 @@ problems. It stays on your machine.
 
 ## Supported agents
 
-The relay (`coucou-hook.exe`) works with any tool that can run a command on hook events. Pass `--agent <name>` to create a named pill.
+Connect each one in **Settings → Agents** (you see the exact diff first, a dated backup is taken, nothing is written until you click). Each gets its own pill; the relay (`coucou-hook.exe --agent <name>`) renames their events to Claude Code's.
 
-| Agent | How to connect | Config file |
+| Agent | What Coucou writes | Permissions |
 |---|---|---|
-| Claude Code | **Settings → Claude Code → Install hooks** | `%USERPROFILE%\.claude\settings.json` |
-| Gemini CLI | `--agent gemini` positional arg | `%USERPROFILE%\.gemini\settings.json` |
-| Antigravity | `--agent antigravity` positional arg | `%USERPROFILE%\.config\antigravity\hooks.json` |
-| Cursor | hooks installed automatically | `%USERPROFILE%\.claude\settings.json` |
-| Codex | `--agent codex` positional arg | `%USERPROFILE%\.codex\hooks.json` |
-| Copilot CLI | `--agent copilot` positional arg + camelCase events | `%USERPROFILE%\.copilot\hooks\coucou.json` |
-| Muse Code | `--agent muse` positional arg | `%USERPROFILE%\.config\muse\settings.json` |
-| Any other | `--agent <name>` positional arg | your tool's hook config |
+| Claude Code | `%USERPROFILE%\.claude\settings.json` (Settings → Claude Code) | Allow / Deny on the island |
+| Gemini CLI | `%USERPROFILE%\.gemini\settings.json` | in its terminal |
+| OpenCode | `%USERPROFILE%\.config\opencode\plugins\coucou.js` | in its terminal |
+| Copilot CLI | `%USERPROFILE%\.copilot\hooks\coucou.json` | in its terminal (the relay answers `ask`) |
+| Muse Code | `%USERPROFILE%\.config\muse\settings.json` | in its terminal |
+| VS Code | a marked block in your PowerShell profile (VS Code's terminal only) | — |
+| Any other | run `coucou-hook.exe --agent <name> <Event>` from its hooks | in its terminal |
 
-OpenCode and Amp are not yet supported on Windows or Linux. Their integration uses a plugin that calls `/bin/sh` with macOS-specific paths; the plugin installer lives in the Mac app only.
+Amp is Mac only for now.
 
 ## What's different from the Mac version
 

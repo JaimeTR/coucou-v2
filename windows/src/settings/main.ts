@@ -184,6 +184,16 @@ const AGENTS: AgentDef[] = [
     missing: "No se encontró OpenCode en este PC. Aun así puedes conectarlo para cuando lo instales.",
   },
   {
+    id: "copilot", color: "#818CF8",
+    what: "Crea ~/.copilot/hooks/coucou.json con los eventos de Copilot CLI. Los permisos se siguen respondiendo en su terminal.",
+    missing: "No se encontró Copilot CLI en este PC. Aun así puedes conectarlo para cuando lo instales.",
+  },
+  {
+    id: "muse", color: "#38BDF8",
+    what: "Añade los hooks de Coucou a ~/.config/muse/settings.json, sin tocar lo demás.",
+    missing: "No se encontró Muse Code en este PC. Aun así puedes conectarlo para cuando lo instales.",
+  },
+  {
     id: "vscode", color: "#2DA8F5",
     what: "Su pill muestra tus proyectos recientes y funciona sin conectar nada. Conectarlo añade un bloque a tu perfil de PowerShell que actúa solo dentro de la terminal de VS Code: cuando termina un comando que tardó 10 segundos o más, el pill (y una notificación) te dice si salió bien. Las demás terminales quedan exactamente como están.",
     missing: "No se encontró VS Code en este PC.",
@@ -721,7 +731,7 @@ function personalSection(detectedName: string): HTMLElement {
     integration_claude: "Claude Code", integration_github: "GitHub",
     integration_vercel: "Vercel", integration_resend: "Resend", integration_notion: "Notion",
     integration_calcom: "Cal.com", integration_stripe: "Stripe",
-    agent_gemini: "Gemini CLI", agent_opencode: "OpenCode", agent_vscode: "VS Code",
+    agent_gemini: "Gemini CLI", agent_opencode: "OpenCode", agent_copilot: "Copilot CLI", agent_muse: "Muse Code", agent_vscode: "VS Code",
   };
   for (const id of ["integration_claude", ...settings.activeIntegrations]) {
     if (names[id]) startPill.append(h("option", { value: id, text: names[id] }));

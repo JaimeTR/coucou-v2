@@ -8,7 +8,7 @@
 
 Aprueba los permisos de Claude Code, mira trabajar tu sesión, suelta un archivo, chatea con tu IA y vigila tus servicios, sin salir de lo que estás haciendo.
 
-*Coucou v2 es el fork de [JaimeTR](https://github.com/JaimeTR) de [Coucou, de Louis Raillé](https://github.com/Louis-CFM/coucou) (MIT).*
+*Coucou v2 es el fork de [JaimeTR](https://github.com/JaimeTR) de [Coucou, de Louis Raillé](https://github.com/Louis-CFM/coucou). El código es MIT; los nombres Coucou y Mochi, el personaje, el icono y los sonidos son de Louis Raillé (ver [LICENSE-ASSETS.md](../LICENSE-ASSETS.md)).*
 
 [English](README.md) · **Español**
 
@@ -39,7 +39,7 @@ Coucou v2 convierte a Mochi en un pequeño asistente personal. Todo lo de abajo 
 | **Solo los pills que usas** | Una instalación nueva muestra solo GitHub; el resto (Vercel, Resend…) se activa en Ajustes → Integraciones. |
 | **GitHub + Copilot** | Un pill con lo que te necesita: revisiones pedidas, tus PRs con su CI y los pull requests y revisiones de **GitHub Copilot**. Cada fila abre la lista, y cada PR se abre en GitHub. |
 | **Claude Code y VS Code, por separado** | El pill de **Claude Code** es solo de Claude Code (conexión, uso del plan, proyectos recientes, sesiones en vivo, y botones para abrirlo o continuar). **VS Code** tiene el suyo (proyectos recientes, Claude corriendo dentro, avisos de comandos largos de su terminal). |
-| **Más agentes** | **Gemini CLI** y **OpenCode** tienen cada uno su pill (Ajustes → Agentes); al conectar ves primero el cambio exacto. Desde su tarjeta los abres en terminal o en su programa de escritorio, o sigues la última sesión (**Continuar**). La tarjeta de Gemini también abre **Antigravity** (programa, IDE y CLI `agy`). |
+| **Más agentes** | **Gemini CLI**, **OpenCode**, **Copilot CLI** y **Muse Code** tienen cada uno su pill (Ajustes → Agentes); al conectar ves primero el cambio exacto. Desde su tarjeta los abres en terminal o en su programa de escritorio, o sigues la última sesión (**Continuar**). La tarjeta de Gemini también abre **Antigravity** (programa, IDE y CLI `agy`). |
 | **Medidor del plan** | Un pill en la cabecera con cuánto llevas gastado de tu plan de Claude (5 horas y 7 días), mediante un relay de statusLine que respeta tu línea de estado. |
 | **Diff en vivo** | Las ediciones muestran `+N −M` en el ticker; un clic abre el diff y ↗ abre el archivo en VS Code. |
 | **Responde las preguntas de Claude** | Las preguntas de `AskUserQuestion` muestran sus opciones en la isla (teclas 1–4, "Otra…", o responder en la terminal). |
@@ -164,6 +164,22 @@ windows/
 
 `%LOCALAPPDATA%\Coucou\coucou.log`: eventos de hooks, decisiones de permisos,
 problemas de los sondeos. Se queda en tu equipo.
+
+## Agentes compatibles
+
+Cada uno se conecta en **Ajustes → Agentes** (ves el diff exacto, se hace una copia con fecha y no se escribe nada hasta tu clic). Cada uno tiene su pill; el relay (`coucou-hook.exe --agent <nombre>`) traduce sus eventos a los de Claude Code.
+
+| Agente | Qué escribe Coucou | Permisos |
+|---|---|---|
+| Claude Code | `%USERPROFILE%\.claude\settings.json` (Ajustes → Claude Code) | Permitir / Denegar en la isla |
+| Gemini CLI | `%USERPROFILE%\.gemini\settings.json` | en su terminal |
+| OpenCode | `%USERPROFILE%\.config\opencode\plugins\coucou.js` | en su terminal |
+| Copilot CLI | `%USERPROFILE%\.copilot\hooks\coucou.json` | en su terminal (el relay responde `ask`) |
+| Muse Code | `%USERPROFILE%\.config\muse\settings.json` | en su terminal |
+| VS Code | un bloque marcado en tu perfil de PowerShell (solo la terminal de VS Code) | — |
+| Cualquier otro | `coucou-hook.exe --agent <nombre> <Evento>` desde sus hooks | en su terminal |
+
+Amp, por ahora, solo en Mac.
 
 ## Qué cambia respecto a la versión de Mac
 

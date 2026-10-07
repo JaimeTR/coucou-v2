@@ -26,6 +26,8 @@ use crate::{platform, settings};
 pub const GEMINI: &str = "gemini";
 pub const OPENCODE: &str = "opencode";
 pub const VSCODE: &str = "vscode";
+pub const COPILOT: &str = "copilot";
+pub const MUSE: &str = "muse";
 
 /// Markers for the files and blocks that are ours. (Gemini's hook entries are
 /// recognised the same way as Claude's: by the relay's name in the command.)
@@ -39,6 +41,19 @@ const GEMINI_EVENTS: &[&str] = &[
     "SessionStart", "SessionEnd", "BeforeAgent", "AfterAgent", "BeforeTool", "AfterTool", "Notification",
 ];
 const GEMINI_TIMEOUT_MS: u64 = 3000;
+
+/// GitHub Copilot CLI's events (camelCase) and their timeouts in seconds. A
+/// permission waits for a click; Copilot is told to ask in its terminal if none comes.
+const COPILOT_EVENTS: &[(&str, u64)] = &[
+    ("sessionStart", 10), ("userPromptSubmitted", 10), ("preToolUse", 10), ("permissionRequest", 120),
+    ("postToolUse", 10), ("agentStop", 10), ("sessionEnd", 3), ("notification", 10),
+];
+
+/// Muse Code's events (PascalCase, timeouts in milliseconds there).
+const MUSE_EVENTS: &[(&str, u64)] = &[
+    ("SessionStart", 10), ("UserPromptSubmit", 5), ("PreToolUse", 5), ("PermissionRequest", 120),
+    ("PostToolUse", 5), ("Stop", 5), ("SessionEnd", 3),
+];
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -57,6 +72,10 @@ pub struct AgentStatus {
 enum Kind {
     GeminiSettings,
     OpenCodePlugin,
+    /// ~/.copilot/hooks/coucou.json: a file of ours.
+    CopilotHooks,
+    /// ~/.config/muse/settings.json: merged, like Gemini's.
+    MuseSettings,
     PowerShellProfile,
 }
 
@@ -130,6 +149,11 @@ fn targets(id: &str) -> Result<Vec<Target>, String> {
             }
             Ok(profiles.into_iter().map(|path| Target { path, kind: Kind::PowerShellProfile }).collect())
         }
+        COPILOT => Ok(vec![Target {
+            path: home().join(".copilot").join("hooks").join("coucou.json"),
+            kind: Kind::CopilotHooks,
+        }]),
+        MUSE => Ok(vec![Target { path: home().join(".config").join("muse").join("settings.json"), kind: Kind::MuseSettings }]),
         other => Err(format!("agente desconocido {other}")),
     }
 }
@@ -175,6 +199,46 @@ fn gemini_merged(existing: &Value) -> Value {
         hooks.insert((*event).to_string(), Value::Array(list));
     }
     root.insert("hooks".into(), Value::Object(hooks));
+    Value::Object(root)
+}
+
+/// Copilot's hook file. Each entry carries the command for both shells Copilot
+/// may use on Windows (PowerShell) and elsewhere (bash).
+fn copilot_hooks() -> Value {
+    let hook = exe();
+    let mut hooks = serde_json::Map::new();
+    for (event, timeout) in COPILOT_EVENTS {
+        hooks.insert(
+            (*event).to_string(),
+            json!([{
+                "type": "command",
+                "bash": format!("\"{hook}\" --agent copilot {event}"),
+                "powershell": format!("& '{}' --agent copilot {event}", hook.replace('\'', "''")),
+                "timeoutSec": timeout,
+            }]),
+        );
+    }
+    json!({ "version": 1, "hooks": hooks })
+}
+
+fn muse_merged(existing: &Value) -> Value {
+    let mut root = existing.as_object().cloned().unwrap_or_default();
+    let mut hooks = root.get("hooks").and_then(Value::as_object).cloned().unwrap_or_default();
+    for (event, secs) in MUSE_EVENTS {
+        let mut list = hooks.get(*event).and_then(Value::as_array).cloned().unwrap_or_default();
+        list.retain(|entry| !hooks::entry_is_ours(entry));
+        list.push(json!({
+            "matcher": "*",
+            "hooks": [{
+                "type": "command",
+                "command": format!("\"{}\" --agent muse --stdout-json {event}", exe()),
+                "timeout": secs * 1000,
+            }]
+        }));
+        hooks.insert((*event).to_string(), Value::Array(list));
+    }
+    root.insert("hooks".into(), Value::Object(hooks));
+    root.entry("schema_version").or_insert(json!(1));
     Value::Object(root)
 }
 
@@ -326,7 +390,7 @@ fn without_block(text: &str) -> String {
 /// should not exist at all.
 fn render(kind: Kind, install: bool, path: &Path, current: &Content) -> Result<Option<String>, String> {
     match kind {
-        Kind::GeminiSettings => {
+        Kind::GeminiSettings | Kind::MuseSettings => {
             let existing = hooks::parse_settings(
                 current.text.as_deref().unwrap_or("").as_bytes(),
                 &path.display().to_string(),
@@ -334,7 +398,11 @@ fn render(kind: Kind, install: bool, path: &Path, current: &Content) -> Result<O
             if !install && current.text.is_none() {
                 return Ok(None);
             }
-            let next = if install { gemini_merged(&existing) } else { hooks::without_ours(&existing) };
+            let next = match (install, kind) {
+                (true, Kind::MuseSettings) => muse_merged(&existing),
+                (true, _) => gemini_merged(&existing),
+                (false, _) => hooks::without_ours(&existing),
+            };
             let mut text = hooks::pretty(&next);
             text.push('\n');
             Ok(Some(text))
@@ -346,6 +414,15 @@ fn render(kind: Kind, install: bool, path: &Path, current: &Content) -> Result<O
                 path.display()
             )),
             (_, true) => Ok(Some(plugin_source())),
+            (_, false) => Ok(None),
+        },
+        Kind::CopilotHooks => match (&current.text, install) {
+            (Some(text), _) if !text.contains(hooks::MARKER) => Err(format!(
+                "{} ya existe y no es de Coucou. Renómbralo o quítalo primero.",
+                path.display()
+            )),
+            (_, true) => Ok(Some(format!("{}
+", hooks::pretty(&copilot_hooks())))),
             (_, false) => Ok(None),
         },
         Kind::PowerShellProfile => {
@@ -371,13 +448,14 @@ fn render(kind: Kind, install: bool, path: &Path, current: &Content) -> Result<O
 
 fn is_installed(kind: Kind, text: &str) -> bool {
     match kind {
-        Kind::GeminiSettings => serde_json::from_str::<Value>(text)
+        Kind::GeminiSettings | Kind::MuseSettings => serde_json::from_str::<Value>(text)
             .ok()
             .and_then(|v| v.get("hooks").cloned())
             .and_then(|h| h.as_object().cloned())
             .map(|h| h.values().filter_map(Value::as_array).flatten().any(|e| hooks::entry_is_ours(e)))
             .unwrap_or(false),
         Kind::OpenCodePlugin => text.contains(PLUGIN_MARKER),
+        Kind::CopilotHooks => text.contains(hooks::MARKER),
         Kind::PowerShellProfile => text.contains(PROFILE_START) && text.contains(PROFILE_END),
     }
 }
@@ -410,6 +488,20 @@ pub fn status() -> Vec<AgentStatus> {
             detected: home.join(".config").join("opencode").is_dir() || on_path("opencode"),
             installed: installed(OPENCODE),
             target: home.join(".config").join("opencode").join("plugins").join("coucou.js").to_string_lossy().to_string(),
+        },
+        AgentStatus {
+            id: COPILOT,
+            name: "Copilot CLI",
+            detected: home.join(".copilot").is_dir() || on_path("copilot"),
+            installed: installed(COPILOT),
+            target: home.join(".copilot").join("hooks").join("coucou.json").to_string_lossy().to_string(),
+        },
+        AgentStatus {
+            id: MUSE,
+            name: "Muse Code",
+            detected: home.join(".config").join("muse").is_dir() || on_path("muse"),
+            installed: installed(MUSE),
+            target: home.join(".config").join("muse").join("settings.json").to_string_lossy().to_string(),
         },
         AgentStatus {
             id: VSCODE,

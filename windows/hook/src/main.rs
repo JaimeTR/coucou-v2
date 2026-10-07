@@ -72,7 +72,7 @@ fn main() {
         std::process::exit(0)
     };
 
-    let Some(Event { payload, name: event, ask_questions }) = read_event() else {
+    let Some(Event { payload, name: event, ask_questions, agent }) = read_event() else {
         finish(false)
     };
 
@@ -99,12 +99,19 @@ fn main() {
     if let Ok(Some(decision)) = rx.recv_timeout(budget) {
         let json = match &ask_questions {
             Some(questions) => answer_json(&decision, questions),
+            None if agent == "copilot" || agent == "muse" => simple_decision_json(&decision),
             None => decision_json(&decision),
         };
         if let Some(json) = json {
             let mut out = std::io::stdout();
             let _ = writeln!(out, "{json}");
             let _ = out.flush();
+            printed = true;
+        }
+    }
+    if !printed {
+        if let Some(json) = copilot_fallback(&agent, &event) {
+            println!("{json}");
             printed = true;
         }
     }
@@ -120,6 +127,10 @@ fn main() {
 /// arguments under the names the live diff expects.
 fn normalize_agent(agent: &str, map: &mut serde_json::Map<String, serde_json::Value>) {
     use serde_json::Value;
+    if agent == "copilot" || agent == "muse" {
+        normalize_copilot_muse(map);
+        return;
+    }
     if agent != "gemini" {
         return;
     }
@@ -171,6 +182,53 @@ fn normalize_agent(agent: &str, map: &mut serde_json::Map<String, serde_json::Va
     }
 }
 
+/// GitHub Copilot CLI speaks camelCase (preToolUse, toolName, toolArgs, workdir)
+/// and Muse Code snake_case (pre_tool_use): both become the names the island
+/// knows. Same mapping as the macOS relay.
+fn normalize_copilot_muse(map: &mut serde_json::Map<String, serde_json::Value>) {
+    use serde_json::Value;
+    let event = map.get("hook_event_name").and_then(|v| v.as_str()).unwrap_or("");
+    let renamed = match event {
+        "sessionStart" | "session_start" => "SessionStart",
+        "sessionEnd" | "session_end" => "SessionEnd",
+        "userPromptSubmitted" | "user_prompt_submit" => "UserPromptSubmit",
+        "preToolUse" | "pre_tool_use" => "PreToolUse",
+        "postToolUse" | "post_tool_use" => "PostToolUse",
+        "permissionRequest" => "PermissionRequest",
+        "agentStop" | "stop" => "Stop",
+        "notification" => "Notification",
+        _ => "",
+    };
+    if !renamed.is_empty() {
+        map.insert("hook_event_name".into(), Value::String(renamed.into()));
+    }
+    for (from, to) in [("toolName", "tool_name"), ("toolArgs", "tool_input"), ("workdir", "cwd")] {
+        if !map.contains_key(to) {
+            if let Some(v) = map.get(from).cloned() {
+                map.insert(to.into(), v);
+            }
+        }
+    }
+    // Copilot may hand the arguments over as a JSON string.
+    if let Some(Value::String(raw)) = map.get("tool_input") {
+        if let Ok(parsed @ Value::Object(_)) = serde_json::from_str::<Value>(raw) {
+            map.insert("tool_input".into(), parsed);
+        }
+    }
+    if !map.contains_key("session_id") {
+        let id = ["sessionId", "conversationId", "conversation_id"].iter().find_map(|k| map.get(*k).cloned());
+        if let Some(id) = id {
+            map.insert("session_id".into(), id);
+        }
+    }
+}
+
+/// Copilot CLI is fail-closed on a permission request: no answer would deny the
+/// tool. Without a decision from the island it is told to ask in the terminal.
+fn copilot_fallback(agent: &str, event: &str) -> Option<&'static str> {
+    (agent == "copilot" && event == "PermissionRequest").then_some(r#"{"permissionDecision":"ask"}"#)
+}
+
 /// The documented PermissionRequest output. Anything we do not recognise prints
 /// nothing at all rather than guessing — silence is the safe answer.
 /// See https://code.claude.com/docs/en/hooks
@@ -185,6 +243,15 @@ fn decision_json(decision: &str) -> Option<String> {
     Some(format!(
         r#"{{"hookSpecificOutput":{{"hookEventName":"PermissionRequest","decision":{behavior}}}}}"#
     ))
+}
+
+/// Copilot CLI and Muse Code take the decision flat: {"permissionDecision":"allow"}.
+fn simple_decision_json(decision: &str) -> Option<String> {
+    match decision.trim() {
+        "allow" | "always" => Some(r#"{"permissionDecision":"allow"}"#.into()),
+        "deny" => Some(r#"{"permissionDecision":"deny"}"#.into()),
+        _ => None,
+    }
 }
 
 /// The documented PreToolUse output that answers an AskUserQuestion: Claude Code
@@ -217,6 +284,8 @@ struct Event {
     /// Set only for `--ask` on an AskUserQuestion: the original, untruncated
     /// questions, which have to travel back to Claude Code with the answers.
     ask_questions: Option<serde_json::Value>,
+    /// `--agent <name>`, empty for Claude Code.
+    agent: String,
 }
 
 /// Reads stdin and returns the payload to forward plus the event name.
@@ -336,7 +405,7 @@ fn read_event() -> Option<Event> {
 
     let mut line = payload.to_string();
     line.push('\n');
-    Some(Event { payload: line, name: event, ask_questions })
+    Some(Event { payload: line, name: event, ask_questions, agent })
 }
 
 /// Caps every string in the payload. A single Write can carry a whole file.
@@ -582,6 +651,31 @@ mod tests {
             "prompt_response": "  Done.\n\nThe tests   pass now. " }));
         assert_eq!(v["hook_event_name"], "Stop");
         assert_eq!(v["message"], "Done. The tests pass now.");
+    }
+
+    #[test]
+    fn copilot_and_muse_events_and_tools_get_the_names_the_island_knows() {
+        let mut v = serde_json::json!({ "hook_event_name": "preToolUse", "toolName": "bash",
+            "toolArgs": "{\"command\":\"ls\"}", "workdir": "C:/p", "sessionId": "s1" });
+        normalize_agent("copilot", v.as_object_mut().unwrap());
+        assert_eq!(v["hook_event_name"], "PreToolUse");
+        assert_eq!(v["tool_name"], "bash");
+        assert_eq!(v["tool_input"]["command"], "ls");
+        assert_eq!(v["cwd"], "C:/p");
+        assert_eq!(v["session_id"], "s1");
+
+        let mut m = serde_json::json!({ "hook_event_name": "post_tool_use" });
+        normalize_agent("muse", m.as_object_mut().unwrap());
+        assert_eq!(m["hook_event_name"], "PostToolUse");
+    }
+
+    #[test]
+    fn copilot_asks_in_the_terminal_when_the_island_does_not_answer() {
+        assert_eq!(copilot_fallback("copilot", "PermissionRequest"), Some(r#"{"permissionDecision":"ask"}"#));
+        assert_eq!(copilot_fallback("copilot", "PreToolUse"), None);
+        assert_eq!(copilot_fallback("", "PermissionRequest"), None);
+        assert_eq!(simple_decision_json("allow").as_deref(), Some(r#"{"permissionDecision":"allow"}"#));
+        assert_eq!(simple_decision_json("decline"), None);
     }
 
     #[test]

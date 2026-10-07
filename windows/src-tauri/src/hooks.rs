@@ -34,7 +34,7 @@ pub const HOOK_EVENTS: &[(&str, u64)] = &[
 ];
 
 /// Marker that identifies a Coucou entry inside settings.json.
-const MARKER: &str = "coucou-hook";
+pub(crate) const MARKER: &str = "coucou-hook";
 
 /// Claude Code 2.1.85+ delivers AskUserQuestion as a PreToolUse. Answering from
 /// the island needs a hook of its own that waits for the person, hence its own
