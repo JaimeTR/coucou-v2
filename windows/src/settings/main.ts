@@ -14,6 +14,7 @@ import { CUSTOM_PILL_LIMIT, DEFAULT_SETTINGS, WEBHOOK_PORT, type CustomPill, typ
 import { h, clear, svg } from "../views/dom";
 import { ICONS } from "../views/icons";
 import { pairingQr } from "./qr";
+import { isOutfit, OUTFIT_NAMES, OUTFITS } from "../mochi/outfits";
 
 /** Two arrows chasing each other: sync. */
 const SYNC_ICON = "M12 4.5a7.5 7.5 0 0 1 6.7 4.1H16v2h6V4.6h-2v2.3A9.5 9.5 0 0 0 2.6 11h2a7.5 7.5 0 0 1 7.4-6.5zM19.4 13a7.5 7.5 0 0 1-14.1 2.4H8v-2H2v6h2v-2.3A9.5 9.5 0 0 0 21.4 13h-2z";
@@ -696,6 +697,17 @@ function voiceSection(present: Record<string, boolean>): HTMLElement {
 
 // ── Personalization ───────────────────────────────────────────────────────────
 
+function outfitSelect(): HTMLSelectElement {
+  const select = h("select", {}) as HTMLSelectElement;
+  for (const id of OUTFITS) select.append(h("option", { value: id, text: OUTFIT_NAMES[id] }));
+  select.value = isOutfit(settings.mochiOutfit) ? settings.mochiOutfit : "auto";
+  select.addEventListener("change", () => {
+    settings.mochiOutfit = select.value;
+    void save();
+  });
+  return select;
+}
+
 function personalSection(detectedName: string): HTMLElement {
   const preview = h("div", { class: "notice ok" });
   const refresh = () => {
@@ -801,6 +813,11 @@ function personalSection(detectedName: string): HTMLElement {
       h("label", { text: "Lo último y pendientes" }),
       toggle(settings.greetingPicker, (v) => { settings.greetingPicker = v; void save(); }),
       h("span", { class: "hint", text: "en la bienvenida: tu último proyecto y lo que espera (revisiones, CI)" }),
+    ),
+    h("div", { class: "row" },
+      h("label", { text: "Atuendo de Mochi" }),
+      outfitSelect(),
+      h("span", { class: "hint", text: "Automático: gorro de Papá Noel en diciembre, sombrero de bruja en octubre, orejas de conejo en Pascua, gafas de sol en verano, gorro de fiesta en Año Nuevo." }),
     ),
     h("div", { class: "row" },
       h("label", { text: "Baila con la música" }),

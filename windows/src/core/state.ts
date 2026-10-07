@@ -208,6 +208,8 @@ export interface Settings {
   updates: "auto" | "notify" | "off";
   /** Mochi dances while music plays. */
   musicDance: boolean;
+  /** What Mochi wears: "auto" follows the date. */
+  mochiOutfit: string;
   /** Who speaks: the voices Windows has, or ElevenLabs. */
   voiceEngine: "system" | "elevenlabs";
   elevenVoice: string;
@@ -267,6 +269,7 @@ export const DEFAULT_SETTINGS: Settings = {
   syncDevice: "",
   updates: "auto",
   musicDance: true,
+  mochiOutfit: "auto",
   voiceEngine: "system",
   elevenVoice: "21m00Tcm4TlvDq8ikWAM",
   elevenModel: "eleven_multilingual_v2",

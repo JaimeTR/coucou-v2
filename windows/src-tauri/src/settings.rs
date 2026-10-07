@@ -79,6 +79,9 @@ pub struct Settings {
     /// Mochi dances while music plays (read from the system media controls).
     #[serde(default = "default_true")]
     pub music_dance: bool,
+    /// What Mochi wears: "auto" (by the date), "none" or a piece (see mochi/outfits.ts).
+    #[serde(default = "default_outfit")]
+    pub mochi_outfit: String,
     /// Who speaks: "system" (the voices Windows has) or "elevenlabs".
     #[serde(default = "default_voice_engine")]
     pub voice_engine: String,
@@ -243,6 +246,10 @@ fn default_start_pill() -> String {
     "integration_claude".into()
 }
 
+fn default_outfit() -> String {
+    "auto".into()
+}
+
 fn default_updates() -> String {
     "auto".into()
 }
@@ -320,6 +327,7 @@ impl Default for Settings {
             sync_device: String::new(),
             updates: default_updates(),
             music_dance: true,
+            mochi_outfit: default_outfit(),
             voice_engine: default_voice_engine(),
             eleven_voice: default_eleven_voice(),
             eleven_model: default_eleven_model(),

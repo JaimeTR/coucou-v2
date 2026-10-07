@@ -6,6 +6,7 @@
 
 import { Ease, lerp, type EaseFn } from "../core/anim.js";
 import { Sound } from "../core/sound.js";
+import { drawOutfitBack, drawOutfitFront, wearing, type Head } from "./outfits.js";
 import type { BotEmoteName, BotStateName } from "../core/layout";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -680,6 +681,13 @@ export class BotEngine {
     if (this.tilt !== 0) x.rotate(this.tilt);
     x.scale(this.sx, this.sy);
 
+    // What Mochi wears (never on the little pill Mochis, nor while it is a box).
+    const outfit = this.isMini || this.morph > 0.05 ? "none" : wearing();
+    const head: Head = {
+      R, rx, ry, yaw: this.yaw, pitch: this.pitch, roll: this.roll, eyeSpread: EYE_SP, eyePitch: EYE_P,
+    };
+    if (outfit !== "none") drawOutfitBack(x, outfit, head);
+
     const body = this.bodyPath(rx, ry, R);
     this.drawBody(x, body, R, rx, ry);
 
@@ -699,6 +707,7 @@ export class BotEngine {
 
     this.drawEyes(x, body, R, rx, ry);
     if (this.morph > 0.05) this.drawMouth(x, body, R);
+    if (outfit !== "none") drawOutfitFront(x, outfit, head);
 
     x.restore();
 

@@ -25,6 +25,7 @@ import { h } from "../views/dom";
 import { IslandStateMachine } from "./fsm";
 import { endQuestion, Recap } from "./hooks";
 import { startMusic } from "./music";
+import { isOutfit, resolve, wear } from "../mochi/outfits";
 import { greetingLines } from "./greetingText";
 import { panelHasRows, panelRows } from "./greetingPanel";
 import { refreshProjects } from "./integrations";
@@ -111,6 +112,8 @@ export class Island {
       this.ensureRunning();
     });
     startMusic(this.engine, () => this.ensureRunning());
+    // The calendar moves on while the app stays open (New Year's Eve, Halloween…).
+    window.setInterval(() => this.applySettings(), 3600_000);
   }
 
   /** The Allow / Deny buttons, and Ctrl+Alt+Y / N from anywhere. */
@@ -1177,6 +1180,8 @@ export class Island {
     Sound.setVolume(State.settings.soundVolume);
     this.fsm.homeToPetitDelay = State.settings.autoCloseInterval;
     this.fsm.neverHide = State.settings.islandPosition === "free";
+    const outfit = isOutfit(State.settings.mochiOutfit) ? State.settings.mochiOutfit : "auto";
+    wear(resolve(outfit, new Date()));
     State.notify();
   }
 
