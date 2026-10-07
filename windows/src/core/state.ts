@@ -3,6 +3,7 @@
 import type { BotEmoteName, BotStateName, IslandMode, IslandViewName } from "./layout";
 import type { EyeShape } from "../mochi/engine";
 import type { FileDiff } from "../island/diff";
+import type { WeeklySummary } from "../island/recap";
 import type { Rule, RuleDraft } from "../island/rules";
 
 const MAX_DIFFS = 50;
@@ -301,6 +302,8 @@ class AppState {
   promptContext: PromptContext | null = null;
   droppedFile: { name: string; path: string } | null = null;
   noteMessage: string | null = null;
+  /** Last week's numbers, worked out when the recap card is opened. */
+  recap: WeeklySummary | null = null;
   /** Said to Mochi by voice: the chat takes it when it opens. */
   pendingVoice: { query?: string; record?: boolean } | null = null;
   /** Whether the microphone is listening for "Oye Mochi". */

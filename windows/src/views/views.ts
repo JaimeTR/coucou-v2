@@ -12,6 +12,7 @@ import { buildPrompt } from "./chat";
 import { buildChoose, buildUpload, buildUploading } from "./upload";
 import { renderIntegrationCard, type IntegrationCardHooks } from "./integrations";
 import { buildQuestion } from "./question";
+import { formatMinutes } from "../island/recap";
 import { buildDiff } from "./diff";
 import { planColor, primaryPercent, renderPlanCard } from "./plan";
 
@@ -452,6 +453,51 @@ function buildFinished(actions: ViewActions): ViewHost {
   };
 }
 
+// ── Weekly recap ──────────────────────────────────────────────────────────────
+
+const DAYS = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"];
+
+function buildRecap(actions: ViewActions): ViewHost {
+  const head = h("div", { class: "recap-head" });
+  const stats = h("div", { class: "recap-stats" });
+  const extra = h("div", { class: "sub" });
+  const row = h("div", { class: "actions" }, btn("OK", "secondary", () => actions.collapse()));
+  const el = h("div", { class: "view" }, card("indigo", stack(116, 16, head, stats, extra, row)));
+  const stat = (value: string, label: string) =>
+    h("div", { class: "recap-stat" }, h("b", { text: value }), h("span", { text: label }));
+  return {
+    el,
+    sync() {
+      const s = State.recap;
+      clear(head);
+      clear(stats);
+      extra.textContent = "";
+      if (!s) {
+        head.append(h("span", { class: "title", text: "Semana tranquila: no hubo sesiones." }));
+        return;
+      }
+      const fmt = (ms: number) => new Date(ms).toLocaleDateString(undefined, { day: "numeric", month: "short" });
+      head.append(
+        h("span", { class: "recap-title", text: "Tu semana" }),
+        h("span", { class: "sub", text: `${fmt(s.weekStart)} – ${fmt(s.weekEnd)}` }),
+      );
+      stats.append(
+        stat(formatMinutes(s.minutes), "programando"),
+        stat(String(s.sessions), s.sessions === 1 ? "sesión" : "sesiones"),
+        stat(String(s.files), s.files === 1 ? "archivo" : "archivos"),
+      );
+      if (s.added + s.removed > 0) stats.append(stat(`+${s.added} −${s.removed}`, "líneas"));
+      if (s.commands > 0) stats.append(stat(String(s.commands), "comandos"));
+      const bits = [
+        s.topProject ? `Más en ${s.topProject}` : "",
+        s.busiestDay != null ? `tu día: ${DAYS[s.busiestDay]}` : "",
+        s.allowed + s.denied > 0 ? `${s.allowed} permitidos · ${s.denied} denegados` : "",
+      ].filter(Boolean);
+      extra.textContent = bits.join(" · ");
+    },
+  };
+}
+
 // ── Confused ──────────────────────────────────────────────────────────────────
 
 function buildConfused(): ViewHost {
@@ -570,6 +616,7 @@ export function buildViews(
   map.set("confused", buildConfused());
   map.set("note", buildNote());
   map.set("settings", buildSettings(actions));
+  map.set("recap", buildRecap(actions));
   map.set("prompt", buildPrompt(onChatHeightChange));
   map.set("upload", buildUpload());
   map.set("uploading", buildUploading());

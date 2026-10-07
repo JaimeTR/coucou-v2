@@ -10,9 +10,30 @@ import { speakAuto } from "../core/voice";
 import { State, type AskQuestion, type PlanUsage, type PlanWindow } from "../core/state";
 import { computeDiff, diffStepLabel } from "./diff";
 import { matchRule, ruleFor } from "./rules";
+import { RecapRecorder, type RecapData } from "./recap";
 import type { Island } from "./island";
 
 const CLAUDE_ID = "integration_claude";
+
+const RECAP_KEY = "coucou.recap";
+
+/** This PC's history for the weekly recap, in the webview's own storage. */
+export const Recap = new RecapRecorder({
+  load() {
+    try {
+      return JSON.parse(localStorage.getItem(RECAP_KEY) ?? "null") as RecapData | null;
+    } catch {
+      return null;
+    }
+  },
+  save(data) {
+    try {
+      localStorage.setItem(RECAP_KEY, JSON.stringify(data));
+    } catch {
+      /* storage full or blocked: the recap is a nicety, never a failure */
+    }
+  },
+});
 
 /** Clears the approval card if no decision was made before the hook gave up. */
 let pendingTimeout: number | null = null;
@@ -180,9 +201,10 @@ function clearSession() {
 const EDIT_TOOLS = new Set(["Edit", "MultiEdit", "Write"]);
 
 /** A PostToolUse for an edit: compute the diff and put its tally on the step. */
-function recordDiff(agentId: string, tool: string, input: Record<string, unknown>) {
+function recordDiff(agentId: string, session: string, tool: string, input: Record<string, unknown>) {
   const diff = computeDiff(tool, input);
   if (!diff) return;
+  Recap.diff(session, diff.path, diff.added, diff.removed);
   State.addDiff(diff);
   // The same text PreToolUse announced the step with, so it can be found again.
   const announced = stepLabel(tool, input);
@@ -291,6 +313,8 @@ function handleHook(island: Island, payload: HookPayload) {
   const isExternalAgent = validAgent !== null;
 
   const focused = State.focusId === agentId;
+  // One recap turn per session; an agent without ids still gets one.
+  const session = `${agentId}:${payload.session_id ?? ""}`;
 
   // Remember where this session's terminal is, so "Open terminal" can bring the
   // right window forward (for Claude Code and for the other agents alike).
@@ -355,6 +379,7 @@ function handleHook(island: Island, payload: HookPayload) {
       ensurePill();
       State.updateTask(agentId, "thinking");
       // The field is `prompt`; reading `message` meant this step was always blank.
+      Recap.prompt(session, agentId, projectName);
       const asked = payload.prompt ?? payload.message;
       if (asked) State.appendStep(agentId, asked.slice(0, 60));
       surface("overview", false);
@@ -373,6 +398,7 @@ function handleHook(island: Island, payload: HookPayload) {
         break;
       }
       ensurePill();
+      Recap.tool(session, tool);
       State.updateTask(agentId, "working");
       State.appendStep(agentId, stepLabel(tool, payload.tool_input ?? {}));
       surface("overview", false);
@@ -382,7 +408,7 @@ function handleHook(island: Island, payload: HookPayload) {
     case "PostToolUse":
       State.updateTask(agentId, "working");
       if (payload.tool_name && EDIT_TOOLS.has(payload.tool_name)) {
-        recordDiff(agentId, payload.tool_name, payload.tool_input ?? {});
+        recordDiff(agentId, session, payload.tool_name, payload.tool_input ?? {});
       }
       break;
 
@@ -413,6 +439,7 @@ function handleHook(island: Island, payload: HookPayload) {
         `${isExternalAgent ? State.tasks.find((t) => t.id === agentId)?.name ?? validAgent : "Claude Code"} terminó`,
         payload.message ?? projectName,
       );
+      Recap.stop(session);
       State.updateTask(agentId, "finished");
       if (payload.message) State.appendStep(agentId, payload.message.slice(0, 60));
       Sound.play("finish");
@@ -428,6 +455,7 @@ function handleHook(island: Island, payload: HookPayload) {
         `${isExternalAgent ? State.tasks.find((t) => t.id === agentId)?.name ?? validAgent : "Claude Code"} se detuvo por un error`,
         payload.message ?? projectName,
       );
+      Recap.stop(session);
       State.updateTask(agentId, "error");
       if (payload.message) State.appendStep(agentId, payload.message.slice(0, 60));
       Sound.play("error");
@@ -443,6 +471,7 @@ function handleHook(island: Island, payload: HookPayload) {
       break;
 
     case "SessionEnd":
+      Recap.end(session);
       if (isExternalAgent) {
         if (State.isPinnedAgent(agentId)) {
           State.updateTask(agentId, "idle");

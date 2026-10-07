@@ -1,13 +1,14 @@
 // Entry point: boot the bridge, wire the island, start the greeting.
 
 import { startRemote } from "./island/remote";
+import { isoWeekKey, weeklySummary } from "./island/recap";
 import "./style.css";
 import { Bridge, IS_TAURI, onEvent } from "./core/bridge";
 import { Sound } from "./core/sound";
 import { State, type Settings } from "./core/state";
 import { applyLanguage, uiLanguage } from "./core/i18n";
 import { Island } from "./island/island";
-import { registerHookHandlers } from "./island/hooks";
+import { Recap, registerHookHandlers } from "./island/hooks";
 import { registerIntegrationHandlers, refreshConfigured } from "./island/integrations";
 import type { Rule } from "./island/rules";
 
@@ -51,6 +52,10 @@ async function main() {
         setPaused(false);
         island.alert(State.defaultView());
         break;
+      case "recap":
+        setPaused(false);
+        showRecap(island);
+        break;
       case "pause":
         setPaused(!State.paused);
         if (State.paused) island.fsm.forceHidden();
@@ -60,6 +65,21 @@ async function main() {
   });
 
   await onEvent<null>("screen-changed", () => void Bridge.reposition());
+
+  // Monday from 8 a.m., once a week: last week's recap, unless something waits for an answer.
+  const recapCheck = () => {
+    const now = new Date();
+    const week = isoWeekKey(now);
+    let shown = 0;
+    try { shown = Number(localStorage.getItem("coucou.recapShownWeek") ?? 0); } catch { /* storage blocked */ }
+    if (now.getDay() !== 1 || now.getHours() < 8 || shown === week) return;
+    if (State.pendingApproval || State.pendingQuestion || State.paused) return;
+    if (!weeklySummary(Recap.data, now)) return;
+    try { localStorage.setItem("coucou.recapShownWeek", String(week)); } catch { /* storage blocked */ }
+    showRecap(island);
+  };
+  window.setTimeout(recapCheck, 12_000);
+  window.setInterval(recapCheck, 3600_000);
 
   // The phone link (Settings → Sincronización): sessions up, Allow / Deny down.
   startRemote(island, boot?.computerName ?? "PC");
@@ -111,7 +131,16 @@ async function main() {
   // page wake the island so the visuals can be checked with `npm run dev`.
   if (!IS_TAURI) {
     document.addEventListener("click", () => Sound.resume(), { once: true });
+    // For checking cards by hand in the browser preview: coucouDev.recap().
+    (window as unknown as { coucouDev: object }).coucouDev = { recap: () => showRecap(island) };
   }
 }
 
 void main();
+
+/** Works out last week's numbers and opens the recap card. */
+function showRecap(island: Island) {
+  const names = Object.fromEntries(State.tasks.map((t) => [t.id, t.name]));
+  State.recap = weeklySummary(Recap.data, new Date(), names);
+  island.alert("recap");
+}

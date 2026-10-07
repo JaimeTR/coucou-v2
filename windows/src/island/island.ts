@@ -23,7 +23,7 @@ import { USC, UploadSeq } from "../upload/sequence";
 import { buildHeader, buildViews, type ViewActions, type ViewHost } from "../views/views";
 import { h } from "../views/dom";
 import { IslandStateMachine } from "./fsm";
-import { endQuestion } from "./hooks";
+import { endQuestion, Recap } from "./hooks";
 import { greetingLines } from "./greetingText";
 import { panelHasRows, panelRows } from "./greetingPanel";
 import { refreshProjects } from "./integrations";
@@ -116,6 +116,7 @@ export class Island {
     const req = State.pendingApproval;
     void Bridge.log(`decide ${d} req=${req?.requestId ?? "none"}`);
     if (!req) return;
+    Recap.decision("integration_claude", d);
     Sound.play(d === "deny" ? "blip" : "approve");
     if (d === "always" && req.rule) {
       // The person just clicked "Always": that click is what creates the rule.
@@ -195,6 +196,7 @@ export class Island {
         const q = State.pendingQuestion;
         void Bridge.log(`question ${answers ? "answered" : "left to the terminal"} req=${q?.requestId ?? "none"}`);
         if (!q) return;
+        if (answers) Recap.question(`integration_claude:${q.sessionId}`);
         endQuestion();
         Sound.play(answers ? "approve" : "blip");
         void Bridge.questionAnswer(q.requestId, answers);

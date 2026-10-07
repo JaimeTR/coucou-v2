@@ -365,6 +365,18 @@ mod tests {
         assert!(open(&keys, "AAAA").is_none());
     }
 
+    /// The phone (mobile/src/logic/link.ts) and this PC must agree byte for byte:
+    /// the ids below were also computed independently, and the blob was sealed by the phone's code.
+    #[test]
+    fn the_phone_and_this_pc_speak_the_same_crypto() {
+        let keys = derive(CODE).unwrap();
+        assert_eq!(keys.id, "b05514a88905b56bc0759045b144d6c6");
+        assert_eq!(keys.token, "cab3e097264fc0b4d7179b27a269f895295d6caca26782931977a18759c37016");
+        let from_phone = "AAAAAAAAAAAAAAAA2j4cv9PBfL2OzpiHNiaoKaWrOhGVf7sQDERulGmtDUaFcFICCE4MDkRzQebXppO3mlnz9Uuo8anH1MUO";
+        let plain = open(&keys, from_phone).unwrap();
+        assert_eq!(plain, br#"{"requestId":"r1","decision":"allow","at":1}"#);
+    }
+
     /// Against a running server: `SYNC_URL=http://127.0.0.1:8787 cargo test sync -- --ignored`.
     #[test]
     #[ignore]
