@@ -4,6 +4,8 @@
 
 import { onEvent, Bridge, type IntegrationUpdate } from "../core/bridge";
 import { Sound } from "../core/sound";
+import { t } from "../core/i18n";
+import { speakAuto } from "../core/voice";
 import { State } from "../core/state";
 import type { Island } from "./island";
 
@@ -79,6 +81,8 @@ function handle(island: Island, update: IntegrationUpdate) {
         task.pillBadge = event.success ? "finished" : "error";
       }
       Sound.play(event.success ? "finish" : "error");
+      // A failure is worth saying aloud (a failed deploy, a red CI); a success only plays its sound.
+      if (!event.success) speakAuto("events", `${task.name}: ${t(event.label)}`);
       // Same as the Swift pollers: show the compact island so the badge is seen,
       // but never steal the screen for a successful deploy.
       island.reveal();

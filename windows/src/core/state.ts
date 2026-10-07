@@ -191,6 +191,8 @@ export interface Settings {
   voiceEnabled: boolean;
   /** Agent news is spoken: finished, permission, question, error. */
   voiceEvents: boolean;
+  /** Mochi's moods are spoken: slapped, dizzy, loved. */
+  voiceEmotions: boolean;
   /** Who speaks: the voices Windows has, or ElevenLabs. */
   voiceEngine: "system" | "elevenlabs";
   elevenVoice: string;
@@ -239,6 +241,7 @@ export const DEFAULT_SETTINGS: Settings = {
   voiceGreeting: false,
   voiceEnabled: false,
   voiceEvents: false,
+  voiceEmotions: false,
   voiceEngine: "system",
   elevenVoice: "21m00Tcm4TlvDq8ikWAM",
   elevenModel: "eleven_multilingual_v2",

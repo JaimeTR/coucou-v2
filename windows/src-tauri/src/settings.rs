@@ -53,6 +53,9 @@ pub struct Settings {
     /// Agent news is spoken: session finished, permission, question, error.
     #[serde(default)]
     pub voice_events: bool,
+    /// Mochi's moods are spoken: slapped, dizzy, loved.
+    #[serde(default)]
+    pub voice_emotions: bool,
     /// Who speaks: "system" (the voices Windows has) or "elevenlabs".
     #[serde(default = "default_voice_engine")]
     pub voice_engine: String,
@@ -265,6 +268,7 @@ impl Default for Settings {
             voice_greeting: false,
             voice_enabled: false,
             voice_events: false,
+            voice_emotions: false,
             voice_engine: default_voice_engine(),
             eleven_voice: default_eleven_voice(),
             eleven_model: default_eleven_model(),

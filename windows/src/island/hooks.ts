@@ -150,6 +150,12 @@ function toast(title: string, body: string) {
   void Bridge.notify(t(title), t(body));
 }
 
+/** Agent news: spoken always, a toast only when the island is closed. */
+function news(title: string, body: string) {
+  if (State.mode !== "expanded") toast(title, body);
+  else speakAuto("events", t(title));
+}
+
 function upsert(projectName: string, cwd: string) {
   const t = State.tasks.find((x) => x.id === CLAUDE_ID);
   if (!t) return;
@@ -402,13 +408,11 @@ function handleHook(island: Island, payload: HookPayload) {
       // An agent may report a single "finished" with no session before it (the
       // terminal does): make sure it has a pill to show it on.
       if (isExternalAgent) ensurePill();
-      // A toast only when the island is not already open to say it.
-      if (State.mode !== "expanded") {
-        toast(
-          `${isExternalAgent ? State.tasks.find((t) => t.id === agentId)?.name ?? validAgent : "Claude Code"} terminó`,
-          payload.message ?? projectName,
-        );
-      }
+      // A toast only when the island is not already open to show it; Mochi says it either way.
+      news(
+        `${isExternalAgent ? State.tasks.find((t) => t.id === agentId)?.name ?? validAgent : "Claude Code"} terminó`,
+        payload.message ?? projectName,
+      );
       State.updateTask(agentId, "finished");
       if (payload.message) State.appendStep(agentId, payload.message.slice(0, 60));
       Sound.play("finish");
@@ -419,12 +423,11 @@ function handleHook(island: Island, payload: HookPayload) {
 
     case "StopFailure":
       if (isExternalAgent) ensurePill();
-      if (State.mode !== "expanded") {
-        toast(
-          `${isExternalAgent ? State.tasks.find((t) => t.id === agentId)?.name ?? validAgent : "Claude Code"} se detuvo por un error`,
-          payload.message ?? projectName,
-        );
-      }
+      // A toast only when the island is not already open to show it; Mochi says it either way.
+      news(
+        `${isExternalAgent ? State.tasks.find((t) => t.id === agentId)?.name ?? validAgent : "Claude Code"} se detuvo por un error`,
+        payload.message ?? projectName,
+      );
       State.updateTask(agentId, "error");
       if (payload.message) State.appendStep(agentId, payload.message.slice(0, 60));
       Sound.play("error");

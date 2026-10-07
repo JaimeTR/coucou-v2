@@ -1,7 +1,7 @@
 // What Mochi says aloud, and with which voice.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { pickVoice, speakable } from "../.test-build/core/voiceText.js";
+import { EMOTION_LINES, emotionLine, pickVoice, speakable } from "../.test-build/core/voiceText.js";
 
 test("markdown and code are not read out", () => {
   assert.equal(speakable("Hola **mundo**, mira `npm test`"), "Hola mundo, mira npm test");
@@ -25,4 +25,12 @@ test("the best voice of the language is chosen", () => {
   assert.equal(pickVoice(voices, "es").name, "Microsoft Dalia Online (Natural)");
   assert.equal(pickVoice(voices, "en").name, "Microsoft David");
   assert.equal(pickVoice([], "es"), null);
+});
+
+test("each mood has a line, whatever the dice say", () => {
+  for (const kind of Object.keys(EMOTION_LINES)) {
+    assert.ok(emotionLine(kind, () => 0).length > 0);
+    assert.ok(emotionLine(kind, () => 0.9999).length > 0);
+    assert.equal(emotionLine(kind, () => 1), EMOTION_LINES[kind].at(-1)); // rand() hitting 1 stays in range
+  }
 });

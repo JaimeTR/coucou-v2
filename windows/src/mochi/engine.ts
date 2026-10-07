@@ -296,9 +296,10 @@ export class BotEngine {
     this.blink();
   }
 
-  slap() {
+  /** What the slap did: "ignored" while still dizzy. */
+  slap(): "annoyed" | "dizzy" | "ignored" {
     this.interruptGreet();
-    if (this.state === "dizzy") return;
+    if (this.state === "dizzy") return "ignored";
     const t = now();
     this.slapTimes = this.slapTimes.filter((s) => t - s < 1.7);
     this.slapTimes.push(t);
@@ -307,11 +308,12 @@ export class BotEngine {
     if (this.slapTimes.length >= 3) {
       this.slapTimes = [];
       this.onDizzy?.();
-    } else {
-      this.eyeOverride = "line";
-      this.eyeOverrideUntil = t + 0.8;
-      setTimeout(() => Sound.play("annoyed"), 60);
+      return "dizzy";
     }
+    this.eyeOverride = "line";
+    this.eyeOverrideUntil = t + 0.8;
+    setTimeout(() => Sound.play("annoyed"), 60);
+    return "annoyed";
   }
 
   doRoll(durationMs: number, turns: number) {

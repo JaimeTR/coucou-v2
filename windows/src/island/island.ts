@@ -10,7 +10,7 @@ import {
   type IslandMode, type IslandViewName,
 } from "../core/layout";
 import { Sound } from "../core/sound";
-import { speakAuto } from "../core/voice";
+import { speakAuto, speakEmotion } from "../core/voice";
 import { WakeListener } from "./listen";
 import { parseIntent } from "../core/intent";
 import { helloLine, runLaunch } from "./voiceCommands";
@@ -730,7 +730,8 @@ export class Island {
       }
       if (this.isBotHit(e.clientX, e.clientY)) {
         this.cancelBotHover();
-        this.engine.slap();
+        const slap = this.engine.slap();
+        speakEmotion(slap === "ignored" ? "stop" : slap);
       }
     });
 
@@ -835,6 +836,7 @@ export class Island {
       this.lastLoveTime = performance.now() / 1000;
       this.engine.triggerEmote("love");
       Sound.play("love");
+      speakEmotion("love");
     }, 1900);
   }
 

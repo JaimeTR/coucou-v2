@@ -4,8 +4,8 @@
 
 import { Bridge } from "./bridge";
 import { State } from "./state";
-import { uiLanguage } from "./i18n";
-import { pickVoice, speakable } from "./voiceText";
+import { t, uiLanguage } from "./i18n";
+import { emotionLine, pickVoice, speakable, type Emotion } from "./voiceText";
 
 export { speakable };
 
@@ -117,4 +117,20 @@ export function speakAuto(occasion: Occasion, text: string, onEnd?: () => void):
   if (occasion === "events" && !s.voiceEvents) return false;
   if (occasion === "replies" && !s.voiceReplies) return false;
   return speak(text, onEnd);
+}
+
+let lastEmotion = 0;
+
+/**
+ * A mood said aloud (slapped, dizzy, loved), when its switch is on. Never
+ * talks over something else, and at most once every 3 s so a burst of clicks
+ * is one phrase, not a stammer.
+ */
+export function speakEmotion(kind: Emotion) {
+  const s = State.settings;
+  if (!s.voiceEnabled || !s.voiceEmotions || speaking) return;
+  const now = performance.now();
+  if (now - lastEmotion < 3000) return;
+  lastEmotion = now;
+  speak(t(emotionLine(kind)));
 }

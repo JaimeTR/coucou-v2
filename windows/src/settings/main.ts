@@ -590,6 +590,11 @@ function voiceSection(present: Record<string, boolean>): HTMLElement {
       h("span", { class: "hint", text: "sesión terminada, permisos, preguntas y errores de Claude Code y los demás agentes" }),
     ),
     h("div", { class: "row" },
+      h("label", { text: "Dice lo que siente" }),
+      toggle(settings.voiceEmotions, (v) => { settings.voiceEmotions = v; void save(); }),
+      h("span", { class: "hint", text: "cuando le haces clic, se marea o le das cariño" }),
+    ),
+    h("div", { class: "row" },
       h("label", { text: "Lee las respuestas del chat" }),
       toggle(settings.voiceReplies, (v) => { settings.voiceReplies = v; void save(); }),
       h("span", { class: "hint", text: "las respuestas largas se cortan en la primera frase o dos; con ElevenLabs gastan crédito" }),
@@ -619,6 +624,7 @@ function voiceSection(present: Record<string, boolean>): HTMLElement {
           // First time: start with the useful ones; replies stay off (they can be long and cost credit).
           settings.voiceGreeting = true;
           settings.voiceEvents = true;
+          settings.voiceEmotions = true;
         }
         void save();
         optionsBox.style.display = v ? "" : "none";
