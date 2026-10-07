@@ -7,15 +7,18 @@ import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
 
 import { sanitizeApps, type CustomApp } from "./logic/custom";
+import { isServerUrl } from "./logic/link";
 import type { Language } from "./logic/translate";
 
 export interface Settings {
   name: string;
   language: Language;
   apps: CustomApp[];
+  /** Your sync server (sync/), "" when this phone is not linked. The code is in secure storage. */
+  syncUrl: string;
 }
 
-export const DEFAULT_SETTINGS: Settings = { name: "", language: "auto", apps: [] };
+export const DEFAULT_SETTINGS: Settings = { name: "", language: "auto", apps: [], syncUrl: "" };
 
 const SETTINGS_KEY = "coucou.settings";
 
@@ -28,6 +31,7 @@ export async function loadSettings(): Promise<Settings> {
       name: String(saved.name ?? "").slice(0, 40),
       language: saved.language === "es" || saved.language === "en" ? saved.language : "auto",
       apps: sanitizeApps(saved.apps),
+      syncUrl: typeof saved.syncUrl === "string" && isServerUrl(saved.syncUrl) ? saved.syncUrl : "",
     };
   } catch {
     return DEFAULT_SETTINGS;
@@ -41,6 +45,8 @@ export async function saveSettings(settings: Settings): Promise<void> {
 // ── Secrets ───────────────────────────────────────────────────────────────────
 
 export const GITHUB_TOKEN = "github-token";
+/** The account code that links this phone to your PCs (see logic/link.ts). */
+export const SYNC_CODE = "sync-code";
 export const appTokenKey = (id: string) => `custom-${id.replace(/^custom_/, "")}-token`;
 
 const onWeb = Platform.OS === "web";

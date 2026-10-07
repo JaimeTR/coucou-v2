@@ -29,6 +29,13 @@ function Navigation() {
           }}
         />
         <Tabs.Screen
+          name="computers"
+          options={{
+            title: t("PCs"),
+            tabBarIcon: ({ color, size }) => <Ionicons name="desktop-outline" color={color} size={size} />,
+          }}
+        />
+        <Tabs.Screen
           name="settings"
           options={{
             title: t("Ajustes"),

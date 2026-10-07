@@ -16,6 +16,7 @@
     "src/logic/extract.ts",
     "src/logic/github.ts",
     "src/logic/custom.ts",
-    "src/logic/translate.ts"
+    "src/logic/translate.ts",
+    "src/logic/link.ts"
   ]
 }

@@ -9,13 +9,14 @@ One app, one codebase, for iPhone and Android ([Expo](https://expo.dev) / React 
 - **Today**: Mochi greets you by name and the time of day, and says what needs you.
 - **GitHub and Copilot**: review requests, your pull requests with their CI, and Copilot's pull requests — the same query and rules as the desktop app. Tap a pull request to open it. Your token is stored encrypted on the phone (Keychain / Keystore) and only goes to GitHub.
 - **My apps**: add your own services. Coucou checks an address every 30 seconds or more (an optional token in a header), reads one value from the JSON with a dotted path (`data.open_issues`) and shows it on a card; tap the card to open a link. Up to 8. (A phone cannot listen for webhooks, so this is the polling half of the desktop's "Mis apps".)
+- **PCs**: your computers' agents (Claude Code and the rest) and the permission waiting on one of them, with **Allow / Deny**. Through your own sync server (`sync/`, end-to-end encrypted): paste its address and the code from Coucou on your PC (Settings → Sync → Show code). Your name and language come from the PC.
 - **Spanish and English**, automatic or your choice.
 - Pull down to refresh. Readings refresh while the app is open and catch up when you come back to it (phones suspend apps in the background).
 
 ## What it cannot do (and the plan)
 
 - **Read other apps' notifications (WhatsApp, the Claude app, GitHub Mobile…)**: possible on **Android only** (a notification-listener service the user allows in system settings); iOS does not allow it at all. Planned as an Android-only native module — it needs a development build, not Expo Go.
-- **See and approve your PC's Claude Code sessions** from the phone: needs a link between desktop and phone (LAN pairing, or the `relay/` service). Planned.
+- **Push when a PC needs you with the app closed**: the PCs tab only looks while it is open (see below). Planned with a push service.
 - **Push when the app is closed**: needs a push service. Planned together with the link above.
 
 ## Run it
@@ -52,13 +53,14 @@ Una sola app, un solo código, para iPhone y Android ([Expo](https://expo.dev) /
 - **Hoy**: Mochi te saluda por tu nombre y el momento del día, y dice qué te necesita.
 - **GitHub y Copilot**: revisiones pedidas, tus pull requests con su CI y los pull requests de Copilot; la misma consulta y reglas que en escritorio. Toca un pull request para abrirlo. Tu token se guarda cifrado en el teléfono (Llavero / Keystore) y solo se envía a GitHub.
 - **Mis apps**: añade tus propios servicios. Coucou consulta una dirección cada 30 segundos o más (con un token opcional en una cabecera), lee un valor del JSON con una ruta con puntos (`data.open_issues`) y lo muestra en una tarjeta; al tocarla se abre un enlace. Hasta 8. (Un teléfono no puede escuchar webhooks: es la mitad de consulta de «Mis apps» de escritorio.)
+- **PCs**: los agentes de tus computadoras (Claude Code y los demás) y el permiso que espera en una de ellas, con **Permitir / Denegar**. A través de tu propio servidor de sincronización (`sync/`, cifrado de extremo a extremo): pega su dirección y el código de Coucou en tu PC (Ajustes → Sincronización → Mostrar código). Tu nombre y tu idioma vienen del PC.
 - **Español e inglés**, automático o a tu elección.
 - Desliza hacia abajo para actualizar. Las lecturas se refrescan con la app abierta y se ponen al día al volver (los teléfonos suspenden las apps en segundo plano).
 
 ### Lo que no puede hacer (y el plan)
 
 - **Leer las notificaciones de otras apps (WhatsApp, la app de Claude, GitHub Mobile…)**: posible **solo en Android** (un servicio de lectura de notificaciones que el usuario permite en los ajustes del sistema); iOS no lo permite en absoluto. Previsto como módulo nativo solo de Android: necesita un build de desarrollo, no Expo Go.
-- **Ver y aprobar las sesiones de Claude Code de tu PC** desde el teléfono: necesita un enlace entre escritorio y teléfono (emparejamiento en la red local o el servicio `relay/`). Previsto.
+- **Aviso push cuando un PC te necesita con la app cerrada**: la pestaña PCs solo mira mientras está abierta. Previsto con un servicio de push.
 - **Notificaciones push con la app cerrada**: necesita un servicio de push. Previsto junto con el enlace anterior.
 
 ### Ejecutarla
