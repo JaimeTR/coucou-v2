@@ -1593,6 +1593,81 @@ function shortcutRow(
   return h("div", { class: "row" }, h("label", { text: label }), button, reset, note);
 }
 
+// ── Sync between your computers ───────────────────────────────────────────────
+
+function syncSection(): HTMLElement {
+  const body = h("div", { style: "display:flex;flex-direction:column;gap:10px" });
+  const feedback = h("div");
+  const say = (ok: boolean, text: string) => {
+    clear(feedback);
+    feedback.append(h("div", { class: `notice ${ok ? "ok" : "err"}`, text }));
+  };
+  const err = (e: unknown) => String(e).replace(/^Error:\s*/, "");
+
+  const render = async () => {
+    clear(body);
+    const st = await Bridge.syncStatus();
+    if (st?.connected) {
+      const codeBox = h("div", { class: "hint" });
+      body.append(
+        h("div", { class: "row" }, statusDot(true), h("span", { text: `Conectado a ${st.url} como ${st.device}` })),
+        h("div", { class: "row" },
+          h("button", { text: "Sincronizar ahora", onclick: async () => {
+            try { say(true, (await Bridge.syncNow()) ? "Ajustes recibidos de otro equipo." : "Ya estaba al día."); }
+            catch (e) { say(false, err(e)); }
+          } }),
+          h("button", { text: "Mostrar código", onclick: async () => {
+            clear(codeBox);
+            codeBox.append(
+              h("code", { text: (await Bridge.syncCode()) ?? "" }),
+              h("div", { text: "Pégalo en tu otro PC (Ajustes → Sincronización → Unir). Quien tenga este código ve tus ajustes: no lo compartas." }),
+            );
+          } }),
+          h("button", { class: "danger", text: "Desconectar este equipo", onclick: async () => {
+            await Bridge.syncDisconnect();
+            void render();
+          } }),
+        ),
+        codeBox,
+      );
+      return;
+    }
+    const url = h("input", { type: "url", placeholder: "https://coucou-sync.<tu-cuenta>.workers.dev", value: settings.syncUrl }) as HTMLInputElement;
+    url.style.width = "100%";
+    const code = h("input", { type: "text", placeholder: "código de tu otro equipo (64 caracteres)" }) as HTMLInputElement;
+    code.style.width = "100%";
+    body.append(
+      h("div", { class: "row" }, h("label", { text: "Servidor" }), url),
+      h("div", { class: "row" },
+        h("button", { text: "Crear cuenta en este equipo", onclick: async () => {
+          try {
+            const made = await Bridge.syncConnect(url.value, null);
+            await render();
+            say(true, `Cuenta creada. Tu código: ${made}`);
+          } catch (e) { say(false, err(e)); }
+        } }),
+      ),
+      h("div", { class: "row" }, h("label", { text: "o unir con código" }), code,
+        h("button", { text: "Unir", onclick: async () => {
+          try {
+            await Bridge.syncConnect(url.value, code.value);
+            await render();
+            say(true, "Unido: los ajustes de tu otro equipo ya están aquí.");
+          } catch (e) { say(false, err(e)); }
+        } }),
+      ),
+    );
+  };
+  void render();
+
+  return h("section", {},
+    h("h2", {}, h("span", { text: "Sincronización" })),
+    h("div", { class: "hint", text: "Tus ajustes (nombre, voz, idioma, pills, Mis apps, reglas) siguen a tus otros PCs a través de tu propio servidor de Cloudflare. Se cifran aquí antes de salir: el servidor no puede leerlos. Las claves API, la pantalla, la posición de la isla y el inicio con Windows no se sincronizan." }),
+    body,
+    feedback,
+  );
+}
+
 // ── Boot ──────────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -1636,6 +1711,7 @@ async function main() {
     apiSection(hasKey),
     integrationsSection(present),
     customSection(),
+    syncSection(),
     generalSection(),
     h("div", {
       class: "hint",

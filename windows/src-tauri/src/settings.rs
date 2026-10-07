@@ -63,6 +63,15 @@ pub struct Settings {
     /// top-left. None until the island is first dragged. Only Rust writes it.
     #[serde(default)]
     pub island_offset: Option<(f64, f64)>,
+    /// The sync server ("" = sync off). The account code itself is in the keychain.
+    #[serde(default)]
+    pub sync_url: String,
+    /// The server's revision of the settings this PC last sent or took.
+    #[serde(default)]
+    pub sync_rev: u64,
+    /// This computer's name on the sync account.
+    #[serde(default)]
+    pub sync_device: String,
     /// Who speaks: "system" (the voices Windows has) or "elevenlabs".
     #[serde(default = "default_voice_engine")]
     pub voice_engine: String,
@@ -282,6 +291,9 @@ impl Default for Settings {
             voice_emotions: false,
             island_position: default_island_position(),
             island_offset: None,
+            sync_url: String::new(),
+            sync_rev: 0,
+            sync_device: String::new(),
             voice_engine: default_voice_engine(),
             eleven_voice: default_eleven_voice(),
             eleven_model: default_eleven_model(),

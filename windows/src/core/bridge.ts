@@ -107,6 +107,14 @@ export const Bridge = {
   rulesAdd: (draft: RuleDraft) => callOrThrow<Rule>("rules_add", { ...draft }),
   rulesRemove: (id: string) => callOrThrow<void>("rules_remove", { id }),
 
+  // ── Sync between your computers (sync/ server) ─────────────────────────────
+  syncStatus: () => call<{ url: string; connected: boolean; device: string }>("sync_status"),
+  /** No code = a new account. Returns the account code. */
+  syncConnect: (url: string, code: string | null) => callOrThrow<string>("sync_connect", { url, code }),
+  syncDisconnect: () => call<void>("sync_disconnect"),
+  syncCode: () => call<string>("sync_code"),
+  syncNow: () => callOrThrow<boolean>("sync_now"),
+
   // ── Other agents (Gemini CLI, OpenCode, your terminal) ────────────────────
   agentsStatus: () => call<AgentStatus[]>("agents_status"),
   /** The diff to look at before anything is written; `install: false` previews removal. */

@@ -199,6 +199,10 @@ export interface Settings {
   islandPosition: "fixed" | "free";
   /** Written by Rust when the island is dropped; read-only here. */
   islandOffset: [number, number] | null;
+  /** Sync server ("" = off); the account code is in the keychain. Rust owns these. */
+  syncUrl: string;
+  syncRev: number;
+  syncDevice: string;
   /** Who speaks: the voices Windows has, or ElevenLabs. */
   voiceEngine: "system" | "elevenlabs";
   elevenVoice: string;
@@ -250,6 +254,9 @@ export const DEFAULT_SETTINGS: Settings = {
   voiceEmotions: false,
   islandPosition: "fixed",
   islandOffset: null,
+  syncUrl: "",
+  syncRev: 0,
+  syncDevice: "",
   voiceEngine: "system",
   elevenVoice: "21m00Tcm4TlvDq8ikWAM",
   elevenModel: "eleven_multilingual_v2",

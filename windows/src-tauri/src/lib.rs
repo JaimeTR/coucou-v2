@@ -16,6 +16,7 @@ mod platform;
 mod rules;
 mod secrets;
 mod settings;
+mod sync;
 mod tray;
 mod voice;
 mod workspaces;
@@ -270,14 +271,36 @@ fn notify(app: AppHandle, shared: State<Shared>, title: String, body: String) {
 }
 
 #[tauri::command]
-fn save_settings(app: AppHandle, shared: State<Shared>, mut settings: Settings) {
+fn save_settings(app: AppHandle, mut settings: Settings) {
+    {
+        let shared = app.state::<Shared>();
+        let current = shared.settings.lock().unwrap();
+        // These belong to the island and to sync, not to the settings window,
+        // whose copy may be older: keep ours.
+        settings.island_offset = current.island_offset;
+        settings.sync_url = current.sync_url.clone();
+        settings.sync_rev = current.sync_rev;
+        settings.sync_device = current.sync_device.clone();
+    }
+    apply_settings(&app, settings);
+    // Made here: the other computers get it.
+    let handle = app.clone();
+    tauri::async_runtime::spawn(async move {
+        if let Err(err) = sync::push(&handle).await {
+            log::line(format!("sync: {err}"));
+        }
+    });
+}
+
+/// Stores new settings and applies what changed (shortcuts, autostart, the
+/// island's place), then tells both windows. Used by a save and by sync.
+pub(crate) fn apply_settings(app: &AppHandle, mut settings: Settings) {
+    let app = app.clone();
+    let shared = app.state::<Shared>();
     settings.custom_pills = settings::sanitize_pills(std::mem::take(&mut settings.custom_pills));
     let pills_changed = shared.settings.lock().unwrap().custom_pills != settings.custom_pills;
     let (screen_changed, autostart_changed, shortcuts_changed) = {
         let mut current = shared.settings.lock().unwrap();
-        // The dragged position belongs to the island, not to the settings window,
-        // whose copy may be older: keep ours.
-        settings.island_offset = current.island_offset;
         let screen_changed = current.screen != settings.screen || current.island_position != settings.island_position;
         let autostart_changed = current.autostart != settings.autostart;
         let shortcuts_changed = current.global_shortcuts != settings.global_shortcuts;
@@ -337,6 +360,33 @@ fn focus_window(app: AppHandle, focused: bool) {
     if focused {
         let _ = win.set_focus();
     }
+}
+
+#[tauri::command]
+fn sync_status(app: AppHandle) -> sync::SyncStatus {
+    sync::status(&app)
+}
+
+/// Creates an account (no code) or joins one; returns the code to show.
+#[tauri::command]
+async fn sync_connect(app: AppHandle, url: String, code: Option<String>) -> Result<String, String> {
+    sync::connect(&app, url, code).await
+}
+
+#[tauri::command]
+fn sync_disconnect(app: AppHandle) {
+    sync::disconnect(&app);
+}
+
+/// The account code, to pair another device. Only on an explicit click in Settings.
+#[tauri::command]
+fn sync_code() -> Option<String> {
+    secrets::get(sync::CODE_KEY)
+}
+
+#[tauri::command]
+async fn sync_now(app: AppHandle) -> Result<bool, String> {
+    sync::pull(&app).await
 }
 
 /// Free mode: the island follows the mouse until the button is released
@@ -933,6 +983,11 @@ pub fn run() {
             focus_window,
             reposition,
             start_island_drag,
+            sync_status,
+            sync_connect,
+            sync_disconnect,
+            sync_code,
+            sync_now,
             reset_island_position,
             open_url,
             open_in_vscode,
@@ -1005,6 +1060,7 @@ pub fn run() {
             pipe::start(handle.clone());
             integrations::start(handle.clone());
             custom::start(handle.clone());
+            sync::spawn(handle.clone());
             Ok(())
         })
         .run(tauri::generate_context!())

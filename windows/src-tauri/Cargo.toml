@@ -23,6 +23,10 @@ serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
 tokio = { version = "1", features = ["net", "io-util", "sync", "time", "rt"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+# Sync: settings are encrypted on this PC before they reach the sync server.
+aes-gcm = "0.10"
+sha2 = "0.10"
+base64 = "0.22"
 
 [target.'cfg(windows)'.dependencies]
 keyring = { version = "3", features = ["windows-native"] }
