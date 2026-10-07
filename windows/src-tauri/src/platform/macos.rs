@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use core_graphics::display::CGDisplay;
-use core_graphics::event::{CGEvent, CGMouseButton};
+use core_graphics::event::CGEvent;
 use core_graphics::event_source::{CGEventSource, CGEventSourceStateID};
 use tauri::{AppHandle, WebviewWindow};
 
@@ -175,9 +175,16 @@ pub fn cursor_physical() -> Option<(f64, f64)> {
     Some((at.x * scale, at.y * scale))
 }
 
+#[link(name = "CoreGraphics", kind = "framework")]
+extern "C" {
+    /// core-graphics 0.24 does not wrap this one.
+    fn CGEventSourceButtonState(state: i32, button: u32) -> bool;
+}
+
 /// True while the left mouse button is held.
 pub fn left_button_down() -> bool {
-    CGEventSource::button_state(CGEventSourceStateID::CombinedSessionState, CGMouseButton::Left)
+    // kCGEventSourceStateCombinedSessionState = 0, kCGMouseButtonLeft = 0.
+    unsafe { CGEventSourceButtonState(0, 0) }
 }
 
 // ── Island window ─────────────────────────────────────────────────────────────
