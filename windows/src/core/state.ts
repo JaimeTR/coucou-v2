@@ -193,6 +193,10 @@ export interface Settings {
   voiceEvents: boolean;
   /** Mochi's moods are spoken: slapped, dizzy, loved. */
   voiceEmotions: boolean;
+  /** "fixed" = top centre, "free" = dragged anywhere (rounded, never hides by itself). */
+  islandPosition: "fixed" | "free";
+  /** Written by Rust when the island is dropped; read-only here. */
+  islandOffset: [number, number] | null;
   /** Who speaks: the voices Windows has, or ElevenLabs. */
   voiceEngine: "system" | "elevenlabs";
   elevenVoice: string;
@@ -242,6 +246,8 @@ export const DEFAULT_SETTINGS: Settings = {
   voiceEnabled: false,
   voiceEvents: false,
   voiceEmotions: false,
+  islandPosition: "fixed",
+  islandOffset: null,
   voiceEngine: "system",
   elevenVoice: "21m00Tcm4TlvDq8ikWAM",
   elevenModel: "eleven_multilingual_v2",

@@ -160,8 +160,20 @@ pub fn apply_geometry(app: &AppHandle, pref: &str, collapsed: bool) {
     let (lw, lh) = if collapsed { (STRIP_W, STRIP_H) } else { (PANEL_W, PANEL_H) };
     let pw = (lw * scale).round().max(1.0) as u32;
     let ph = (lh * scale).round().max(1.0) as u32;
-    let x = mp.x + (ms.width as i32 - pw as i32) / 2;
-    let y = mp.y;
+    let mut x = mp.x + (ms.width as i32 - pw as i32) / 2;
+    let mut y = mp.y;
+    // Free mode puts the panel where it was dragged, kept whole on the display.
+    // The wake strip (a paused island) always stays at the top centre.
+    // ponytail: the panel, not the island, is clamped, so a small island can't
+    // reach the very side edges (by ~(720-288)/2 px); clamp to the island if it matters.
+    if !collapsed {
+        if let Some((ox, oy)) = free_offset(app) {
+            let max_x = mp.x + (ms.width as i32 - pw as i32).max(0);
+            let max_y = mp.y + (ms.height as i32 - ph as i32).max(0);
+            x = (mp.x + (ox * scale).round() as i32).clamp(mp.x, max_x);
+            y = (mp.y + (oy * scale).round() as i32).clamp(mp.y, max_y);
+        }
+    }
 
     // GTK never sizes a non-resizable window below its natural size (200 px
     // here), so on Linux the 6 px wake strip would stay a 200 px block. tao
@@ -175,6 +187,47 @@ pub fn apply_geometry(app: &AppHandle, pref: &str, collapsed: bool) {
     // Moving across displays can rescale the window: re-assert the physical size.
     let _ = win.set_size(PhysicalSize::new(pw, ph));
     let _ = win.set_always_on_top(true);
+}
+
+/// The dragged position, when the island is in free mode and has been dragged.
+fn free_offset(app: &AppHandle) -> Option<(f64, f64)> {
+    let shared = app.try_state::<crate::Shared>()?;
+    let s = shared.settings.lock().unwrap();
+    if s.island_position == "free" { s.island_offset } else { None }
+}
+
+/// Free mode: remembers where the island was dropped. Called when the left
+/// button is released, so a drag is saved once, not at every pixel.
+/// ponytail: the offset is relative to the island's display; dragging it to
+/// another display is pulled back onto this one.
+fn save_dropped_position(app: &AppHandle, win: &WebviewWindow) {
+    let Some(shared) = app.try_state::<crate::Shared>() else { return };
+    let pref = {
+        let s = shared.settings.lock().unwrap();
+        if s.island_position != "free" || shared.gate.collapsed.load(Ordering::Relaxed) {
+            return;
+        }
+        s.screen.clone()
+    };
+    let (Some(m), Ok(pos)) = (target_monitor(app, &pref), win.outer_position()) else { return };
+    let scale = m.scale_factor();
+    let offset = (
+        ((pos.x - m.position().x) as f64 / scale).round(),
+        ((pos.y - m.position().y) as f64 / scale).round(),
+    );
+    let settings = {
+        let mut s = shared.settings.lock().unwrap();
+        if s.island_offset == Some(offset) {
+            return;
+        }
+        s.island_offset = Some(offset);
+        s.clone()
+    };
+    if let Err(err) = crate::settings::save(&settings) {
+        eprintln!("[coucou] could not save settings: {err}");
+    }
+    // Pulls it back on screen if it was dropped half off the display.
+    apply_geometry(app, &pref, false);
 }
 
 /// Position, size and scale of the monitor the island lives on. Any change here
@@ -195,6 +248,7 @@ fn current_screen_key(app: &AppHandle) -> Option<(i32, i32, u32, u32, u64)> {
 pub fn spawn_cursor_poll(app: AppHandle, gate: Arc<PollGate>) {
     std::thread::spawn(move || {
         let mut was_down = false;
+        let mut was_held = false;
         // Remembered across wakes so a display change while hidden is noticed the
         // moment the island comes back.
         let mut last_screen: Option<(i32, i32, u32, u32, u64)> = None;
@@ -236,6 +290,13 @@ pub fn spawn_cursor_poll(app: AppHandle, gate: Arc<PollGate>) {
                     Ok(s) => (s.width as f64 / scale, s.height as f64 / scale),
                     Err(_) => (PANEL_W, PANEL_H),
                 };
+                // Read before the "cursor hasn't moved" skip: while the window is being
+                // dragged it moves with the cursor, so the window-relative position never changes.
+                let held = left_button_down();
+                if !held && was_held {
+                    save_dropped_position(&app, &win);
+                }
+                was_held = held;
                 if (x - last.0).abs() < 1.0 && (y - last.1).abs() < 1.0 {
                     continue;
                 }

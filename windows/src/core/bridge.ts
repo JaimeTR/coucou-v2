@@ -78,6 +78,10 @@ export const Bridge = {
 
   reposition: () => call<void>("reposition"),
 
+  /** Free mode: the window follows the mouse until the button is released. */
+  startIslandDrag: () => call<void>("start_island_drag"),
+  resetIslandPosition: () => call<void>("reset_island_position"),
+
   openUrl: (url: string) => call<void>("open_url", { url }),
 
   /** "Open terminal" → opens the folder in VS Code when `code` is on PATH. */

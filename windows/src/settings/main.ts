@@ -1475,6 +1475,18 @@ function generalSection(): HTMLElement {
     void save();
   });
 
+  const position = h("select", {}) as HTMLSelectElement;
+  position.append(
+    h("option", { value: "fixed", text: "Fija arriba al centro" }),
+    h("option", { value: "free", text: "Libre (arrástrala)" }),
+  );
+  position.value = settings.islandPosition;
+  position.addEventListener("change", () => {
+    settings.islandPosition = position.value as Settings["islandPosition"];
+    void save();
+  });
+  const resetPosition = h("button", { text: "Volver arriba al centro", onclick: () => void Bridge.resetIslandPosition() });
+
   return h(
     "section",
     {},
@@ -1493,6 +1505,12 @@ function generalSection(): HTMLElement {
       h("label", { text: "La isla vive en" }),
       screen,
     ),
+    h("div", { class: "row" },
+      h("label", { text: "Posición de la isla" }),
+      position,
+      resetPosition,
+    ),
+    h("div", { class: "hint", text: "En modo libre arrastra la isla a donde quieras: se queda ahí, redondeada, y no se esconde sola." }),
     h("div", { class: "row" },
       h("label", { text: "Iniciar con Windows" }),
       toggle(settings.autostart, (v) => { settings.autostart = v; void save(); }),

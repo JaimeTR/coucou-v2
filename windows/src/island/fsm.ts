@@ -18,6 +18,8 @@ export class IslandStateMachine {
   greetHoverCollapseDelay = 10;
   /** An alert waiting for an answer stays open, even when the mouse leaves. */
   pinned = false;
+  /** Free mode: a dragged island has no top edge to retract into, so it stays compact. */
+  neverHide = false;
 
   private petitHide: number | null = null;
   private homeCollapse: number | null = null;
@@ -106,6 +108,7 @@ export class IslandStateMachine {
 
   private schedulePetitHide() {
     this.clear("petitHide");
+    if (this.neverHide) return;
     this.petitHide = window.setTimeout(() => {
       this.petitHide = null;
       if (this.state === "petit") this.transition("hidden");

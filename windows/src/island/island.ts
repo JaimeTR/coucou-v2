@@ -664,7 +664,8 @@ export class Island {
     const r = this.radius.value;
     this.islandEl.style.width = `${w}px`;
     this.islandEl.style.height = `${hh}px`;
-    this.islandEl.style.borderRadius = `0 0 ${r}px ${r}px`;
+    // Dragged away from the top edge, the island is rounded all round.
+    this.islandEl.style.borderRadius = State.settings.islandPosition === "free" ? `${r}px` : `0 0 ${r}px ${r}px`;
     this.islandEl.style.transform = `translateX(-50%)`;
     // These follow the island as it resizes, so they belong here rather than in
     // the state-driven DOM sync.
@@ -724,6 +725,7 @@ export class Island {
     this.islandEl.addEventListener("mousedown", (e) => {
       Sound.resume();
       State.lastActivity = performance.now();
+      if (this.armDrag(e)) return;
       if (State.mode !== "expanded") {
         this.fsm.click();
         return;
@@ -808,6 +810,34 @@ export class Island {
     }
 
     this.ensureRunning();
+  }
+
+  /**
+   * Free mode: a press on the island (not on Mochi or a control) becomes a drag
+   * once the pointer moves a few px; released without moving, it is a click.
+   * Returns true when it took the press.
+   */
+  private armDrag(e: MouseEvent): boolean {
+    if (State.settings.islandPosition !== "free" || e.button !== 0) return false;
+    if ((e.target as Element).closest("button, input, textarea, select, a, [contenteditable], .pill")) return false;
+    if (State.mode === "expanded" && this.isBotHit(e.clientX, e.clientY)) return false;
+    const start = { x: e.screenX, y: e.screenY };
+    const move = (m: MouseEvent) => {
+      if (Math.hypot(m.screenX - start.x, m.screenY - start.y) < 4) return;
+      done();
+      void Bridge.startIslandDrag();
+    };
+    const up = () => {
+      done();
+      if (State.mode !== "expanded") this.fsm.click();
+    };
+    const done = () => {
+      window.removeEventListener("mousemove", move);
+      window.removeEventListener("mouseup", up);
+    };
+    window.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", up);
+    return true;
   }
 
   private isBotHit(x: number, y: number): boolean {
@@ -1142,6 +1172,7 @@ export class Island {
     Sound.setEnabled(State.settings.soundEnabled);
     Sound.setVolume(State.settings.soundVolume);
     this.fsm.homeToPetitDelay = State.settings.autoCloseInterval;
+    this.fsm.neverHide = State.settings.islandPosition === "free";
     State.notify();
   }
 

@@ -275,7 +275,10 @@ fn save_settings(app: AppHandle, shared: State<Shared>, mut settings: Settings) 
     let pills_changed = shared.settings.lock().unwrap().custom_pills != settings.custom_pills;
     let (screen_changed, autostart_changed, shortcuts_changed) = {
         let mut current = shared.settings.lock().unwrap();
-        let screen_changed = current.screen != settings.screen;
+        // The dragged position belongs to the island, not to the settings window,
+        // whose copy may be older: keep ours.
+        settings.island_offset = current.island_offset;
+        let screen_changed = current.screen != settings.screen || current.island_position != settings.island_position;
         let autostart_changed = current.autostart != settings.autostart;
         let shortcuts_changed = current.global_shortcuts != settings.global_shortcuts;
         *current = settings.clone();
@@ -334,6 +337,30 @@ fn focus_window(app: AppHandle, focused: bool) {
     if focused {
         let _ = win.set_focus();
     }
+}
+
+/// Free mode: the island follows the mouse until the button is released
+/// (the cursor poll then saves where it landed).
+#[tauri::command]
+fn start_island_drag(app: AppHandle) {
+    if let Some(win) = island::window(&app) {
+        let _ = win.start_dragging();
+    }
+}
+
+/// Back to the top centre; free mode stays free.
+#[tauri::command]
+fn reset_island_position(app: AppHandle, shared: State<Shared>) {
+    let (pref, settings) = {
+        let mut current = shared.settings.lock().unwrap();
+        current.island_offset = None;
+        (current.screen.clone(), current.clone())
+    };
+    if let Err(err) = settings::save(&settings) {
+        eprintln!("[coucou] could not save settings: {err}");
+    }
+    let collapsed = shared.gate.collapsed.load(Ordering::Relaxed);
+    island::apply_geometry(&app, &pref, collapsed);
 }
 
 #[tauri::command]
@@ -905,6 +932,8 @@ pub fn run() {
             set_island_rect,
             focus_window,
             reposition,
+            start_island_drag,
+            reset_island_position,
             open_url,
             open_in_vscode,
             launch_agent,

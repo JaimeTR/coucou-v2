@@ -56,6 +56,13 @@ pub struct Settings {
     /// Mochi's moods are spoken: slapped, dizzy, loved.
     #[serde(default)]
     pub voice_emotions: bool,
+    /// "fixed" = glued to the top centre (the default), "free" = wherever it was dragged.
+    #[serde(default = "default_island_position")]
+    pub island_position: String,
+    /// Free mode: the island window's top-left, in logical px from the display's
+    /// top-left. None until the island is first dragged. Only Rust writes it.
+    #[serde(default)]
+    pub island_offset: Option<(f64, f64)>,
     /// Who speaks: "system" (the voices Windows has) or "elevenlabs".
     #[serde(default = "default_voice_engine")]
     pub voice_engine: String,
@@ -215,6 +222,10 @@ fn default_start_pill() -> String {
     "integration_claude".into()
 }
 
+fn default_island_position() -> String {
+    "fixed".into()
+}
+
 fn default_greeting_language() -> String {
     "auto".into()
 }
@@ -269,6 +280,8 @@ impl Default for Settings {
             voice_enabled: false,
             voice_events: false,
             voice_emotions: false,
+            island_position: default_island_position(),
+            island_offset: None,
             voice_engine: default_voice_engine(),
             eleven_voice: default_eleven_voice(),
             eleven_model: default_eleven_model(),
