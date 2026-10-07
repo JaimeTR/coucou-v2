@@ -1,21 +1,31 @@
-/* Settings window — same palette as the island, laid out as a normal window. */
+/* Settings window — same palette as the island, laid out like a system settings app:
+   a sidebar of categories, and in each one, boxes of settings (name and note on the
+   left, control on the right). Works from 380 px wide up. */
 
 :root {
   /* Makes Windows render the native dropdown and scrollbars dark — without it
      the <select> popup is white text on white. */
   color-scheme: dark;
 
-  --font: system-ui, "Segoe UI Variable Text", "Segoe UI", sans-serif;
-  --mono: "Cascadia Mono", "Consolas", ui-monospace, monospace;
-  --ink: #f5f6f8;
-  --dim: #9398a1;
+  --font: system-ui, "Segoe UI Variable Text", "Segoe UI", -apple-system, sans-serif;
+  --font-display: "Segoe UI Variable Display", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --mono: "Cascadia Mono", "Consolas", ui-monospace, "SF Mono", monospace;
+  --ink: #f2f3f5;
+  --ink-2: #c9ccd2;
+  --dim: #979ca6;
   --dim-2: #6b7079;
   --bg: #0b0c0e;
-  --card: #141518;
+  --side: #0f1013;
+  --card: #15161a;
+  --card-2: #1b1c21;
   --hairline: rgba(255, 255, 255, 0.07);
+  --hairline-2: rgba(255, 255, 255, 0.12);
+  --accent: #8b9cff;
   --green: #22c55e;
   --red: #f4505e;
   --amber: #f5a524;
+  --titlebar: 36px;
+  --radius: 14px;
 }
 
 * {
@@ -27,36 +37,124 @@
 body.settings-window {
   background: var(--bg);
   color: var(--ink);
-  font: 400 13px/1.45 var(--font);
+  font: 400 13.5px/1.5 var(--font);
   -webkit-font-smoothing: antialiased;
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
+/* Thin, dark scrollbars instead of the white system ones. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.16) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 10px;
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(255, 255, 255, 0.24);
+}
+
+/* ── Title bar (the system one is off) ──────────────────────────────────── */
+
+.titlebar {
+  flex: 0 0 var(--titlebar);
+  height: var(--titlebar);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--side);
+  border-bottom: 1px solid var(--hairline);
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.titlebar-title {
+  flex: 1 1 auto;
+  padding-left: 14px;
+  font: 500 12px var(--font);
+  color: var(--dim);
+  height: 100%;
+  display: flex;
+  align-items: center;
+}
+
+.titlebar-buttons {
+  display: flex;
+  height: 100%;
+}
+
+.titlebar-buttons button {
+  border: 0;
+  width: 46px;
+  height: 100%;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.titlebar-buttons button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.titlebar-buttons button.close:hover:not(:disabled) {
+  background: #c42b1c;
+  color: #fff;
+}
+
+.titlebar-buttons button:active:not(:disabled) {
+  transform: none;
+}
+
+/* On a Mac the traffic lights sit at the left of the bar and close the window. */
+body.mac .titlebar-buttons {
+  display: none;
+}
+
+body.mac .titlebar-title {
+  padding-left: 78px;
+}
+
+/* ── Layout: sidebar + one category ─────────────────────────────────────── */
+
 #settings-root {
+  flex: 1 1 auto;
+  min-height: 0;
   padding: 22px 24px 32px;
   display: flex;
   flex-direction: column;
   gap: 18px;
-  max-width: 720px;
-  margin: 0 auto;
 }
 
-/* Sidebar + one category at a time. */
 #settings-root.two-pane {
   flex-direction: row;
   gap: 0;
   padding: 0;
-  max-width: none;
-  height: 100vh;
 }
 
 .side {
-  flex: 0 0 200px;
+  flex: 0 0 212px;
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 18px 10px 14px;
-  background: #0e0f12;
+  padding: 16px 10px 14px;
+  background: var(--side);
   border-right: 1px solid var(--hairline);
   overflow-y: auto;
 }
@@ -65,8 +163,8 @@ body.settings-window {
   display: flex;
   align-items: baseline;
   gap: 8px;
-  padding: 0 10px 14px;
-  font: 650 16px var(--font);
+  padding: 2px 10px 16px;
+  font: 650 17px var(--font-display);
   letter-spacing: -0.01em;
 }
 
@@ -76,22 +174,25 @@ body.settings-window {
 }
 
 .nav-item {
+  border: 0;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 11px;
   width: 100%;
-  padding: 8px 10px;
+  min-height: 36px;
+  padding: 7px 10px;
   border-radius: 9px;
   background: transparent;
   color: var(--dim);
-  font: 500 13px var(--font);
+  font: 500 13.5px var(--font);
   text-align: left;
+  white-space: nowrap;
 }
 
 .nav-item svg {
   fill: currentColor;
   flex: 0 0 auto;
-  opacity: 0.85;
+  opacity: 0.9;
 }
 
 .nav-item:hover:not(:disabled) {
@@ -100,8 +201,12 @@ body.settings-window {
 }
 
 .nav-item.on {
-  background: rgba(255, 255, 255, 0.09);
+  background: rgba(139, 156, 255, 0.14);
   color: var(--ink);
+}
+
+.nav-item.on svg {
+  color: var(--accent);
 }
 
 .nav-item:active:not(:disabled) {
@@ -111,95 +216,183 @@ body.settings-window {
 .side-note {
   padding: 10px 10px 0;
   font-size: 11px;
-  line-height: 1.4;
+  line-height: 1.45;
   color: var(--dim-2);
+}
+
+.spacer {
+  flex: 1 1 auto;
 }
 
 .content {
   flex: 1 1 auto;
   min-width: 0;
   overflow-y: auto;
-  padding: 22px 28px 40px;
+  padding: 26px 32px 48px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 20px;
+}
+
+/* Keeps long lines readable on a wide window. */
+.content > * {
+  width: 100%;
+  max-width: 760px;
 }
 
 .content > h1 {
-  font: 650 20px var(--font);
-  letter-spacing: -0.015em;
-  margin-bottom: 2px;
+  font: 650 24px/1.2 var(--font-display);
+  letter-spacing: -0.02em;
 }
 
-/* Narrow window: the categories become a strip on top. */
-@media (max-width: 620px) {
-  #settings-root.two-pane {
-    flex-direction: column;
-    height: auto;
-  }
-  .side {
-    flex: 0 0 auto;
-    flex-direction: row;
-    flex-wrap: wrap;
-    border-right: 0;
-    border-bottom: 1px solid var(--hairline);
-    padding: 12px;
-  }
-  .brand,
-  .side-note,
-  .side .spacer {
-    display: none;
-  }
-  .nav-item {
-    width: auto;
-  }
-  .content {
-    overflow: visible;
-    padding: 18px 16px 32px;
-  }
-}
-
-/* The setup checklist: dot, text and button on one line, the text wrapping. */
-.row.check-item {
-  align-items: flex-start;
-  flex-wrap: nowrap;
-  gap: 10px;
-}
-
-.row.check-item > .dot {
-  margin-top: 5px;
-}
-
-h1 {
-  font: 600 17px var(--font);
-  letter-spacing: -0.01em;
-}
-
-h1 .version {
-  font: 400 12px var(--font);
-  color: var(--dim-2);
-  margin-left: 8px;
-}
+/* ── Sections and groups ────────────────────────────────────────────────── */
 
 section {
   background: var(--card);
   border: 1px solid var(--hairline);
-  border-radius: 14px;
-  padding: 18px 20px;
+  border-radius: var(--radius);
+  padding: 6px 18px 14px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
+}
+
+/* A section built from groups: no card of its own, the groups are the cards. */
+section.plain {
+  background: none;
+  border: 0;
+  padding: 0;
+  gap: 18px;
 }
 
 section > h2 {
-  font: 600 14px var(--font);
+  font: 600 15px var(--font-display);
+  letter-spacing: -0.005em;
   display: flex;
   align-items: center;
   gap: 8px;
+  padding-top: 12px;
+}
+
+/* The first line under a section's title says what it is for. */
+section > h2 + .hint,
+.lead {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--dim);
+  max-width: 64ch;
+}
+
+.group-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.group-title {
+  font: 600 11px var(--font);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--dim);
+  padding: 0 4px;
+}
+
+.group {
+  background: var(--card);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  padding: 2px 18px;
+  display: flex;
+  flex-direction: column;
+}
+
+.group > .notice,
+.group > div:not(.field) {
+  margin: 10px 0;
+}
+
+.group-note {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--dim-2);
+}
+
+/* ── One setting ────────────────────────────────────────────────────────── */
+
+.field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 24px;
+  padding: 13px 0;
+  flex-wrap: wrap;
+}
+
+.field + .field,
+.group > * + .field,
+section > * + .field {
+  border-top: 1px solid var(--hairline);
+}
+
+.field-text {
+  flex: 1 1 220px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.field-label {
+  font: 500 13.5px var(--font);
+  color: var(--ink);
+}
+
+.field-hint {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--dim);
+}
+
+.field-ctrl {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* Text fields and lists take the room they need, not the whole line. */
+.field-ctrl input[type="text"],
+.field-ctrl input[type="password"],
+.field-ctrl input[type="url"],
+.field-ctrl select {
+  width: 260px;
+  max-width: 100%;
+}
+
+/* Some fields carry an inline "fill the row" flex: in a field the control keeps its own width. */
+.field-ctrl > input,
+.field-ctrl > select {
+  flex: 0 1 auto !important;
+}
+
+.field-ctrl input[type="number"] {
+  width: 84px;
+}
+
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 0;
 }
 
 .hint {
-  font: 400 12px var(--font);
+  font: 400 12px/1.5 var(--font);
   color: var(--dim);
 }
 
@@ -210,16 +403,6 @@ section > h2 {
   flex-wrap: wrap;
 }
 
-.row > label {
-  min-width: 132px;
-  color: var(--dim);
-  font-size: 12.5px;
-}
-
-.spacer {
-  flex: 1 1 auto;
-}
-
 .dot {
   width: 8px;
   height: 8px;
@@ -228,27 +411,60 @@ section > h2 {
   flex: 0 0 auto;
 }
 
+/* The setup checklist: dot, text and button on one line, the text wrapping. */
+.row.check-item {
+  align-items: flex-start;
+  flex-wrap: nowrap;
+  gap: 12px;
+  padding: 10px 0;
+}
+
+.row.check-item + .row.check-item {
+  border-top: 1px solid var(--hairline);
+}
+
+.row.check-item > .dot {
+  margin-top: 6px;
+}
+
+.row.check-item > button {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+/* ── Controls ───────────────────────────────────────────────────────────── */
+
 button {
-  font: 500 12.5px var(--font);
-  padding: 7px 14px;
-  border: 0;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.09);
+  font: 500 13px var(--font);
+  min-height: 32px;
+  padding: 6px 14px;
+  border: 1px solid var(--hairline-2);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.06);
   color: var(--ink);
   cursor: pointer;
-  transition: background 0.14s, transform 0.08s;
+  white-space: nowrap;
+  transition: background 0.14s, border-color 0.14s, transform 0.08s;
 }
 
 button:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.11);
 }
 
 button:active:not(:disabled) {
-  transform: scale(0.96);
+  transform: scale(0.97);
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 
 button.primary {
   background: var(--ink);
+  border-color: var(--ink);
   color: #0b0c0e;
 }
 
@@ -257,8 +473,13 @@ button.primary:hover:not(:disabled) {
 }
 
 button.danger {
-  background: rgba(244, 80, 94, 0.16);
+  background: rgba(244, 80, 94, 0.1);
+  border-color: rgba(244, 80, 94, 0.3);
   color: #ff8d97;
+}
+
+button.danger:hover:not(:disabled) {
+  background: rgba(244, 80, 94, 0.18);
 }
 
 button:disabled {
@@ -268,40 +489,48 @@ button:disabled {
 
 code,
 .path {
-  font: 400 11.5px var(--mono);
-  color: var(--dim);
+  font: 400 12px var(--mono);
+  color: var(--ink-2);
   word-break: break-all;
   user-select: text;
 }
 
 .switch {
   position: relative;
-  width: 36px;
-  height: 20px;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.15);
-  flex: 0 0 36px;
+  width: 40px;
+  min-height: 0;
+  height: 22px;
+  border-radius: 11px;
+  border: 0;
+  background: rgba(255, 255, 255, 0.16);
+  flex: 0 0 40px;
   padding: 0;
 }
 
-.switch.on {
+.switch:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.switch.on,
+.switch.on:hover:not(:disabled) {
   background: var(--green);
 }
 
 .switch::after {
   content: "";
   position: absolute;
-  top: 2px;
-  left: 2px;
+  top: 3px;
+  left: 3px;
   width: 16px;
   height: 16px;
   border-radius: 50%;
   background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
   transition: transform 0.18s;
 }
 
 .switch.on::after {
-  transform: translateX(16px);
+  transform: translateX(18px);
 }
 
 input[type="range"] {
@@ -310,13 +539,13 @@ input[type="range"] {
   height: 4px;
   border-radius: 2px;
   background: rgba(255, 255, 255, 0.2);
-  width: 140px;
+  width: 160px;
 }
 
 input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none;
-  width: 13px;
-  height: 13px;
+  width: 15px;
+  height: 15px;
   border-radius: 50%;
   background: #fff;
 }
@@ -325,23 +554,28 @@ input[type="number"],
 input[type="text"],
 input[type="password"],
 input[type="url"],
-select {
-  font: 400 12.5px var(--font);
-  background: rgba(255, 255, 255, 0.07);
-  border: 1px solid var(--hairline);
-  border-radius: 8px;
+select,
+textarea {
+  font: 400 13px var(--font);
+  min-height: 32px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--hairline-2);
+  border-radius: 9px;
   color: var(--ink);
-  padding: 5px 8px;
+  padding: 5px 10px;
 }
 
-input::placeholder {
+input::placeholder,
+textarea::placeholder {
   color: var(--dim-2);
 }
 
 input:focus,
-select:focus {
+select:focus,
+textarea:focus {
   outline: none;
-  border-color: rgba(255, 255, 255, 0.28);
+  border-color: rgba(139, 156, 255, 0.6);
+  background: rgba(255, 255, 255, 0.07);
 }
 
 /* The popup is drawn by the OS: give it an explicit pair of colours rather than
@@ -352,12 +586,12 @@ select option {
 }
 
 .diff {
-  font: 400 11.5px/1.5 var(--mono);
+  font: 400 12px/1.55 var(--mono);
   background: #08090b;
   border: 1px solid var(--hairline);
   border-radius: 10px;
   padding: 10px 12px;
-  max-height: 260px;
+  max-height: 280px;
   overflow: auto;
   white-space: pre;
   user-select: text;
@@ -375,28 +609,120 @@ select option {
   color: var(--dim-2);
 }
 
+/* Messages: a soft tint and a coloured edge, readable at a glance. */
 .notice {
-  font: 400 12px var(--font);
+  font: 400 12.5px/1.5 var(--font);
   border-radius: 10px;
-  padding: 8px 12px;
+  padding: 10px 14px 10px 13px;
+  border: 1px solid transparent;
+  border-left-width: 3px;
 }
 
 .notice.ok {
-  background: rgba(34, 197, 94, 0.12);
-  color: #86efac;
+  background: rgba(34, 197, 94, 0.08);
+  border-color: rgba(34, 197, 94, 0.22);
+  border-left-color: var(--green);
+  color: #a7f3c4;
 }
 
 .notice.err {
-  background: rgba(244, 80, 94, 0.14);
-  color: #ff8d97;
+  background: rgba(244, 80, 94, 0.08);
+  border-color: rgba(244, 80, 94, 0.25);
+  border-left-color: var(--red);
+  color: #ffb1b8;
 }
 
 .notice.warn {
-  background: rgba(245, 165, 36, 0.13);
-  color: #fbc06a;
+  background: rgba(245, 165, 36, 0.07);
+  border-color: rgba(245, 165, 36, 0.22);
+  border-left-color: var(--amber);
+  color: #fcd38d;
 }
 
-.row.check-item > button {
-  flex: 0 0 auto;
-  white-space: nowrap;
+/* ── Narrower windows ───────────────────────────────────────────────────── */
+
+/* Middle: the sidebar keeps only its icons. */
+@media (max-width: 760px) {
+  .side {
+    flex-basis: 60px;
+    padding: 12px 8px;
+    align-items: center;
+  }
+  .brand,
+  .side-note,
+  .nav-item span {
+    display: none;
+  }
+  .nav-item {
+    width: 44px;
+    justify-content: center;
+    padding: 0;
+  }
+  .content {
+    padding: 22px 22px 40px;
+  }
+}
+
+/* Narrow: every control goes under its name, full width. */
+@media (max-width: 560px) {
+  .field {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .field-text {
+    flex-basis: auto;
+  }
+  .field-ctrl {
+    justify-content: flex-start;
+  }
+  .field-ctrl input[type="text"],
+  .field-ctrl input[type="password"],
+  .field-ctrl input[type="url"],
+  .field-ctrl select {
+    width: 100%;
+  }
+  .content {
+    padding: 18px 16px 32px;
+  }
+  .content > h1 {
+    font-size: 21px;
+  }
+  .group,
+  section:not(.plain) {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+}
+
+/* A service's name with its colour, and a key's name with its saved/unsaved dot. */
+.service-name,
+.with-dot {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.service-name {
+  font: 600 14px var(--font);
+}
+
+.group > .button-row {
+  margin: 0;
+  padding: 4px 0 14px;
+}
+
+.group > .group-note {
+  margin: 0 0 12px;
+}
+
+/* A section whose title is hidden (it repeats the category) starts without a line. */
+section > h2[style*="none"] + .field,
+section > h2[style*="none"] + .hint + .field {
+  border-top: 0;
+}
+
+/* A setting with extra lines under it (Updates: its messages and button). */
+.field-group {
+  border-top: 1px solid var(--hairline);
+  padding-bottom: 8px;
 }

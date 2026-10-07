@@ -3,7 +3,8 @@
 // integrations land here too in a later stage.
 
 import "./settings.css";
-import { Bridge, onEvent, type AgentStatus, type DetectedTool, type HookStatus, type UpdateInfo } from "../core/bridge";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import { Bridge, IS_TAURI, onEvent, type AgentStatus, type DetectedTool, type HookStatus, type UpdateInfo } from "../core/bridge";
 import { applyLanguage } from "../core/i18n";
 import { speak, stopSpeaking } from "../core/voice";
 import { State } from "../core/state";
@@ -37,6 +38,59 @@ function toggle(on: boolean, onChange: (v: boolean) => void): HTMLElement {
     onChange(next);
   });
   return el;
+}
+
+/**
+ * One setting: its name and a line of explanation on the left, the control on
+ * the right (stacked on a narrow window).
+ */
+function field(label: string, hint: string | HTMLElement, ...controls: (HTMLElement | string)[]): HTMLElement {
+  const text = h("div", { class: "field-text" }, h("div", { class: "field-label", text: label }));
+  if (hint) text.append(typeof hint === "string" ? h("div", { class: "field-hint", text: hint }) : h("div", { class: "field-hint" }, hint));
+  return h("div", { class: "field" }, text, h("div", { class: "field-ctrl" }, ...controls));
+}
+
+/** Settings that belong together, in one rounded box with a small heading. */
+function group(title: string, ...children: (HTMLElement | string)[]): HTMLElement {
+  return h("div", { class: "group-wrap" },
+    title ? h("div", { class: "group-title", text: title }) : "",
+    h("div", { class: "group" }, ...children),
+  );
+}
+
+/**
+ * Turns an older `.row` (a label, its controls, a hint span) into a `.field`
+ * in place, so code that kept a reference to the row (to hide it, say) still
+ * works. Rows without a label become a right-aligned button row.
+ */
+function upgradeRows(scope: HTMLElement) {
+  for (const row of Array.from(scope.querySelectorAll<HTMLElement>(".row:not(.check-item)"))) {
+    const first = row.firstElementChild;
+    if (!(first instanceof HTMLLabelElement)) {
+      row.classList.replace("row", "button-row");
+      continue;
+    }
+    const text = h("div", { class: "field-text" });
+    first.classList.add("field-label");
+    text.append(first);
+    const ctrl = h("div", { class: "field-ctrl" });
+    for (const child of Array.from(row.childNodes)) {
+      if (child instanceof HTMLElement && child.classList.contains("hint")) {
+        child.classList.replace("hint", "field-hint");
+        text.append(child);
+      } else {
+        ctrl.append(child);
+      }
+    }
+    row.classList.replace("row", "field");
+    row.replaceChildren(text, ctrl);
+    // A note written as its own line right under the row belongs to it.
+    const next = row.nextElementSibling;
+    if (next instanceof HTMLDivElement && next.className === "hint") {
+      next.className = "field-hint";
+      text.append(next);
+    }
+  }
 }
 
 function statusDot(ok: boolean): HTMLElement {
@@ -210,9 +264,12 @@ const AGENTS: AgentDef[] = [
  * only after a click. Disconnecting removes Coucou's part and nothing else.
  */
 function agentsSection(initial: AgentStatus[]): HTMLElement {
-  const note = h("div", { class: "hint" });
-  const list = h("div", { style: "display:flex;flex-direction:column;gap:18px" });
+  const note = h("p", { class: "lead" });
+  const list = h("div", { style: "display:flex;flex-direction:column;gap:14px" });
   const statuses = new Map(initial.map((s) => [s.id, s]));
+  const NAMES: Record<string, string> = {
+    gemini: "Gemini CLI", opencode: "OpenCode", copilot: "Copilot CLI", muse: "Muse Code", vscode: "VS Code",
+  };
 
   function updateNote() {
     const used = settings.activeIntegrations.length;
@@ -239,17 +296,12 @@ function agentsSection(initial: AgentStatus[]): HTMLElement {
     });
 
     const connected = status?.installed ?? false;
-    box.append(
-      h("div", { class: "row" },
-        sw,
-        h("i", { class: "dot", style: `background:${def.color}` }),
-        h("span", { style: "font-size:12.5px;min-width:140px", text: status?.name ?? def.id }),
-        statusDot(connected),
-        h("span", { class: "hint", text: connected ? "Conectado" : "Sin conectar" }),
-      ),
-      h("div", { class: "hint", text: def.what }),
+    const head = field("", h("span", { class: "with-dot" }, statusDot(connected), h("span", { text: connected ? "Conectado" : "Sin conectar" })), sw);
+    head.querySelector(".field-label")?.replaceChildren(
+      h("span", { class: "service-name" }, h("i", { class: "dot", style: `background:${def.color}` }), h("span", { text: status?.name ?? NAMES[def.id] ?? def.id })),
     );
-    if (status && !status.detected && def.missing) box.append(h("div", { class: "hint", text: def.missing }));
+    box.append(head, h("div", { class: "group-note", text: def.what }));
+    if (status && !status.detected && def.missing) box.append(h("div", { class: "group-note", text: def.missing }));
 
     const actions = h("div", { class: "row" });
     actions.append(h("button", {
@@ -317,12 +369,12 @@ function agentsSection(initial: AgentStatus[]): HTMLElement {
   }
 
   for (const def of AGENTS) {
-    const box = h("div", { style: "display:flex;flex-direction:column;gap:8px" });
+    const box = h("div", { class: "group" });
     list.append(box);
     drawAgent(def, box);
   }
   updateNote();
-  return h("section", {}, h("h2", {}, h("span", { text: "Agentes" })), note, list);
+  return h("section", { class: "plain" }, note, list);
 }
 
 // ── Your own apps ─────────────────────────────────────────────────────────────
@@ -479,20 +531,14 @@ function voiceSection(present: Record<string, boolean>): HTMLElement {
   engine.value = settings.voiceEngine;
 
   // ElevenLabs: key, voice, model.
-  const keyField = h("input", {
-    type: "password", placeholder: "sk_…", autocomplete: "off", spellcheck: "false",
-    style: "flex:1 1 auto;min-width:0",
-  }) as HTMLInputElement;
-  const keyState = h("span", { class: "hint" });
-  const saveKey = h("button", { class: "primary", text: "Guardar clave" });
+  const keyField = h("input", { type: "password", placeholder: "sk_…", autocomplete: "off", spellcheck: "false" }) as HTMLInputElement;
+  const keyState = h("span");
+  const saveKey = h("button", { class: "primary", text: "Guardar" });
   const clearKey = h("button", { class: "danger", text: "Quitar" });
   const feedback = h("div", {});
 
-  const voice = h("select", { style: "flex:1 1 auto;min-width:0" }) as HTMLSelectElement;
-  const voiceId = h("input", {
-    type: "text", value: settings.elevenVoice, spellcheck: "false", placeholder: "ID de la voz",
-    style: "flex:1 1 auto;min-width:0",
-  }) as HTMLInputElement;
+  const voice = h("select", {}) as HTMLSelectElement;
+  const voiceId = h("input", { type: "text", value: settings.elevenVoice, spellcheck: "false", placeholder: "ID de la voz" }) as HTMLInputElement;
   const model = h("select", {}) as HTMLSelectElement;
   model.append(
     h("option", { value: "eleven_multilingual_v2", text: "Multilingual v2 (la más natural)" }),
@@ -501,25 +547,21 @@ function voiceSection(present: Record<string, boolean>): HTMLElement {
   );
   model.value = settings.elevenModel;
 
-  const eleven = h("div", { style: "display:flex;flex-direction:column;gap:10px" },
-    h("div", {
-      class: "hint",
-      text: "ElevenLabs crea voces muy naturales, y también una voz tuya o a tu gusto en su web. Crea tu clave en elevenlabs.io (Developers → API Keys), pégala aquí y elige tu voz. Cada respuesta leída gasta caracteres de tu plan de ElevenLabs.",
-    }),
-    keyState,
-    h("div", { class: "row" }, h("label", { text: "Clave API" }), keyField, saveKey, clearKey),
-    h("div", { class: "row" }, h("button", { text: "Conseguir una clave", onclick: () => void Bridge.openUrl("https://elevenlabs.io/app/settings/api-keys") })),
-    h("div", { class: "row" }, h("label", { text: "Voz" }), voice, h("button", { text: "Cargar mis voces", onclick: () => void loadVoices() })),
-    h("div", { class: "row" }, h("label", { text: "ID de la voz" }), voiceId),
-    h("div", { class: "hint", text: "Elige una de tu lista, o pega el ID de una voz tuya (en ElevenLabs: Voces → ⋯ → Copiar ID)." }),
-    h("div", { class: "row" }, h("label", { text: "Modelo" }), model),
+  const eleven = group("ElevenLabs",
+    h("div", { class: "group-note", text: "Voces muy naturales, o una tuya, creadas en elevenlabs.io. Cada frase gasta caracteres de tu plan; las frases repetidas no se cobran dos veces." }),
+    field("Clave API", keyState, keyField, saveKey, clearKey),
+    field("¿No tienes clave?", "Developers → API Keys en tu cuenta de ElevenLabs.",
+      h("button", { text: "Conseguir una clave", onclick: () => void Bridge.openUrl("https://elevenlabs.io/app/settings/api-keys") })),
+    field("Voz", "Una de tu lista.", voice, h("button", { text: "Cargar mis voces", onclick: () => void loadVoices() })),
+    field("ID de la voz", "O pega el de una voz tuya (Voces → ⋯ → Copiar ID).", voiceId),
+    field("Modelo", "", model),
     feedback,
   );
 
   async function refreshKey() {
     const has = (await Bridge.secretPresent("elevenlabs-api-key")) ?? false;
     present["elevenlabs-api-key"] = has;
-    keyState.textContent = has ? "Clave guardada en el Administrador de credenciales de Windows." : "Aún no hay clave de ElevenLabs.";
+    keyState.textContent = has ? "Guardada en el Administrador de credenciales de Windows." : "Aún no hay clave.";
     keyField.placeholder = has ? "••••••••••••  (guardada)" : "sk_…";
     clearKey.style.display = has ? "" : "none";
   }
@@ -592,73 +634,60 @@ function voiceSection(present: Record<string, boolean>): HTMLElement {
   });
 
   // What Mochi says on its own, once its voice is on.
-  const optionsBox = h("div", { style: "display:flex;flex-direction:column;gap:10px;padding-left:12px" },
-    h("div", { class: "row" },
-      h("label", { text: "Dice la bienvenida" }),
-      toggle(settings.voiceGreeting, (v) => { settings.voiceGreeting = v; void save(); }),
-      h("span", { class: "hint", text: "tu nombre y el momento del día al iniciar" }),
-    ),
-    h("div", { class: "row" },
-      h("label", { text: "Avisa de los agentes" }),
-      toggle(settings.voiceEvents, (v) => { settings.voiceEvents = v; void save(); }),
-      h("span", { class: "hint", text: "sesión terminada, permisos, preguntas y errores de Claude Code y los demás agentes" }),
-    ),
-    h("div", { class: "row" },
-      h("label", { text: "Dice lo que siente" }),
-      toggle(settings.voiceEmotions, (v) => { settings.voiceEmotions = v; void save(); }),
-      h("span", { class: "hint", text: "cuando le haces clic, se marea o le das cariño" }),
-    ),
-    h("div", { class: "row" },
-      h("label", { text: "Lee las respuestas del chat" }),
-      toggle(settings.voiceReplies, (v) => { settings.voiceReplies = v; void save(); }),
-      h("span", { class: "hint", text: "las respuestas largas se cortan en la primera frase o dos; con ElevenLabs gastan crédito" }),
-    ),
-    h("div", { class: "hint", text: "«Oye Mochi» también habla (el saludo y «Abriendo Claude Code») cuando la voz está activada. Cada respuesta del chat tiene además un botón de altavoz que usa la voz gratis de Windows." }),
-  );
-  optionsBox.style.display = settings.voiceEnabled ? "" : "none";
+  const options = [
+    field("Dice la bienvenida", "Tu nombre y el momento del día al iniciar.",
+      toggle(settings.voiceGreeting, (v) => { settings.voiceGreeting = v; void save(); })),
+    field("Avisa de los agentes", "Sesión terminada, permisos, preguntas y errores de Claude Code y los demás agentes.",
+      toggle(settings.voiceEvents, (v) => { settings.voiceEvents = v; void save(); })),
+    field("Dice lo que siente", "Cuando le haces clic, se marea o le das cariño.",
+      toggle(settings.voiceEmotions, (v) => { settings.voiceEmotions = v; void save(); })),
+    field("Lee las respuestas del chat", "Solo la primera frase o dos; con ElevenLabs gastan crédito.",
+      toggle(settings.voiceReplies, (v) => { settings.voiceReplies = v; void save(); })),
+  ];
+  const showOptions = (on: boolean) => options.forEach((o) => (o.style.display = on ? "" : "none"));
+  showOptions(settings.voiceEnabled);
 
   // Listening: the wake phrase, and the shortcut that pauses it.
-  const groqNote = h("div", { class: "hint" });
+  const groqNote = h("span");
   void Bridge.secretPresent("groq-api-key").then((has) => {
     groqNote.textContent = has
-      ? "Entender tu voz usa Whisper de Groq con la clave que ya guardaste."
-      : "Para entender tu voz hace falta una clave de Groq (Proveedor de chat → Groq).";
+      ? "Usa Whisper de Groq con la clave que ya guardaste."
+      : "Necesita una clave de Groq (Chat e IA → Groq).";
   });
 
-  return h("section", {},
-    h("h2", {}, h("span", { text: "Voz" })),
-    h("div", { class: "hint", text: "Mochi puede hablarte y escucharte. Todo es opcional y está desactivado hasta que lo actives." }),
-    h("div", { class: "row" }, h("label", { text: "Quién habla" }), engine, test),
+  return h("section", { class: "plain" },
+    h("p", { class: "lead", text: "Mochi puede hablarte y escucharte. Todo es opcional y está apagado hasta que lo enciendas." }),
+    group("Quién habla",
+      field("Voz de Mochi", "Windows: gratis y sin conexión. ElevenLabs: natural o tu propia voz.", engine, test),
+    ),
     eleven,
-    h("div", { class: "row" },
-      h("label", { text: "Mochi habla" }),
-      toggle(settings.voiceEnabled, (v) => {
-        settings.voiceEnabled = v;
-        if (v && !settings.voiceGreeting && !settings.voiceEvents) {
-          // First time: start with the useful ones; replies stay off (they can be long and cost credit).
-          settings.voiceGreeting = true;
-          settings.voiceEvents = true;
-          settings.voiceEmotions = true;
-        }
-        void save();
-        optionsBox.style.display = v ? "" : "none";
-        if (v) {
-          State.settings = { ...State.settings, ...settings };
-          speak(settings.userName.trim() ? `Hola ${settings.userName.trim()}` : "Hola");
-        }
-      }),
-      h("span", { class: "hint", text: "activa la voz de Mochi; sin esto no dice nada por sí solo" }),
+    group("Qué dice Mochi",
+      field("Mochi habla", "Sin esto no dice nada por sí solo.",
+        toggle(settings.voiceEnabled, (v) => {
+          settings.voiceEnabled = v;
+          if (v && !settings.voiceGreeting && !settings.voiceEvents) {
+            // First time: start with the useful ones; replies stay off (they can be long and cost credit).
+            settings.voiceGreeting = true;
+            settings.voiceEvents = true;
+            settings.voiceEmotions = true;
+          }
+          void save();
+          showOptions(v);
+          if (v) {
+            State.settings = { ...State.settings, ...settings };
+            speak(settings.userName.trim() ? `Hola ${settings.userName.trim()}` : "Hola");
+          }
+        })),
+      ...options,
+      h("div", { class: "group-note", text: "«Oye Mochi» también habla cuando la voz está encendida. Cada respuesta del chat tiene un botón de altavoz con la voz gratis de Windows." }),
     ),
-    optionsBox,
-    h("div", { class: "row" },
-      h("label", { text: "Escuchar «Oye Mochi»" }),
-      toggle(settings.wakeWord, (v) => { settings.wakeWord = v; void save(); }),
-      h("span", { class: "hint", text: "dices «Oye Mochi» y se abre el chat para hablar" }),
+    group("Escuchar",
+      field("Escuchar «Oye Mochi»", groqNote,
+        toggle(settings.wakeWord, (v) => { settings.wakeWord = v; void save(); })),
+      h("div", { class: "notice warn", text: "Mientras está encendido, el micrófono está abierto y cada frase se envía a Groq para entenderla (no se guarda nada). Apágalo aquí, con el micrófono de la isla o con el atajo." }),
+      shortcutRow("listen", "Encender o pausar la escucha", "Ctrl+Alt+M", () => settings.listenShortcut, (a) => (settings.listenShortcut = a)),
+      h("div", { class: "group-note", text: "En el chat también hay un botón de micrófono para dictar una sola pregunta, sin «Oye Mochi»." }),
     ),
-    h("div", { class: "notice warn", text: "Mientras está activado, el micrófono está abierto y cada frase que dices se envía a Groq para entenderla (no se guarda nada). Desactívalo cuando no lo quieras, aquí, con el botón del micrófono de la isla o con el atajo de abajo." }),
-    groqNote,
-    shortcutRow("listen", "Activar o pausar la escucha con", "Ctrl+Alt+M", () => settings.listenShortcut, (a) => (settings.listenShortcut = a)),
-    h("div", { class: "hint", text: "En el chat también hay un botón de micrófono para dictar una sola pregunta, sin activar «Oye Mochi»." }),
   );
 }
 
@@ -1384,8 +1413,8 @@ const INTEGRATIONS: IntegrationDef[] = [
 const MAX_ACTIVE = 4;
 
 function integrationsSection(present: Record<string, boolean>): HTMLElement {
-  const note = h("div", { class: "hint" });
-  const list = h("div", { style: "display:flex;flex-direction:column;gap:14px" });
+  const note = h("p", { class: "lead" });
+  const cards: HTMLElement[] = [];
 
   function updateNote() {
     const used = settings.activeIntegrations.length;
@@ -1394,7 +1423,7 @@ function integrationsSection(present: Record<string, boolean>): HTMLElement {
 
   for (const def of INTEGRATIONS) {
     const active = settings.activeIntegrations.includes(def.id);
-    const sw = h("button", { class: active ? "switch on" : "switch" });
+    const sw = h("button", { class: active ? "switch on" : "switch", "aria-label": `Mostrar ${def.name}` });
     sw.addEventListener("click", () => {
       const on = settings.activeIntegrations.includes(def.id);
       if (on) {
@@ -1408,51 +1437,46 @@ function integrationsSection(present: Record<string, boolean>): HTMLElement {
       void save();
     });
 
-    const rows = h("div", { style: "display:flex;flex-direction:column;gap:6px;flex:1 1 auto;min-width:0" });
-    for (const field of def.fields) {
+    const keyFields = def.fields.map((f) => {
       const input = h("input", {
-        type: field.secret ? "password" : "text",
-        placeholder: present[field.key] ? "••••••••  (guardada)" : field.placeholder,
+        type: f.secret ? "password" : "text",
+        placeholder: present[f.key] ? "••••••••  (guardada)" : f.placeholder,
         autocomplete: "off",
         spellcheck: "false",
-        style: "flex:1 1 auto;min-width:0",
       }) as HTMLInputElement;
+      const state = h("span", { text: present[f.key] ? "Guardada." : "Sin guardar." });
       const saveBtn = h("button", { text: "Guardar" });
-      const dotEl = statusDot(present[field.key] ?? false);
+      const dotEl = statusDot(present[f.key] ?? false);
       saveBtn.addEventListener("click", async () => {
         const value = input.value.trim();
         try {
-          await Bridge.secretSet(field.key, value);
-          present[field.key] = value.length > 0;
+          await Bridge.secretSet(f.key, value);
+          present[f.key] = value.length > 0;
           input.value = "";
-          input.placeholder = value ? "••••••••  (guardada)" : field.placeholder;
+          input.placeholder = value ? "••••••••  (guardada)" : f.placeholder;
           dotEl.style.background = value ? "#22c55e" : "#f4505e";
+          state.textContent = value ? "Guardada." : "Sin guardar.";
         } catch {
           dotEl.style.background = "#f5a524";
+          state.textContent = "No se pudo guardar.";
         }
       });
-      rows.append(
-        h("div", { class: "row" },
-          h("label", { style: "min-width:104px", text: field.label }),
-          input, saveBtn, dotEl,
-        ),
-      );
-    }
+      const label = h("span", { class: "with-dot" }, dotEl, h("span", { text: f.label }));
+      const row = field("", state, input, saveBtn);
+      row.querySelector(".field-label")?.replaceChildren(label);
+      return row;
+    });
 
-    list.append(
-      h("div", { style: "display:flex;gap:12px;align-items:flex-start" },
-        h("div", { style: "display:flex;align-items:center;gap:8px;min-width:132px;padding-top:4px" },
-          sw,
-          h("i", { class: "dot", style: `background:${def.color}` }),
-          h("span", { style: "font-size:12.5px", text: def.name }),
-        ),
-        rows,
-      ),
-    );
+    cards.push(group("",
+      field("", "Mostrar su pill junto a Mochi.", sw),
+      ...keyFields,
+    ));
+    const title = cards[cards.length - 1].querySelector(".field-label");
+    title?.replaceChildren(h("span", { class: "service-name" }, h("i", { class: "dot", style: `background:${def.color}` }), h("span", { text: def.name })));
   }
 
   updateNote();
-  return h("section", {}, h("h2", {}, h("span", { text: "Integraciones" })), note, list);
+  return h("section", { class: "plain" }, note, ...cards);
 }
 
 // ── General section ───────────────────────────────────────────────────────────
@@ -1492,7 +1516,7 @@ function updatesRow(): HTMLElement {
     say(true, `Hay una versión nueva: ${u.version}.`);
     note.append(install(u.version));
   });
-  return h("div", { style: "display:flex;flex-direction:column;gap:8px" },
+  return h("div", { class: "field-group" },
     h("div", { class: "row" }, h("label", { text: "Actualizaciones" }), mode, look),
     h("div", { class: "hint", text: "Automáticas: Coucou se actualiza solo cuando no hay ninguna sesión trabajando ni un permiso esperando. Las versiones vienen firmadas desde GitHub." }),
     note,
@@ -1717,7 +1741,19 @@ function syncSection(): HTMLElement {
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 
+/** The page's own title bar: the system one is off (white on a dark window). */
+function wireTitlebar() {
+  const mac = /Mac/i.test(navigator.platform);
+  document.body.classList.toggle("mac", mac);
+  if (!IS_TAURI) return;
+  const win = getCurrentWindow();
+  document.getElementById("tb-min")?.addEventListener("click", () => void win.minimize());
+  document.getElementById("tb-max")?.addEventListener("click", () => void win.toggleMaximize());
+  document.getElementById("tb-close")?.addEventListener("click", () => void win.close());
+}
+
 async function main() {
+  wireTitlebar();
   const boot = await Bridge.boot();
   if (boot) {
     settings = { ...settings, ...boot.settings };
@@ -1775,7 +1811,7 @@ async function main() {
   const nav = h("nav", { class: "side" },
     h("div", { class: "brand" }, h("span", { text: "Coucou" }), h("span", { class: "version", text: version })),
     ...groups.map((g) => {
-      const b = h("button", { class: "nav-item", onclick: () => show(g.id) }, svg(g.icon, 15), h("span", { text: g.label }));
+      const b = h("button", { class: "nav-item", title: g.label, onclick: () => show(g.id) }, svg(g.icon, 16), h("span", { text: g.label }));
       buttons.set(g.id, b);
       return b;
     }),
@@ -1785,8 +1821,14 @@ async function main() {
   clear(root);
   root.classList.add("two-pane");
   root.append(nav, content);
+  // Every "label + controls + note" row, now and whenever a section redraws,
+  // takes the same shape as field(): name and note on the left, controls right.
+  for (const g of groups) g.sections.forEach(upgradeRows);
+  new MutationObserver(() => upgradeRows(content)).observe(content, { childList: true, subtree: true });
   let last = "start";
   try { last = localStorage.getItem("coucou.settingsTab") ?? "start"; } catch { /* storage blocked */ }
+  // Browser preview only: settings.html#voice opens that category (for checking each one).
+  if (!IS_TAURI && location.hash) last = location.hash.slice(1);
   show(last);
 
   void onEvent<Settings>("settings-changed", (s) => {

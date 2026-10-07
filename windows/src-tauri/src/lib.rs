@@ -918,16 +918,21 @@ fn settings_page_url(app: &AppHandle) -> WebviewUrl {
 /// one that exists before the island's webview does.
 fn create_settings_window(app: &AppHandle) {
     let url = settings_page_url(app);
-    match WebviewWindowBuilder::new(app, "settings", url)
+    let builder = WebviewWindowBuilder::new(app, "settings", url)
         .additional_browser_args(BROWSER_ARGS)
         .title("Ajustes — Coucou")
-        .inner_size(780.0, 640.0)
-        .min_inner_size(460.0, 480.0)
+        .inner_size(820.0, 660.0)
+        .min_inner_size(380.0, 460.0)
         .resizable(true)
         .visible(false)
-        .center()
-        .build()
-    {
+        .center();
+    // The page draws its own title bar (settings.html): no white system strip on
+    // top of a dark window. On a Mac the traffic lights stay, over the page.
+    #[cfg(not(target_os = "macos"))]
+    let builder = builder.decorations(false).shadow(true);
+    #[cfg(target_os = "macos")]
+    let builder = builder.title_bar_style(tauri::TitleBarStyle::Overlay).hidden_title(true);
+    match builder.build() {
         Ok(win) => {
             // Closing it must only hide it, or it could never be reopened.
             let hidden = win.clone();

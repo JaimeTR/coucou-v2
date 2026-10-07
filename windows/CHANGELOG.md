@@ -24,7 +24,7 @@ Coucou v2 is [JaimeTR](https://github.com/JaimeTR)'s fork of [Coucou by Louis Ra
 - **Copilot CLI** and **Muse Code** connect in Settings → Agents.
 
 **Settings**
-- Redesigned: a sidebar of nine categories, one at a time.
+- Redesigned throughout: a sidebar of nine categories; each setting with its name and a line of explanation on the left and the control on the right; titled groups; clearer notices; the window draws its own title bar (no white Windows strip) and dark scrollbars. It adapts to the width: icons only in the sidebar, controls under their name in a narrow window.
 - Fixed: the status dot sat on its own line for GitHub and Chat in the setup checklist.
 
 **Mac**

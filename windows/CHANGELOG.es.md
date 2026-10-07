@@ -24,7 +24,7 @@ Coucou v2 es el fork de [JaimeTR](https://github.com/JaimeTR) de [Coucou, de Lou
 - **Copilot CLI** y **Muse Code** se conectan en Ajustes → Agentes.
 
 **Ajustes**
-- Rediseño: una barra lateral con nueve categorías, una a la vez.
+- Rediseño completo: barra lateral con nueve categorías; cada ajuste con su nombre y una línea de explicación a la izquierda y el control a la derecha; grupos con título; avisos más legibles; barra de título propia (sin la franja blanca de Windows) y barras de desplazamiento oscuras. Se adapta al ancho: solo iconos en la barra lateral y controles debajo de su nombre en una ventana estrecha.
 - Arreglado: en la lista de configuración el punto de estado quedaba desalineado en GitHub y Chat.
 
 **Mac**
