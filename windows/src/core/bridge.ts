@@ -130,6 +130,8 @@ export const Bridge = {
   syncNow: () => callOrThrow<boolean>("sync_now"),
   /** This PC's sessions and waiting approval, for the phone (encrypted in Rust). */
   syncPublish: (state: unknown) => call<void>("sync_publish", { state }),
+  /** Pings the phones on the account (generic text: the PC's name and what waits). */
+  syncNotify: (kind: "approval" | "question", body: string) => call<void>("sync_notify", { kind, body }),
   /** Allow / Deny taps from the phone: [{ requestId, decision, at }]. */
   syncTakeDecisions: () => call<{ requestId: string; decision: "allow" | "deny"; at: number }[]>("sync_take_decisions"),
 

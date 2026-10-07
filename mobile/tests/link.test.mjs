@@ -52,3 +52,25 @@ test("the PC's QR is accepted only if it points at an https server with a real c
   assert.equal(parsePairing(`https://coucou-sync.me.workers.dev/?code=${CODE}`), null);
   assert.equal(parsePairing(`coucou://pair?server=%E0%A4%A&code=${CODE}`), null, "bad escapes are refused, not thrown");
 });
+
+test("push: only a real Expo token is registered, to this phone's own route, and it can be taken back", async () => {
+  const { registerPush, isExpoToken } = await import("../.test-build/link.js");
+  const k = deriveKeys(CODE);
+  assert.ok(isExpoToken("ExponentPushToken[abcdefgh12345678]") && isExpoToken("ExpoPushToken[abcdefgh-1234_5678]"));
+  assert.ok(!isExpoToken("https://evil.example") && !isExpoToken("ExponentPushToken[short]") && !isExpoToken("ExponentPushToken[a b c d e f g h]"));
+
+  const calls = [];
+  const fetcher = async (url, init) => { calls.push({ url, init }); return { ok: true, status: 204, json: async () => ({}) }; };
+  await registerPush(fetcher, "https://s.example/", k, "phone-ab12", "ExponentPushToken[abcdefgh12345678]");
+  assert.equal(calls[0].url, `https://s.example/v1/${k.id}/push/phone-ab12`);
+  assert.equal(calls[0].init.method, "PUT");
+  assert.deepEqual(JSON.parse(calls[0].init.body), { token: "ExponentPushToken[abcdefgh12345678]" });
+  assert.equal(calls[0].init.headers.authorization, `Bearer ${k.token}`);
+
+  await registerPush(fetcher, "https://s.example", k, "phone-ab12", null);
+  assert.equal(calls[1].init.method, "DELETE");
+
+  await assert.rejects(() => registerPush(fetcher, "https://s.example", k, "p", "nope"), /no válido/);
+  const refused = async () => ({ ok: false, status: 403, json: async () => ({}) });
+  await assert.rejects(() => registerPush(refused, "https://s.example", k, "p", "ExponentPushToken[abcdefgh12345678]"), /no corresponde/);
+});

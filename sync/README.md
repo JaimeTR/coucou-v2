@@ -38,12 +38,25 @@ account; any other token gets 403. Bodies are `{ "blob": "<base64 of nonce(12) â
 | `GET devices` | every computer's state: `[{ id, blob, at }]` |
 | `POST decisions/<id>` | the phone's Allow / Deny for that computer |
 | `GET decisions/<id>` | the computer takes its decisions (each is returned once) |
+| `PUT` / `DELETE push/<id>` | a phone registers (or removes) its Expo push token |
+| `POST notify/<id>` | a computer pings every registered phone: `{ kind: "approval" \| "question", title, body }`; at most one per 15 s per computer |
+
+## Push to the phone (optional)
+
+When a permission or a question waits on a PC, the phone can get a notification even with the app closed. The server
+hands a short generic message ("Claude Code pide permiso en JAIME-PC") to [Expo's push service](https://docs.expo.dev/push-notifications/overview/),
+which relays it through Apple or Google. **It never carries the command, a path or a project** â€” only the computer's name
+and what kind of thing waits. The phone's push token is the one thing the server reads in the clear: it has to, to send.
+
+It needs credentials on your side, once: an Apple Developer account for iPhone (EAS sets up the push key), and a Firebase
+project for Android (`eas credentials`). See `mobile/README.md`. Without them nothing breaks: the phone just does not get pushes.
 
 ## Develop
 
 ```bash
 npm run dev        # local server on http://127.0.0.1:8787
 npm test           # API tests against it
+npm run dev:test   # the same, with push pointed at a fake service on :9998 (the push test needs it)
 npm run typecheck
 ```
 

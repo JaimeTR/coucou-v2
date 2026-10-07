@@ -5,7 +5,8 @@
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "typecheck": "tsc --noEmit",
-    "test": "node --test \"test/*.test.mjs\""
+    "test": "node --test \"test/*.test.mjs\"",
+    "dev:test": "wrangler dev -c wrangler.test.toml --persist-to .wrangler-test"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261001.1",

@@ -18,9 +18,13 @@ export interface Settings {
   syncUrl: string;
   /** Face ID / fingerprint / passcode before an Allow is sent to a PC. */
   requireAuth: boolean;
+  /** This phone asked to be pinged when a PC needs it (the token is on the server). */
+  pushOn: boolean;
+  /** Names this phone to the server; made once. */
+  phoneId: string;
 }
 
-export const DEFAULT_SETTINGS: Settings = { name: "", language: "auto", apps: [], syncUrl: "", requireAuth: true };
+export const DEFAULT_SETTINGS: Settings = { name: "", language: "auto", apps: [], syncUrl: "", requireAuth: true, pushOn: false, phoneId: "" };
 
 const SETTINGS_KEY = "coucou.settings";
 
@@ -35,6 +39,8 @@ export async function loadSettings(): Promise<Settings> {
       apps: sanitizeApps(saved.apps),
       syncUrl: typeof saved.syncUrl === "string" && isServerUrl(saved.syncUrl) ? saved.syncUrl : "",
       requireAuth: saved.requireAuth !== false,
+      pushOn: saved.pushOn === true,
+      phoneId: typeof saved.phoneId === "string" && /^[a-z0-9-]{1,40}$/.test(saved.phoneId) ? saved.phoneId : ""
     };
   } catch {
     return DEFAULT_SETTINGS;

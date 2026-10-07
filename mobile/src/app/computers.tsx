@@ -10,7 +10,8 @@ import { useCallback, useEffect, useState } from "react";
 import { AppState, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { useApp } from "../app-context";
-import { deriveKeys, fetchComputers, fetchSharedSettings, isServerUrl, parsePairing, sendDecision, type Computer } from "../logic/link";
+import { deriveKeys, fetchComputers, fetchSharedSettings, isServerUrl, parsePairing, registerPush, sendDecision, type Computer } from "../logic/link";
+import { getPushToken } from "../push";
 import { clearSecret, getSecret, setSecret, SYNC_CODE } from "../store";
 import { colors } from "../theme";
 
@@ -233,6 +234,27 @@ export default function Computers() {
     }
   };
 
+  // Pings when a PC needs you, even with the app closed.
+  const [pushNote, setPushNote] = useState("");
+  const togglePush = async () => {
+    if (!keys || !server) return;
+    setPushNote("");
+    try {
+      const phone = settings.phoneId || `phone-${Crypto.getRandomBytes(4).reduce((s, b) => s + b.toString(16).padStart(2, "0"), "")}`;
+      if (settings.pushOn) {
+        await registerPush(fetcher, server, keys, phone, null);
+        update({ pushOn: false, phoneId: phone });
+        return;
+      }
+      const result = await getPushToken();
+      if (!result.ok) return setPushNote(result.why);
+      await registerPush(fetcher, server, keys, phone, result.token);
+      update({ pushOn: true, phoneId: phone });
+    } catch (err) {
+      setPushNote(err instanceof Error ? t(err.message) : String(err));
+    }
+  };
+
   if (!loaded) return null;
   if (!keys || !server) {
     return (
@@ -251,6 +273,20 @@ export default function Computers() {
         <ComputerCard key={pc.id} pc={pc} decide={decide} sent={sent} />
       ))}
       {error ? <Text style={styles.err}>{error}</Text> : null}
+      {Platform.OS !== "web" ? (
+        <View style={styles.card}>
+          <Text style={styles.title}>{t("Avisos en este teléfono")}</Text>
+          <Text style={styles.hint}>
+            {t("Te avisa cuando un PC pide permiso o hace una pregunta, aunque la app esté cerrada. El aviso nunca incluye el comando: solo el nombre del PC.")}
+          </Text>
+          <Pressable style={[styles.button, settings.pushOn ? styles.danger : styles.primary, { alignSelf: "flex-start" }]} onPress={togglePush}>
+            <Text style={[styles.buttonText, { color: settings.pushOn ? colors.red : colors.bg }]}>
+              {settings.pushOn ? t("Desactivar avisos") : t("Activar avisos")}
+            </Text>
+          </Pressable>
+          {pushNote ? <Text style={styles.err}>{pushNote}</Text> : null}
+        </View>
+      ) : null}
       <Pressable
         style={[styles.button, styles.danger, { alignSelf: "flex-start" }]}
         onPress={async () => {

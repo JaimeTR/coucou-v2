@@ -10,6 +10,8 @@ One app, one codebase, for iPhone and Android ([Expo](https://expo.dev) / React 
 - **GitHub and Copilot**: review requests, your pull requests with their CI, and Copilot's pull requests — the same query and rules as the desktop app. Tap a pull request to open it. Your token is stored encrypted on the phone (Keychain / Keystore) and only goes to GitHub.
 - **My apps**: add your own services. Coucou checks an address every 30 seconds or more (an optional token in a header), reads one value from the JSON with a dotted path (`data.open_issues`) and shows it on a card; tap the card to open a link. Up to 8. (A phone cannot listen for webhooks, so this is the polling half of the desktop's "Mis apps".)
 - **PCs**: your computers' agents (Claude Code and the rest) and the permission waiting on one of them, with **Allow / Deny**. Through your own sync server (`sync/`, end-to-end encrypted): paste its address and the code from Coucou on your PC (Settings → Sync → Show code). Your name and language come from the PC.
+- **Alerts when a PC needs you, with the app closed** (PCs tab → *Alerts on this phone*). The alert says only which PC and what kind of thing waits ("Claude Code asks permission on JAIME-PC"), never the command; tapping it opens the PCs tab. **Allow** asks for Face ID / fingerprint / the passcode first (Settings → *Confirm before allowing*).
+- **Pair by QR**: on the PC, *Settings → Sync → Show QR for the phone*, then *Scan my PC's QR* here.
 - **Spanish and English**, automatic or your choice.
 - Pull down to refresh. Readings refresh while the app is open and catch up when you come back to it (phones suspend apps in the background).
 
@@ -40,7 +42,21 @@ npx eas-cli build -p android --profile preview   # an .apk you can install direc
 npx eas-cli build -p ios --profile preview       # needs an Apple Developer account ($99/year)
 ```
 
-The bundle id is `com.jaimetr.coucou` on both. None of this has been run on a device yet: the web preview and the tests are what has been checked.
+The bundle id is `com.jaimetr.coucou` on both.
+
+### Alerts need credentials (once)
+
+Alerts go through [Expo's push service](https://docs.expo.dev/push-notifications/overview/), via your sync server (`sync/`).
+Everything else in the app works without this.
+
+1. `npx eas-cli init` — links the app to an EAS project (writes `extra.eas.projectId` into `app.json`).
+2. **iPhone**: with an Apple Developer account, `npx eas-cli credentials` (or the first `eas build -p ios`) creates the push key.
+3. **Android**: create a Firebase project, add the Android app `com.jaimetr.coucou`, and upload its FCM v1 service-account key
+   with `npx eas-cli credentials` ([Expo's guide](https://docs.expo.dev/push-notifications/fcm-credentials/)).
+4. Build the app (`eas build`) and turn alerts on in the PCs tab. A simulator cannot receive pushes: use a real phone.
+
+Not yet tried on a real phone: the server route is tested against a stand-in for Expo's service, and the app bundles for
+iOS and Android, but no push has been delivered end to end. None of this has been run on a device yet: the web preview and the tests are what has been checked.
 
 ---
 

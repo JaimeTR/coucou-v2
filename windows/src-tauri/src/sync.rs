@@ -203,6 +203,27 @@ pub async fn publish(app: &AppHandle, state: Value) -> Result<(), String> {
     Ok(())
 }
 
+/// Pings the phones registered on the account: "Claude Code needs you". `kind`
+/// is "approval" or "question"; the text is generic on purpose (the computer's
+/// name and what waits) — never the command, a path or a project.
+pub async fn notify(app: &AppHandle, kind: &str, body: &str) -> Result<(), String> {
+    let Some((s, keys)) = current(app) else { return Ok(()) };
+    if !matches!(kind, "approval" | "question") {
+        return Err("aviso desconocido".into());
+    }
+    let res = client()
+        .post(endpoint(&s.sync_url, &keys, &format!("notify/{}", s.sync_device)))
+        .bearer_auth(&keys.token)
+        .json(&serde_json::json!({ "kind": kind, "title": "Coucou", "body": body.chars().take(140).collect::<String>() }))
+        .send()
+        .await
+        .map_err(|e| format!("No se pudo llegar al servidor: {e}"))?;
+    if !res.status().is_success() {
+        return Err(http_error(res.status()));
+    }
+    Ok(())
+}
+
 /// A decision from the phone older than this is ignored: whatever it answered is gone.
 const DECISION_MAX_AGE_MS: i64 = 2 * 60 * 1000;
 

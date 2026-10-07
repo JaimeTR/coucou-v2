@@ -433,6 +433,11 @@ async fn sync_publish(app: AppHandle, state: serde_json::Value) -> Result<(), St
 }
 
 #[tauri::command]
+async fn sync_notify(app: AppHandle, kind: String, body: String) -> Result<(), String> {
+    sync::notify(&app, &kind, &body).await
+}
+
+#[tauri::command]
 async fn sync_take_decisions(app: AppHandle) -> Result<Vec<serde_json::Value>, String> {
     sync::take_decisions(&app).await
 }
@@ -1070,6 +1075,7 @@ pub fn run() {
             sync_now,
             sync_publish,
             sync_take_decisions,
+            sync_notify,
             reset_island_position,
             open_url,
             open_in_vscode,

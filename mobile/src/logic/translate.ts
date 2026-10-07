@@ -8,6 +8,11 @@ const PAIRS: ReadonlyArray<readonly [string, string]> = [
   ["Ajustes", "Settings"],
   // Your PCs (computers.tsx)
   ["PCs", "PCs"],
+  ["Avisos en este teléfono", "Alerts on this phone"],
+  ["Te avisa cuando un PC pide permiso o hace una pregunta, aunque la app esté cerrada. El aviso nunca incluye el comando: solo el nombre del PC.", "Tells you when a PC asks permission or a question, even with the app closed. The alert never includes the command: only the PC's name."],
+  ["Activar avisos", "Turn alerts on"],
+  ["Desactivar avisos", "Turn alerts off"],
+  ["Token de avisos no válido.", "Invalid alert token."],
   ["Apunta al QR de tu PC", "Point at your PC's QR"],
   ["Escanear el QR de mi PC", "Scan my PC's QR"],
   ["Cancelar", "Cancel"],

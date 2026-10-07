@@ -71,6 +71,8 @@ const EXTRA: ReadonlyArray<readonly [string, string]> = [
   ["sesión terminada, permisos, preguntas y errores de Claude Code y los demás agentes", "session finished, permissions, questions and errors from Claude Code and the other agents"],
   ["Dice lo que siente", "Says how it feels"],
   ["Sincronización", "Sync"],
+  ["Claude Code pide permiso en {0}", "Claude Code asks permission on {0}"],
+  ["Claude Code tiene una pregunta en {0}", "Claude Code has a question on {0}"],
   ["Mochi travieso", "Mischievous Mochi"],
   ["De vez en cuando Mochi se asoma por un borde de la pantalla, hace una travesura y se esconde. Si le haces clic se enfada; si te acercas, a veces se asusta. No aparece sobre juegos, vídeos a pantalla completa ni con Coucou en pausa.", "Now and then Mochi peeks out from an edge of the screen, gets up to something and hides. Click it and it gets annoyed; come near and it sometimes gets scared. It does not appear over games, full-screen videos or while Coucou is paused."],
   ["Rara vez (cada 25–50 min)", "Rarely (every 25–50 min)"],

@@ -2,11 +2,20 @@ import { Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 
+import { useEffect } from "react";
+import { Platform } from "react-native";
+
 import { AppProvider, useApp } from "../app-context";
+import { openPcsOnTap, showNoticesInForeground } from "../push";
 import { colors } from "../theme";
 
 function Navigation() {
   const { t } = useApp();
+  useEffect(() => {
+    if (Platform.OS === "web") return;
+    showNoticesInForeground();
+    return openPcsOnTap();
+  }, []);
   return (
     <>
       <StatusBar style="light" />

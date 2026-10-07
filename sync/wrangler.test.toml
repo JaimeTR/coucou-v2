@@ -1,0 +1,20 @@
+# Coucou sync: one Durable Object per account, holding only encrypted blobs.
+# Deploy: see README.md. No secrets needed: the server never sees a key.
+name = "coucou-sync"
+main = "src/index.ts"
+compatibility_date = "2026-09-01"
+workers_dev = true
+
+[[durable_objects.bindings]]
+name = "ACCOUNT"
+class_name = "Account"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Account"]
+
+[vars]
+EXPO_PUSH_URL = "http://127.0.0.1:9998/"
+
+[observability]
+enabled = false

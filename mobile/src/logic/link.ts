@@ -167,6 +167,22 @@ export async function fetchSharedSettings(fetcher: Fetch, server: string, keys: 
   return body.blob ? open<Record<string, unknown>>(keys, body.blob) : null;
 }
 
+/** Expo's push token, as the sync server also checks it. */
+export const isExpoToken = (t: string) => /^Expo(nent)?PushToken\[[A-Za-z0-9_-]{8,80}\]$/.test(t);
+
+/** Tells the server where to reach this phone (or, with `null`, to forget it). */
+export async function registerPush(
+  fetcher: Fetch, server: string, keys: Keys, phone: string, token: string | null,
+): Promise<void> {
+  if (token !== null && !isExpoToken(token)) throw new Error("Token de avisos no válido.");
+  const res = await fetcher(url(server, keys, `push/${encodeURIComponent(phone)}`), {
+    method: token === null ? "DELETE" : "PUT",
+    headers: auth(keys),
+    body: token === null ? undefined : JSON.stringify({ token }),
+  });
+  if (!res.ok) throw new Error(problem(res.status));
+}
+
 /** A tap on Allow / Deny. The computer applies it only to the card it still shows. */
 export async function sendDecision(
   fetcher: Fetch, server: string, keys: Keys, device: string,

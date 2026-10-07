@@ -3,6 +3,7 @@
 // when sync is off, and decisions are only polled while a card waits.
 
 import { Bridge } from "../core/bridge";
+import { t } from "../core/i18n";
 import { State } from "../core/state";
 import { remoteState } from "./remoteState";
 import type { Island } from "./island";
@@ -12,6 +13,8 @@ const DECISIONS_EVERY_MS = 2000;
 
 export function startRemote(island: Island, computerName: string) {
   let last = "";
+  /** The request already announced to the phone, so one waiting card is one ping. */
+  let announced = "";
   let publishTimer: number | null = null;
   let decisionsTimer: number | null = null;
 
@@ -41,8 +44,18 @@ export function startRemote(island: Island, computerName: string) {
     decisionsTimer = window.setTimeout(pollDecisions, DECISIONS_EVERY_MS);
   };
 
+  const announce = () => {
+    const req = State.pendingApproval?.requestId ?? State.pendingQuestion?.requestId ?? "";
+    if (!req || req === announced) return;
+    announced = req;
+    const kind = State.pendingApproval ? "approval" : "question";
+    const text = kind === "approval" ? t("Claude Code pide permiso en {0}") : t("Claude Code tiene una pregunta en {0}");
+    void Bridge.syncNotify(kind, text.replace("{0}", computerName));
+  };
+
   State.subscribe(() => {
     if (!State.settings.syncUrl) return;
+    announce();
     if (publishTimer == null) publishTimer = window.setTimeout(publish, PUBLISH_EVERY_MS);
     if (State.pendingApproval && decisionsTimer == null) decisionsTimer = window.setTimeout(pollDecisions, DECISIONS_EVERY_MS);
   });

@@ -12,12 +12,19 @@
 
 export interface Env {
   ACCOUNT: DurableObjectNamespace;
+  /** Where push messages go. Expo's service by default; a test points it elsewhere. */
+  EXPO_PUSH_URL?: string;
 }
 
 const ID = /^[a-f0-9]{32}$/;
 const DEVICE = /^[a-z0-9-]{1,40}$/;
 const TOKEN = /^[a-f0-9]{64}$/;
 const BLOB = /^[A-Za-z0-9+/=]+$/;
+const EXPO_TOKEN = /^Expo(nent)?PushToken\[[A-Za-z0-9_-]{8,80}\]$/;
+const EXPO_PUSH = "https://exp.host/--/api/v2/push/send";
+/** A phone is not pinged more than once in this time per computer: a loop on a PC cannot flood it. */
+const NOTIFY_EVERY_MS = 15_000;
+const NOTIFY_KINDS = new Set(["approval", "question"]);
 
 /** Bytes of base64 per kind of blob. */
 const MAX = { settings: 96 * 1024, device: 48 * 1024, decision: 4 * 1024 };
@@ -48,7 +55,7 @@ interface Stored {
 }
 
 export class Account {
-  constructor(private state: DurableObjectState) {}
+  constructor(private state: DurableObjectState, private env: Env) {}
 
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
@@ -102,6 +109,74 @@ export class Account {
         await store.delete([`dev:${device}`, `dec:${device}`]);
         return new Response(null, { status: 204 });
       }
+    }
+
+    // The phone registers where to reach it (its Expo push token). The server reads
+    // this one: it has to, to send. It never sees a command, a path or a project.
+    if (what === "push" && device !== undefined) {
+      if (m === "PUT") {
+        let body: { token?: unknown };
+        try {
+          body = await request.json();
+        } catch {
+          return text(400, "bad json");
+        }
+        if (typeof body.token !== "string" || !EXPO_TOKEN.test(body.token)) return text(400, "bad token");
+        await store.put(`push:${device}`, { token: body.token, at: now });
+        return new Response(null, { status: 204 });
+      }
+      if (m === "DELETE") {
+        await store.delete(`push:${device}`);
+        return new Response(null, { status: 204 });
+      }
+    }
+
+    // A computer asks to ping every registered phone: "Claude Code needs you".
+    if (what === "notify" && device !== undefined && m === "POST") {
+      let body: { kind?: unknown; title?: unknown; body?: unknown };
+      try {
+        body = await request.json();
+      } catch {
+        return text(400, "bad json");
+      }
+      const title = typeof body.title === "string" ? body.title.slice(0, 60) : "";
+      const message = typeof body.body === "string" ? body.body.slice(0, 140) : "";
+      if (typeof body.kind !== "string" || !NOTIFY_KINDS.has(body.kind) || !title || !message) return text(400, "bad notice");
+      const lastKey = `last:${device}`;
+      const last = (await store.get<number>(lastKey)) ?? 0;
+      if (now - last < NOTIFY_EVERY_MS) return json({ sent: 0, reason: "too soon" });
+      await store.put(lastKey, now);
+      const phones = await store.list<{ token: string; at: number }>({ prefix: "push:" });
+      const messages = [...phones.values()].map((p) => ({
+        to: p.token,
+        title,
+        body: message,
+        sound: "default",
+        priority: "high",
+        channelId: "approvals",
+        data: { kind: body.kind, device },
+      }));
+      if (!messages.length) return json({ sent: 0, reason: "no phone" });
+      let sent = 0;
+      let status = 0;
+      try {
+        const res = await fetch(this.env.EXPO_PUSH_URL ?? EXPO_PUSH, {
+          method: "POST",
+          headers: { "content-type": "application/json", accept: "application/json" },
+          body: JSON.stringify(messages),
+        });
+        const answer = (await res.json().catch(() => null)) as { data?: { status?: string; details?: { error?: string } }[] } | null;
+        status = res.status;
+        const keys = [...phones.keys()];
+        answer?.data?.forEach((ticket, i) => {
+          if (ticket.status === "ok") sent += 1;
+          // The phone removed the app or the token: forget it, so it is not tried again.
+          else if (ticket.details?.error === "DeviceNotRegistered") void store.delete(keys[i]);
+        });
+      } catch {
+        return json({ sent: 0, reason: "push service unreachable" });
+      }
+      return json({ sent, status });
     }
 
     // Decisions go from the phone to one computer, which takes them once.
