@@ -76,6 +76,9 @@ pub struct Settings {
     /// say so, "off" = never look.
     #[serde(default = "default_updates")]
     pub updates: String,
+    /// Mochi dances while music plays (read from the system media controls).
+    #[serde(default = "default_true")]
+    pub music_dance: bool,
     /// Who speaks: "system" (the voices Windows has) or "elevenlabs".
     #[serde(default = "default_voice_engine")]
     pub voice_engine: String,
@@ -316,6 +319,7 @@ impl Default for Settings {
             sync_rev: 0,
             sync_device: String::new(),
             updates: default_updates(),
+            music_dance: true,
             voice_engine: default_voice_engine(),
             eleven_voice: default_eleven_voice(),
             eleven_model: default_eleven_model(),

@@ -248,6 +248,48 @@ pub fn current_user_sid() -> Option<String> {
 pub const CURSOR_POLL: bool = true;
 
 /// Cursor position in physical screen pixels.
+/// What the system media controls (the same ones the volume flyout shows —
+/// Spotify, the browser, the media player…) say is playing. Blocks for a few
+/// milliseconds: call it from a worker thread.
+pub fn now_playing() -> Option<super::NowPlaying> {
+    // WinRT needs COM on the calling thread, and the threads this runs on (a
+    // blocking pool, a test) have not started it: use a thread of its own.
+    std::thread::spawn(|| {
+        use windows::Win32::System::Com::{CoInitializeEx, CoUninitialize, COINIT_MULTITHREADED};
+        let started = unsafe { CoInitializeEx(None, COINIT_MULTITHREADED) }.is_ok();
+        let found = media_session();
+        if started {
+            unsafe { CoUninitialize() };
+        }
+        found
+    })
+    .join()
+    .ok()
+    .flatten()
+}
+
+fn media_session() -> Option<super::NowPlaying> {
+    use windows::Media::Control::{
+        GlobalSystemMediaTransportControlsSessionManager as Manager,
+        GlobalSystemMediaTransportControlsSessionPlaybackStatus as Status,
+    };
+    let manager = Manager::RequestAsync().ok()?.get().ok()?;
+    let session = manager.GetCurrentSession().ok()?;
+    let playing = session.GetPlaybackInfo().ok()?.PlaybackStatus().ok()? == Status::Playing;
+    let (title, artist) = session
+        .TryGetMediaPropertiesAsync()
+        .ok()
+        .and_then(|op| op.get().ok())
+        .map(|p| {
+            (
+                p.Title().map(|t| t.to_string()).unwrap_or_default(),
+                p.Artist().map(|t| t.to_string()).unwrap_or_default(),
+            )
+        })
+        .unwrap_or_default();
+    Some(super::NowPlaying { playing, title, artist })
+}
+
 pub fn cursor_physical() -> Option<(f64, f64)> {
     let mut p = POINT::default();
     unsafe { GetCursorPos(&mut p).ok()? };
@@ -330,3 +372,15 @@ pub fn set_activating(win: &WebviewWindow, activating: bool) {
 
 /// Click-through here is the poll's WS_EX_TRANSPARENT toggle, not a region.
 pub fn set_input_region(_win: &WebviewWindow, _rect: Option<(f64, f64, f64, f64)>) {}
+
+#[cfg(test)]
+mod now_playing_tests {
+    /// Asks the real system media controls. Prints what it finds (nothing playing is a
+    /// valid answer); it only fails if the call itself breaks.
+    /// `cargo test now_playing_smoke -- --ignored --nocapture`
+    #[test]
+    #[ignore]
+    fn now_playing_smoke() {
+        println!("{:?}", super::now_playing());
+    }
+}

@@ -135,8 +135,14 @@ async function main() {
   // page wake the island so the visuals can be checked with `npm run dev`.
   if (!IS_TAURI) {
     document.addEventListener("click", () => Sound.resume(), { once: true });
-    // For checking cards by hand in the browser preview: coucouDev.recap().
-    (window as unknown as { coucouDev: object }).coucouDev = { recap: () => showRecap(island) };
+    // For checking by hand in the browser preview: coucouDev.recap(), coucouDev.dance(true).
+    (window as unknown as { coucouDev: object }).coucouDev = {
+      recap: () => showRecap(island),
+      dance: (on: boolean) => {
+        (island as unknown as { engine: { isDancing: boolean } }).engine.isDancing = on;
+        island.ensureRunning();
+      },
+    };
   }
 }
 

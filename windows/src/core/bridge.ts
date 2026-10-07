@@ -108,6 +108,9 @@ export const Bridge = {
   rulesAdd: (draft: RuleDraft) => callOrThrow<Rule>("rules_add", { ...draft }),
   rulesRemove: (id: string) => callOrThrow<void>("rules_remove", { id }),
 
+  /** What the computer is playing (system media controls); for Mochi's dance. */
+  nowPlaying: () => call<{ playing: boolean; title: string; artist: string }>("now_playing"),
+
   // ── Updates (GitHub releases, signed) ──────────────────────────────────────
   updateCheck: () => callOrThrow<UpdateInfo | null>("update_check"),
   /** Downloads, installs and restarts Coucou. */

@@ -802,6 +802,11 @@ function personalSection(detectedName: string): HTMLElement {
       toggle(settings.greetingPicker, (v) => { settings.greetingPicker = v; void save(); }),
       h("span", { class: "hint", text: "en la bienvenida: tu último proyecto y lo que espera (revisiones, CI)" }),
     ),
+    h("div", { class: "row" },
+      h("label", { text: "Baila con la música" }),
+      toggle(settings.musicDance, (v) => { settings.musicDance = v; void save(); }),
+      h("span", { class: "hint", text: "Mochi baila mientras suena algo (Spotify, el navegador…). Solo mira si suena, nunca guarda ni envía qué." }),
+    ),
     preview,
   );
 }

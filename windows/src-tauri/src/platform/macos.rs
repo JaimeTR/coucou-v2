@@ -167,6 +167,29 @@ fn main_scale() -> f64 {
     }
 }
 
+/// Music or Spotify, when one of them is open and playing. `osascript` asks
+/// only if the app is already running (`is running` never launches it); the first
+/// time, macOS asks the person to allow Coucou to control it.
+pub fn now_playing() -> Option<super::NowPlaying> {
+    for app in ["Music", "Spotify"] {
+        let script = format!(
+            "if application \"{app}\" is running then tell application \"{app}\" to \
+             if player state is playing then return (name of current track) & \"\\n\" & (artist of current track)"
+        );
+        let out = Command::new("osascript").args(["-e", &script]).output().ok()?;
+        let text = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        if out.status.success() && !text.is_empty() {
+            let mut lines = text.lines();
+            return Some(super::NowPlaying {
+                playing: true,
+                title: lines.next().unwrap_or("").to_string(),
+                artist: lines.next().unwrap_or("").to_string(),
+            });
+        }
+    }
+    Some(super::NowPlaying::default())
+}
+
 /// Cursor position in physical screen pixels.
 pub fn cursor_physical() -> Option<(f64, f64)> {
     let source = CGEventSource::new(CGEventSourceStateID::HIDSystemState).ok()?;

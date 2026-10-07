@@ -206,6 +206,8 @@ export interface Settings {
   syncDevice: string;
   /** "auto" installs a new version when nothing is going on; "notify" only says so; "off" never looks. */
   updates: "auto" | "notify" | "off";
+  /** Mochi dances while music plays. */
+  musicDance: boolean;
   /** Who speaks: the voices Windows has, or ElevenLabs. */
   voiceEngine: "system" | "elevenlabs";
   elevenVoice: string;
@@ -264,6 +266,7 @@ export const DEFAULT_SETTINGS: Settings = {
   syncRev: 0,
   syncDevice: "",
   updates: "auto",
+  musicDance: true,
   voiceEngine: "system",
   elevenVoice: "21m00Tcm4TlvDq8ikWAM",
   elevenModel: "eleven_multilingual_v2",

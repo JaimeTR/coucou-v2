@@ -24,6 +24,7 @@ import { buildHeader, buildViews, type ViewActions, type ViewHost } from "../vie
 import { h } from "../views/dom";
 import { IslandStateMachine } from "./fsm";
 import { endQuestion, Recap } from "./hooks";
+import { startMusic } from "./music";
 import { greetingLines } from "./greetingText";
 import { panelHasRows, panelRows } from "./greetingPanel";
 import { refreshProjects } from "./integrations";
@@ -109,6 +110,7 @@ export class Island {
       this.dirty = true;
       this.ensureRunning();
     });
+    startMusic(this.engine, () => this.ensureRunning());
   }
 
   /** The Allow / Deny buttons, and Ctrl+Alt+Y / N from anywhere. */

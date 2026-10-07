@@ -35,10 +35,13 @@ tauri-plugin-updater = "2"
 [target.'cfg(windows)'.dependencies]
 keyring = { version = "3", features = ["windows-native"] }
 windows = { version = "0.61", features = [
+  "Foundation",
+  "Media_Control",
   "Win32_Foundation",
   "Win32_Security",
   "Win32_Security_Authorization",
   "Win32_Security_Authentication_Identity",
+  "Win32_System_Com",
   "Win32_System_Ole",
   "Win32_System_SystemInformation",
   "Win32_System_Threading",

@@ -378,6 +378,14 @@ async fn update_install(app: AppHandle) -> Result<(), String> {
     updater::install(&app).await
 }
 
+/// What is playing, for Mochi to dance to. Asked only while the island is up.
+#[tauri::command]
+async fn now_playing() -> platform::NowPlaying {
+    tauri::async_runtime::spawn_blocking(|| platform::now_playing().unwrap_or_default())
+        .await
+        .unwrap_or_default()
+}
+
 #[tauri::command]
 fn sync_status(app: AppHandle) -> sync::SyncStatus {
     sync::status(&app)
@@ -1027,6 +1035,7 @@ pub fn run() {
             reposition,
             start_island_drag,
             sync_status,
+            now_playing,
             update_check,
             update_install,
             sync_connect,

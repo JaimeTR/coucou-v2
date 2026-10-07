@@ -10,6 +10,23 @@
 //   * the cursor comes from the page's own mouse events, which only fire over
 //     the island — Mochi's eyes follow the pointer there, not across the screen.
 
+/// Any MPRIS player (Spotify, VLC, the browser…) through `playerctl`, when it is
+/// installed; without it nothing dances.
+pub fn now_playing() -> Option<super::NowPlaying> {
+    let run = |args: &[&str]| {
+        let mut cmd = std::process::Command::new("playerctl");
+        cmd.args(args);
+        let out = cmd.output().ok()?;
+        out.status.success().then(|| String::from_utf8_lossy(&out.stdout).trim().to_string())
+    };
+    let playing = run(&["status"])? == "Playing";
+    Some(super::NowPlaying {
+        playing,
+        title: run(&["metadata", "title"]).unwrap_or_default(),
+        artist: run(&["metadata", "artist"]).unwrap_or_default(),
+    })
+}
+
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;

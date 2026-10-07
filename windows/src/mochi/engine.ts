@@ -4,8 +4,8 @@
 // (design/prototype/notch-buddy.html, the visual source of truth) — the Swift
 // arc angles produce a different shape.
 
-import { Ease, lerp, type EaseFn } from "../core/anim";
-import { Sound } from "../core/sound";
+import { Ease, lerp, type EaseFn } from "../core/anim.js";
+import { Sound } from "../core/sound.js";
 import type { BotEmoteName, BotStateName } from "../core/layout";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -172,6 +172,9 @@ export class BotEngine {
   // Animated state (BotEngine `s`)
   yaw = 0; pitch = 0; roll = 0; tilt = 0; open = 1;
   sx = 1; sy = 1; oy = 0; ox = 0;
+  /** Music is playing: Mochi dances to a 112 BPM beat. The level fades in over 0.3 s and out over 0.5 s. */
+  isDancing = false;
+  dancingLevel = 0;
   tint = 0; morph = 0; hands = 0; blush = 0; es = 1; badgeS = 0;
 
   // Targets
@@ -461,6 +464,7 @@ export class BotEngine {
       this.particles.length > 0 ||
       this.cfg.bounces || this.cfg.scans || this.cfg.breathes || this.cfg.zz || this.cfg.sweat ||
       this.isMini ||
+      this.isDancing || this.dancingLevel > 0.001 ||
       Math.abs(this.tgYaw - this.yaw) > 0.002 ||
       Math.abs(this.tgPitch - this.pitch) > 0.002 ||
       Math.abs(this.tgTilt - this.tilt) > 0.002 ||
@@ -504,6 +508,10 @@ export class BotEngine {
         }
       }
     }
+
+    const target = this.isDancing ? 1 : 0;
+    if (this.dancingLevel < target) this.dancingLevel = Math.min(target, this.dancingLevel + dt / 0.3);
+    else if (this.dancingLevel > target) this.dancingLevel = Math.max(target, this.dancingLevel - dt / 0.5);
 
     const t = n - this.t0;
     let ty = this.lookX * 0.62;
@@ -649,6 +657,22 @@ export class BotEngine {
     const cx = W / 2 + this.ox * R;
     const cy = H / 2 + this.particleOverhang / 2 + this.oy * R + R * 0.06;
 
+    // The dance: a hop and a sway pivoting at the bottom of the body (as on the Mac).
+    const dance = this.dancingLevel > 0.001;
+    if (dance) {
+      x.save();
+      const px = W / 2 + this.ox * R;
+      const py = H / 2 + this.particleOverhang / 2 + this.oy * R + R * 0.06 + R * 0.88;
+      const beat = (performance.now() / 1000) * 112 / 60;
+      const hop = Math.abs(Math.sin(Math.PI * beat));
+      const land = Math.pow(1 - hop, 6);
+      const l = this.dancingLevel;
+      x.translate(px + 0.08 * R * Math.sin(Math.PI * beat) * l, py - 0.2 * R * hop * l);
+      x.rotate(0.1 * Math.sin(Math.PI * beat) * l);
+      x.scale(1 + 0.045 * land * l, 1 - 0.06 * land * l);
+      x.translate(-px, -py);
+    }
+
     this.drawHandsBehind(x, R, rx, ry, cx, cy);
 
     x.save();
@@ -682,6 +706,7 @@ export class BotEngine {
       this.drawBadge(x, this.badge, R, cx, cy);
     }
     this.drawParticles(x, R, cx, cy);
+    if (dance) x.restore();
   }
 
   private bodyPath(rx: number, ry: number, R: number): Path2D {
@@ -750,6 +775,10 @@ export class BotEngine {
 
   private drawEyes(x: CanvasRenderingContext2D, body: Path2D, R: number, rx: number, ry: number) {
     let shape: EyeShape = this.eyeOverride ?? this.cfg.eye;
+    // Dancing: happy eyes while nothing else is going on.
+    if (this.isDancing && this.dancingLevel > 0.15 && !this.isMini && (this.state === "idle" || this.state === "finished")) {
+      shape = "happy";
+    }
     if (this.morph > 0.5) {
       if (this.isChewing) shape = "happy";
       else if (this.slotHTarget > 0.05 || this.slotH > 0.1) shape = "cup";

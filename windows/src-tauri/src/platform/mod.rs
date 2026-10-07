@@ -30,6 +30,16 @@ pub struct LocalTime {
     pub second: u32,
 }
 
+/// What the computer is playing right now, as far as its media controls say.
+/// Read-only and local: nothing is sent anywhere.
+#[derive(serde::Serialize, Clone, Default, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct NowPlaying {
+    pub playing: bool,
+    pub title: String,
+    pub artist: String,
+}
+
 /// The user's home directory, where `.claude/settings.json` lives.
 pub fn home_dir() -> PathBuf {
     std::env::var_os(HOME_VAR)

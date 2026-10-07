@@ -9,5 +9,5 @@
     "isolatedModules": false
   },
   "include": [],
-  "files": ["src/island/diff.ts", "src/island/rules.ts", "src/island/greetingText.ts", "src/island/greetingPanel.ts", "src/core/translate.ts", "src/core/en.ts", "src/core/i18n.ts", "src/core/voiceText.ts", "src/core/accelerator.ts", "src/core/audio.ts", "src/core/intent.ts", "src/island/remoteState.ts", "src/island/recap.ts"]
+  "files": ["src/island/diff.ts", "src/island/rules.ts", "src/island/greetingText.ts", "src/island/greetingPanel.ts", "src/core/translate.ts", "src/core/en.ts", "src/core/i18n.ts", "src/core/voiceText.ts", "src/core/accelerator.ts", "src/core/audio.ts", "src/core/intent.ts", "src/island/remoteState.ts", "src/island/recap.ts", "src/mochi/engine.ts", "src/core/anim.ts", "src/core/sound.ts"]
 }

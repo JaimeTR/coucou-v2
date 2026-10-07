@@ -71,6 +71,8 @@ const EXTRA: ReadonlyArray<readonly [string, string]> = [
   ["sesión terminada, permisos, preguntas y errores de Claude Code y los demás agentes", "session finished, permissions, questions and errors from Claude Code and the other agents"],
   ["Dice lo que siente", "Says how it feels"],
   ["Sincronización", "Sync"],
+  ["Baila con la música", "Dances to music"],
+  ["Mochi baila mientras suena algo (Spotify, el navegador…). Solo mira si suena, nunca guarda ni envía qué.", "Mochi dances while something plays (Spotify, the browser…). It only looks whether something plays, and never saves or sends what."],
   ["Mostrar QR para el teléfono", "Show QR for the phone"],
   ["En la app del teléfono: pestaña PCs → Escanear el QR. Quien lo vea puede leer tus ajustes: ciérralo cuando termines.", "In the phone app: PCs tab → Scan the QR. Whoever sees it can read your settings: close it when you are done."],
   ["Ocultar", "Hide"],
