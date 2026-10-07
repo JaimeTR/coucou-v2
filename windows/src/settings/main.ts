@@ -10,7 +10,11 @@ import { State } from "../core/state";
 import { captureAccelerator } from "../core/accelerator";
 import { greetingLines } from "../island/greetingText";
 import { CUSTOM_PILL_LIMIT, DEFAULT_SETTINGS, WEBHOOK_PORT, type CustomPill, type Settings } from "../core/state";
-import { h, clear } from "../views/dom";
+import { h, clear, svg } from "../views/dom";
+import { ICONS } from "../views/icons";
+
+/** Two arrows chasing each other: sync. */
+const SYNC_ICON = "M12 4.5a7.5 7.5 0 0 1 6.7 4.1H16v2h6V4.6h-2v2.3A9.5 9.5 0 0 0 2.6 11h2a7.5 7.5 0 0 1 7.4-6.5zM19.4 13a7.5 7.5 0 0 1-14.1 2.4H8v-2H2v6h2v-2.3A9.5 9.5 0 0 0 21.4 13h-2z";
 import type { Rule } from "../island/rules";
 
 let settings: Settings = { ...DEFAULT_SETTINGS };
@@ -66,7 +70,7 @@ function setupSection(
   const found = (id: string) => tools.some((t) => t.id === id && t.found);
 
   const item = (ok: boolean, title: string, hint: string, action?: HTMLElement) =>
-    h("div", { class: "row", style: "align-items:flex-start;gap:9px" },
+    h("div", { class: "row check-item" },
       statusDot(ok),
       h("div", { style: "flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:2px" },
         h("span", { style: "font-size:12.5px", text: title }),
@@ -82,11 +86,11 @@ function setupSection(
       "Claude Code conectado",
       status.installed
         ? status.outdated
-          ? "Hooks de una versión anterior: actualízalos en la sección Claude Code, más abajo."
+          ? "Hooks de una versión anterior: actualízalos en la sección Claude Code."
           : "Las sesiones, los permisos y las preguntas aparecen en la isla."
         : claudeFound
-          ? "Claude Code está en este PC, pero Coucou aún no está conectado: usa “Instalar hooks…” en la sección Claude Code, más abajo."
-          : "Instala los hooks (sección Claude Code, más abajo) para ver tus sesiones en la isla.",
+          ? "Claude Code está en este PC, pero Coucou aún no está conectado: usa “Instalar hooks…” en la sección Claude Code."
+          : "Instala los hooks (en Claude Code) para ver tus sesiones en la isla.",
     ),
     // The other agents: only the ones that are on this PC (the terminal always is).
     ...agents
@@ -97,7 +101,7 @@ function setupSection(
           a.name,
           a.installed
             ? "Conectado: tiene su propio pill."
-            : `Encontrado en este PC pero sin conectar: usa “Conectar…” en Agentes, más abajo.`,
+            : `Encontrado en este PC pero sin conectar: usa “Conectar…” en Agentes.`,
         ),
       ),
     item(
@@ -1697,27 +1701,50 @@ async function main() {
   const providerKey = chatProviderInfo(settings.chatProvider).keyName;
   const hasProviderKey = (await Bridge.secretPresent(providerKey)) ?? false;
 
-  clear(root);
-  root.append(
-    h("h1", {}, h("span", { text: "Coucou" }), h("span", { class: "version", text: version })),
-    setupSection(status, present, hasProviderKey, tools, detectedName, agents),
-    personalSection(detectedName),
-    voiceSection(present),
-    claudeSection(status),
-    agentsSection(agents),
-    planSection(status),
-    rulesSection((await Bridge.rulesList()) ?? []),
-    providerSection(present),
-    apiSection(hasKey),
-    integrationsSection(present),
-    customSection(),
-    syncSection(),
-    generalSection(),
-    h("div", {
-      class: "hint",
-      text: "Sin telemetría. Las peticiones de red solo van a los servicios que tú configures.",
+  // One category at a time, picked in the sidebar. Every section is built once
+  // and only moved in and out, so a half-typed field survives a switch.
+  const groups: { id: string; label: string; icon: string; sections: HTMLElement[] }[] = [
+    { id: "start", label: "Inicio", icon: ICONS.house, sections: [setupSection(status, present, hasProviderKey, tools, detectedName, agents)] },
+    { id: "personal", label: "Personalización", icon: ICONS.star, sections: [personalSection(detectedName)] },
+    { id: "voice", label: "Voz", icon: ICONS.speakerOn, sections: [voiceSection(present)] },
+    { id: "claude", label: "Claude Code", icon: ICONS.doc, sections: [claudeSection(status), planSection(status), rulesSection((await Bridge.rulesList()) ?? [])] },
+    { id: "agents", label: "Agentes", icon: ICONS.stack, sections: [agentsSection(agents)] },
+    { id: "chat", label: "Chat e IA", icon: ICONS.bubble, sections: [providerSection(present), apiSection(hasKey)] },
+    { id: "integrations", label: "Integraciones", icon: ICONS.arrowUpRight, sections: [integrationsSection(present), customSection()] },
+    { id: "sync", label: "Sincronización", icon: SYNC_ICON, sections: [syncSection()] },
+    { id: "general", label: "General", icon: ICONS.gear, sections: [generalSection()] },
+  ];
+  const content = h("main", { class: "content" });
+  const buttons = new Map<string, HTMLElement>();
+  const show = (id: string) => {
+    const group = groups.find((g) => g.id === id) ?? groups[0];
+    clear(content);
+    content.append(h("h1", { text: group.label }), ...group.sections);
+    // A section named like its category would say it twice.
+    for (const section of group.sections) {
+      const title = section.querySelector<HTMLElement>(":scope > h2");
+      if (title) title.style.display = title.textContent?.trim() === group.label ? "none" : "";
+    }
+    content.scrollTop = 0;
+    buttons.forEach((b, key) => b.classList.toggle("on", key === group.id));
+    try { localStorage.setItem("coucou.settingsTab", group.id); } catch { /* storage blocked */ }
+  };
+  const nav = h("nav", { class: "side" },
+    h("div", { class: "brand" }, h("span", { text: "Coucou" }), h("span", { class: "version", text: version })),
+    ...groups.map((g) => {
+      const b = h("button", { class: "nav-item", onclick: () => show(g.id) }, svg(g.icon, 15), h("span", { text: g.label }));
+      buttons.set(g.id, b);
+      return b;
     }),
+    h("div", { class: "spacer" }),
+    h("div", { class: "hint side-note", text: "Sin telemetría. Las peticiones de red solo van a los servicios que tú configures." }),
   );
+  clear(root);
+  root.classList.add("two-pane");
+  root.append(nav, content);
+  let last = "start";
+  try { last = localStorage.getItem("coucou.settingsTab") ?? "start"; } catch { /* storage blocked */ }
+  show(last);
 
   void onEvent<Settings>("settings-changed", (s) => {
     settings = { ...settings, ...s };

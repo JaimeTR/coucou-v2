@@ -41,6 +41,135 @@ body.settings-window {
   margin: 0 auto;
 }
 
+/* Sidebar + one category at a time. */
+#settings-root.two-pane {
+  flex-direction: row;
+  gap: 0;
+  padding: 0;
+  max-width: none;
+  height: 100vh;
+}
+
+.side {
+  flex: 0 0 200px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 18px 10px 14px;
+  background: #0e0f12;
+  border-right: 1px solid var(--hairline);
+  overflow-y: auto;
+}
+
+.brand {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 0 10px 14px;
+  font: 650 16px var(--font);
+  letter-spacing: -0.01em;
+}
+
+.brand .version {
+  font: 400 11px var(--font);
+  color: var(--dim-2);
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--dim);
+  font: 500 13px var(--font);
+  text-align: left;
+}
+
+.nav-item svg {
+  fill: currentColor;
+  flex: 0 0 auto;
+  opacity: 0.85;
+}
+
+.nav-item:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--ink);
+}
+
+.nav-item.on {
+  background: rgba(255, 255, 255, 0.09);
+  color: var(--ink);
+}
+
+.nav-item:active:not(:disabled) {
+  transform: none;
+}
+
+.side-note {
+  padding: 10px 10px 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--dim-2);
+}
+
+.content {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-y: auto;
+  padding: 22px 28px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.content > h1 {
+  font: 650 20px var(--font);
+  letter-spacing: -0.015em;
+  margin-bottom: 2px;
+}
+
+/* Narrow window: the categories become a strip on top. */
+@media (max-width: 620px) {
+  #settings-root.two-pane {
+    flex-direction: column;
+    height: auto;
+  }
+  .side {
+    flex: 0 0 auto;
+    flex-direction: row;
+    flex-wrap: wrap;
+    border-right: 0;
+    border-bottom: 1px solid var(--hairline);
+    padding: 12px;
+  }
+  .brand,
+  .side-note,
+  .side .spacer {
+    display: none;
+  }
+  .nav-item {
+    width: auto;
+  }
+  .content {
+    overflow: visible;
+    padding: 18px 16px 32px;
+  }
+}
+
+/* The setup checklist: dot, text and button on one line, the text wrapping. */
+.row.check-item {
+  align-items: flex-start;
+  flex-wrap: nowrap;
+  gap: 10px;
+}
+
+.row.check-item > .dot {
+  margin-top: 5px;
+}
+
 h1 {
   font: 600 17px var(--font);
   letter-spacing: -0.01em;
@@ -56,14 +185,14 @@ section {
   background: var(--card);
   border: 1px solid var(--hairline);
   border-radius: 14px;
-  padding: 16px 18px;
+  padding: 18px 20px;
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
 
 section > h2 {
-  font: 600 13px var(--font);
+  font: 600 14px var(--font);
   display: flex;
   align-items: center;
   gap: 8px;
@@ -195,6 +324,7 @@ input[type="range"]::-webkit-slider-thumb {
 input[type="number"],
 input[type="text"],
 input[type="password"],
+input[type="url"],
 select {
   font: 400 12.5px var(--font);
   background: rgba(255, 255, 255, 0.07);
@@ -264,4 +394,9 @@ select option {
 .notice.warn {
   background: rgba(245, 165, 36, 0.13);
   color: #fbc06a;
+}
+
+.row.check-item > button {
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
