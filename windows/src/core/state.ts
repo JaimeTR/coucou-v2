@@ -204,6 +204,8 @@ export interface Settings {
   syncUrl: string;
   syncRev: number;
   syncDevice: string;
+  /** "auto" installs a new version when nothing is going on; "notify" only says so; "off" never looks. */
+  updates: "auto" | "notify" | "off";
   /** Who speaks: the voices Windows has, or ElevenLabs. */
   voiceEngine: "system" | "elevenlabs";
   elevenVoice: string;
@@ -258,6 +260,7 @@ export const DEFAULT_SETTINGS: Settings = {
   syncUrl: "",
   syncRev: 0,
   syncDevice: "",
+  updates: "auto",
   voiceEngine: "system",
   elevenVoice: "21m00Tcm4TlvDq8ikWAM",
   elevenModel: "eleven_multilingual_v2",

@@ -18,6 +18,7 @@ mod secrets;
 mod settings;
 mod sync;
 mod tray;
+mod updater;
 mod voice;
 mod workspaces;
 
@@ -363,6 +364,18 @@ fn focus_window(app: AppHandle, focused: bool) {
     if focused {
         let _ = win.set_focus();
     }
+}
+
+#[tauri::command]
+async fn update_check(app: AppHandle) -> Result<Option<updater::UpdateInfo>, String> {
+    updater::check(&app).await
+}
+
+/// Downloads, installs and restarts. Only from a click, or from the island when
+/// "automatic" is on and nothing is going on.
+#[tauri::command]
+async fn update_install(app: AppHandle) -> Result<(), String> {
+    updater::install(&app).await
 }
 
 #[tauri::command]
@@ -955,6 +968,7 @@ pub fn run() {
         }))
         .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, None))
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(|app, shortcut, event| {
@@ -997,6 +1011,8 @@ pub fn run() {
             reposition,
             start_island_drag,
             sync_status,
+            update_check,
+            update_install,
             sync_connect,
             sync_disconnect,
             sync_code,
@@ -1076,6 +1092,7 @@ pub fn run() {
             integrations::start(handle.clone());
             custom::start(handle.clone());
             sync::spawn(handle.clone());
+            updater::spawn(handle.clone());
             Ok(())
         })
         .run(tauri::generate_context!())

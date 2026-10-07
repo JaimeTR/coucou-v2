@@ -12,7 +12,7 @@ Approve permissions, watch your agents work, drop a file, chat with Claude — a
 
 iPhone y Android (una sola app): [mobile](mobile/README.md) · Windows y Linux · Windows/Linux: [README](windows/README.md) · [en español](windows/README.es.md) · [CHANGELOG](windows/CHANGELOG.md) · [en español](windows/CHANGELOG.es.md)
 
-[![Version](https://img.shields.io/badge/version-0.3.0-0A84FF)](windows/CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.3.1-0A84FF)](windows/CHANGELOG.md)
 ![macOS 15+](https://img.shields.io/badge/macOS-15%2B-black?logo=apple)
 ![iOS 18+](https://img.shields.io/badge/iOS-18%2B-black?logo=apple)
 ![Windows 10/11](https://img.shields.io/badge/Windows-10%2F11-0078D4?logo=windows&logoColor=white)

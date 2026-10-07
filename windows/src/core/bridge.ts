@@ -108,6 +108,11 @@ export const Bridge = {
   rulesAdd: (draft: RuleDraft) => callOrThrow<Rule>("rules_add", { ...draft }),
   rulesRemove: (id: string) => callOrThrow<void>("rules_remove", { id }),
 
+  // ── Updates (GitHub releases, signed) ──────────────────────────────────────
+  updateCheck: () => callOrThrow<UpdateInfo | null>("update_check"),
+  /** Downloads, installs and restarts Coucou. */
+  updateInstall: () => callOrThrow<void>("update_install"),
+
   // ── Sync between your computers (sync/ server) ─────────────────────────────
   syncStatus: () => call<{ url: string; connected: boolean; device: string }>("sync_status"),
   /** No code = a new account. Returns the account code. */
@@ -232,6 +237,12 @@ export interface HookPreview {
   settingsPath: string;
   /** Hand back to hooksApply so only the reviewed diff is ever written. */
   fingerprint: string;
+}
+
+export interface UpdateInfo {
+  version: string;
+  current: string;
+  notes: string;
 }
 
 /** Same as `call`, but surfaces the error so the UI can show what went wrong. */

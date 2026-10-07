@@ -1,0 +1,90 @@
+name: Release (Coucou v2 app)
+
+# Publishes the Tauri app — Windows and macOS — to a GitHub release, with the
+# signed `latest.json` the app's updater reads. Push a tag `app-vX.Y.Z` (the
+# version in tauri.conf.json, package.json and Cargo.toml) and every installed
+# Coucou picks the new version up by itself (Settings → General → Updates).
+#
+# Needs the repository secret TAURI_SIGNING_PRIVATE_KEY: the private half of the
+# key whose public half is plugins.updater.pubkey in tauri.conf.json. Without it
+# the build refuses to sign and nothing is published.
+#
+# The release stays a draft until both platforms are uploaded, so the updater
+# (which reads /releases/latest) never sees half a release.
+
+on:
+  push:
+    tags:
+      - 'app-v*'
+
+permissions:
+  contents: write
+
+jobs:
+  draft:
+    runs-on: ubuntu-latest
+    outputs:
+      id: ${{ steps.make.outputs.id }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check the tag and every version agree
+        working-directory: windows
+        run: |
+          tag="${GITHUB_REF_NAME#app-v}"
+          conf=$(jq -r .version src-tauri/tauri.conf.json)
+          pkg=$(jq -r .version package.json)
+          cargo=$(sed -n 's/^version *= *"\(.*\)"/\1/p' Cargo.toml | head -1)
+          echo "tag=$tag tauri.conf=$conf package.json=$pkg Cargo.toml=$cargo"
+          [ "$tag" = "$conf" ] && [ "$tag" = "$pkg" ] && [ "$tag" = "$cargo" ]
+      - name: Create the draft release
+        id: make
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          v="${GITHUB_REF_NAME#app-v}"
+          notes=$(awk -v v="$v" '$0 ~ "^## "v {on=1; next} on && /^## / {exit} on' windows/CHANGELOG.es.md)
+          gh release create "$GITHUB_REF_NAME" --draft --title "Coucou v2 $v" --notes "${notes:-Coucou v2 $v}"
+          echo "id=$(gh release view "$GITHUB_REF_NAME" --json databaseId -q .databaseId)" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: draft
+    strategy:
+      fail-fast: false
+      matrix:
+        # ponytail: Apple Silicon only on the Mac; an Intel or universal build needs the
+        # relay (coucou-hook) built for both architectures too.
+        os: [windows-latest, macos-14]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: windows/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install dependencies
+        working-directory: windows
+        run: npm ci
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ''
+        with:
+          projectPath: windows
+          tauriScript: npm run tauri
+          releaseId: ${{ needs.draft.outputs.id }}
+          includeUpdaterJson: true
+          args: --config src-tauri/tauri.release.conf.json
+
+  publish:
+    needs: [draft, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft=false --latest

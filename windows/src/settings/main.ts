@@ -3,7 +3,7 @@
 // integrations land here too in a later stage.
 
 import "./settings.css";
-import { Bridge, onEvent, type AgentStatus, type DetectedTool, type HookStatus } from "../core/bridge";
+import { Bridge, onEvent, type AgentStatus, type DetectedTool, type HookStatus, type UpdateInfo } from "../core/bridge";
 import { applyLanguage } from "../core/i18n";
 import { speak, stopSpeaking } from "../core/voice";
 import { State } from "../core/state";
@@ -1457,6 +1457,48 @@ function integrationsSection(present: Record<string, boolean>): HTMLElement {
 
 // ── General section ───────────────────────────────────────────────────────────
 
+/** Settings → General: how new versions arrive, and a button to look now. */
+function updatesRow(): HTMLElement {
+  const mode = h("select", {}) as HTMLSelectElement;
+  mode.append(
+    h("option", { value: "auto", text: "Automáticas" }),
+    h("option", { value: "notify", text: "Solo avisar" }),
+    h("option", { value: "off", text: "Desactivadas" }),
+  );
+  mode.value = settings.updates;
+  mode.addEventListener("change", () => {
+    settings.updates = mode.value as Settings["updates"];
+    void save();
+  });
+  const note = h("div");
+  const say = (ok: boolean, text: string) => {
+    clear(note);
+    note.append(h("div", { class: `notice ${ok ? "ok" : "err"}`, text }));
+  };
+  const install = (version: string) =>
+    h("button", { class: "primary", text: `Instalar ${version} y reiniciar`, onclick: async () => {
+      say(true, "Descargando… Coucou se reiniciará solo.");
+      try { await Bridge.updateInstall(); } catch (e) { say(false, String(e).replace(/^Error:\s*/, "")); }
+    } });
+  const look = h("button", { text: "Buscar ahora", onclick: async () => {
+    try {
+      const found = await Bridge.updateCheck();
+      if (!found) return say(true, `Tienes la última versión (${version}).`);
+      say(true, `Hay una versión nueva: ${found.version}.`);
+      note.append(install(found.version));
+    } catch (e) { say(false, String(e).replace(/^Error:\s*/, "")); }
+  } });
+  void onEvent<UpdateInfo>("update-available", (u) => {
+    say(true, `Hay una versión nueva: ${u.version}.`);
+    note.append(install(u.version));
+  });
+  return h("div", { style: "display:flex;flex-direction:column;gap:8px" },
+    h("div", { class: "row" }, h("label", { text: "Actualizaciones" }), mode, look),
+    h("div", { class: "hint", text: "Automáticas: Coucou se actualiza solo cuando no hay ninguna sesión trabajando ni un permiso esperando. Las versiones vienen firmadas desde GitHub." }),
+    note,
+  );
+}
+
 function generalSection(): HTMLElement {
   const volume = h("input", {
     type: "range", min: "0", max: "0.2", step: "0.005",
@@ -1529,6 +1571,7 @@ function generalSection(): HTMLElement {
       h("label", { text: "Iniciar con Windows" }),
       toggle(settings.autostart, (v) => { settings.autostart = v; void save(); }),
     ),
+    updatesRow(),
     h("div", { class: "row" },
       h("label", { text: "Notificaciones de Windows" }),
       toggle(settings.nativeNotifications, (v) => { settings.nativeNotifications = v; void save(); }),

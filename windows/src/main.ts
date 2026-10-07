@@ -1,6 +1,7 @@
 // Entry point: boot the bridge, wire the island, start the greeting.
 
 import { startRemote } from "./island/remote";
+import { startUpdates } from "./island/updates";
 import { isoWeekKey, weeklySummary } from "./island/recap";
 import "./style.css";
 import { Bridge, IS_TAURI, onEvent } from "./core/bridge";
@@ -80,6 +81,9 @@ async function main() {
   };
   window.setTimeout(recapCheck, 12_000);
   window.setInterval(recapCheck, 3600_000);
+
+  // New versions: said aloud, and installed at a quiet moment when automatic.
+  await startUpdates(island);
 
   // The phone link (Settings → Sincronización): sessions up, Allow / Deny down.
   startRemote(island, boot?.computerName ?? "PC");

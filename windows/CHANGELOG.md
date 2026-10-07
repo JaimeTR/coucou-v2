@@ -4,6 +4,32 @@
 
 Coucou v2 is [JaimeTR](https://github.com/JaimeTR)'s fork of [Coucou by Louis Raillé](https://github.com/Louis-CFM/coucou) (MIT). The macOS release notes stay in the root [CHANGELOG.md](../CHANGELOG.md).
 
+## 0.3.1 — October 7, 2026
+
+**Automatic updates**
+- Coucou looks for a new version on GitHub at launch and every 6 hours. Settings → General → Updates: **Automatic** (installs itself when no session is working and no permission waits; Mochi says it is updating), **Only tell me**, or **Off**. "Check now" looks right away. Every version is signed and the app refuses a signature that does not match.
+- Versions are published for Windows and Mac together with an `app-vX.Y.Z` tag (`release-app.yml`).
+
+**Your devices, linked**
+- **Sync** (Settings → Sync): your settings follow you to your other PCs and Macs through your own Cloudflare server (`sync/`), end-to-end encrypted. API keys, the screen, the island's position and start with Windows stay on each machine.
+- **Phone** (`mobile/`, iPhone and Android): a **PCs** tab with each computer's agents and **Allow / Deny** for the waiting permission.
+
+**Mochi**
+- Says how it feels (clicked, dizzy, petted): Settings → Voice.
+- Speaks agent errors with the island open too, and a failed deploy or CI.
+- **Island position**: fixed at the top centre, or free (drag it anywhere).
+- **Weekly recap**: on Mondays, "Your week" with time, sessions, files, lines and commands; also from the tray.
+
+**Agents**
+- **Copilot CLI** and **Muse Code** connect in Settings → Agents.
+
+**Settings**
+- Redesigned: a sidebar of nine categories, one at a time.
+- Fixed: the status dot sat on its own line for GitHub and Chat in the setup checklist.
+
+**Mac**
+- The same app now builds for macOS on every change (fixes for `macos-private-api` and the mouse button state). Not yet tried on a real Mac.
+
 ## 0.3.0 — October 6, 2026
 
 **A personal assistant**

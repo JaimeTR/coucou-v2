@@ -72,6 +72,10 @@ pub struct Settings {
     /// This computer's name on the sync account.
     #[serde(default)]
     pub sync_device: String,
+    /// "auto" = install a new version when nothing is going on, "notify" = only
+    /// say so, "off" = never look.
+    #[serde(default = "default_updates")]
+    pub updates: String,
     /// Who speaks: "system" (the voices Windows has) or "elevenlabs".
     #[serde(default = "default_voice_engine")]
     pub voice_engine: String,
@@ -231,6 +235,10 @@ fn default_start_pill() -> String {
     "integration_claude".into()
 }
 
+fn default_updates() -> String {
+    "auto".into()
+}
+
 fn default_island_position() -> String {
     "fixed".into()
 }
@@ -294,6 +302,7 @@ impl Default for Settings {
             sync_url: String::new(),
             sync_rev: 0,
             sync_device: String::new(),
+            updates: default_updates(),
             voice_engine: default_voice_engine(),
             eleven_voice: default_eleven_voice(),
             eleven_model: default_eleven_model(),

@@ -4,6 +4,32 @@
 
 Coucou v2 es el fork de [JaimeTR](https://github.com/JaimeTR) de [Coucou, de Louis Raillé](https://github.com/Louis-CFM/coucou) (MIT). Las notas de la versión de macOS siguen en el [CHANGELOG.md](../CHANGELOG.md) de la raíz.
 
+## 0.3.1: 7 de octubre de 2026
+
+**Actualizaciones automáticas**
+- Coucou busca versiones nuevas en GitHub al iniciar y cada 6 horas. En Ajustes → General → Actualizaciones eliges: **Automáticas** (se instala sola cuando ninguna sesión trabaja ni hay un permiso esperando; Mochi avisa «Me actualizo, vuelvo enseguida»), **Solo avisar** o **Desactivadas**. "Buscar ahora" lo comprueba al momento. Cada versión viene firmada y la app rechaza una firma que no coincide.
+- Las versiones se publican para Windows y Mac a la vez con una etiqueta `app-vX.Y.Z` (workflow `release-app.yml`).
+
+**Tus dispositivos conectados**
+- **Sincronización** (Ajustes → Sincronización): tus ajustes siguen a tus otros PCs y Macs a través de tu propio servidor de Cloudflare (`sync/`), cifrados de extremo a extremo. Las claves API, la pantalla, la posición de la isla y el inicio con Windows no viajan.
+- **Teléfono** (`mobile/`, iPhone y Android): pestaña **PCs** con los agentes de cada computadora y **Permitir / Denegar** el permiso que espera.
+
+**Mochi**
+- Dice lo que siente (al hacerle clic, al marearse, al darle cariño), en Ajustes → Voz → «Dice lo que siente».
+- Avisa en voz de los errores también con la isla abierta, y de un deploy o CI que falla.
+- **Posición de la isla**: fija arriba al centro o libre (arrástrala a donde quieras).
+- **Resumen semanal**: los lunes, «Tu semana» con tiempo, sesiones, archivos, líneas y comandos; también desde la bandeja.
+
+**Agentes**
+- **Copilot CLI** y **Muse Code** se conectan en Ajustes → Agentes.
+
+**Ajustes**
+- Rediseño: una barra lateral con nueve categorías, una a la vez.
+- Arreglado: en la lista de configuración el punto de estado quedaba desalineado en GitHub y Chat.
+
+**Mac**
+- La misma app compila para macOS en cada cambio (arreglos de `macos-private-api` y del estado del botón del ratón). Aún no probada en una Mac real.
+
 ## 0.3.0: 6 de octubre de 2026
 
 **Un asistente personal**
