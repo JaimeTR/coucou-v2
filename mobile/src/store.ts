@@ -16,9 +16,11 @@ export interface Settings {
   apps: CustomApp[];
   /** Your sync server (sync/), "" when this phone is not linked. The code is in secure storage. */
   syncUrl: string;
+  /** Face ID / fingerprint / passcode before an Allow is sent to a PC. */
+  requireAuth: boolean;
 }
 
-export const DEFAULT_SETTINGS: Settings = { name: "", language: "auto", apps: [], syncUrl: "" };
+export const DEFAULT_SETTINGS: Settings = { name: "", language: "auto", apps: [], syncUrl: "", requireAuth: true };
 
 const SETTINGS_KEY = "coucou.settings";
 
@@ -32,6 +34,7 @@ export async function loadSettings(): Promise<Settings> {
       language: saved.language === "es" || saved.language === "en" ? saved.language : "auto",
       apps: sanitizeApps(saved.apps),
       syncUrl: typeof saved.syncUrl === "string" && isServerUrl(saved.syncUrl) ? saved.syncUrl : "",
+      requireAuth: saved.requireAuth !== false,
     };
   } catch {
     return DEFAULT_SETTINGS;

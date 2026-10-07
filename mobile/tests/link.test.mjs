@@ -40,3 +40,15 @@ test("computers are read from the server, unreadable ones skipped; a decision go
   assert.deepEqual(open(k, posted), { requestId: "r1", decision: "allow", at: 42 });
   assert.equal(calls[1].url, `https://s.example/v1/${k.id}/decisions/pc-1`);
 });
+
+test("the PC's QR is accepted only if it points at an https server with a real code", async () => {
+  const { parsePairing } = await import("../.test-build/link.js");
+  const server = encodeURIComponent("https://coucou-sync.me.workers.dev");
+  const ok = parsePairing(`coucou://pair?server=${server}&code=${CODE}`);
+  assert.deepEqual(ok, { server: "https://coucou-sync.me.workers.dev", code: CODE });
+  assert.ok(parsePairing(`coucou://pair?server=${encodeURIComponent("http://127.0.0.1:8787")}&code=${CODE}`), "a server on this machine is fine for development");
+  assert.equal(parsePairing(`coucou://pair?server=${encodeURIComponent("http://evil.example")}&code=${CODE}`), null);
+  assert.equal(parsePairing(`coucou://pair?server=${server}&code=1234`), null);
+  assert.equal(parsePairing(`https://coucou-sync.me.workers.dev/?code=${CODE}`), null);
+  assert.equal(parsePairing(`coucou://pair?server=%E0%A4%A&code=${CODE}`), null, "bad escapes are refused, not thrown");
+});

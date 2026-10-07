@@ -34,7 +34,9 @@
       "expo-router",
       "expo-secure-store",
       "expo-font",
-      "expo-asset"
+      "expo-asset",
+      ["expo-camera", { "cameraPermission": "Coucou usa la cámara solo para leer el QR que enlaza tu PC." }],
+      ["expo-local-authentication", { "faceIDPermission": "Coucou usa Face ID para confirmar que eres tú antes de permitir un comando en tu PC." }]
     ],
     "extra": {
       "author": "JaimeTR"

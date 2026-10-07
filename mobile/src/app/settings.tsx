@@ -178,6 +178,21 @@ export default function Settings() {
         <Text style={styles.hint}>{t("Para saludarte en la pantalla de inicio.")}</Text>
       </View>
 
+      <View style={styles.card}>
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text style={styles.title}>{t("Confirmar antes de permitir")}</Text>
+            <Text style={styles.hint}>{t("Pide Face ID, huella o el código del teléfono antes de enviar un “Permitir” a tu PC. “Denegar” nunca lo pide.")}</Text>
+          </View>
+          <Pressable
+            onPress={() => update({ requireAuth: !settings.requireAuth })}
+            style={[styles.seg, { flex: 0, paddingHorizontal: 16 }, settings.requireAuth && styles.segOn]}
+          >
+            <Text style={[styles.segText, settings.requireAuth && { color: colors.bg }]}>{settings.requireAuth ? t("Sí") : t("No")}</Text>
+          </Pressable>
+        </View>
+      </View>
+
       <GithubSection />
 
       <Text style={styles.title}>{t("Mis apps")}</Text>

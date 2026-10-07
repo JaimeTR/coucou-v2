@@ -13,6 +13,7 @@ import { greetingLines } from "../island/greetingText";
 import { CUSTOM_PILL_LIMIT, DEFAULT_SETTINGS, WEBHOOK_PORT, type CustomPill, type Settings } from "../core/state";
 import { h, clear, svg } from "../views/dom";
 import { ICONS } from "../views/icons";
+import { pairingQr } from "./qr";
 
 /** Two arrows chasing each other: sync. */
 const SYNC_ICON = "M12 4.5a7.5 7.5 0 0 1 6.7 4.1H16v2h6V4.6h-2v2.3A9.5 9.5 0 0 0 2.6 11h2a7.5 7.5 0 0 1 7.4-6.5zM19.4 13a7.5 7.5 0 0 1-14.1 2.4H8v-2H2v6h2v-2.3A9.5 9.5 0 0 0 21.4 13h-2z";
@@ -1737,6 +1738,16 @@ function syncSection(): HTMLElement {
             codeBox.append(
               h("code", { text: (await Bridge.syncCode()) ?? "" }),
               h("div", { text: "Pégalo en tu otro PC (Ajustes → Sincronización → Unir). Quien tenga este código ve tus ajustes: no lo compartas." }),
+            );
+          } }),
+          h("button", { text: "Mostrar QR para el teléfono", onclick: async () => {
+            clear(codeBox);
+            const code = await Bridge.syncCode();
+            if (!code || !st.url) return;
+            codeBox.append(
+              pairingQr(st.url, code),
+              h("div", { text: "En la app del teléfono: pestaña PCs → Escanear el QR. Quien lo vea puede leer tus ajustes: ciérralo cuando termines." }),
+              h("button", { text: "Ocultar", onclick: () => clear(codeBox) }),
             );
           } }),
           h("button", { class: "danger", text: "Desconectar este equipo", onclick: async () => {

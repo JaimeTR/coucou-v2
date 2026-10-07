@@ -2,13 +2,15 @@
 // one of them, with Allow / Deny. Through your own sync server (sync/), end to
 // end encrypted. It only looks while this screen is open and the app is in front.
 
+import { CameraView, useCameraPermissions } from "expo-camera";
 import * as Crypto from "expo-crypto";
+import * as LocalAuthentication from "expo-local-authentication";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
-import { AppState, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { AppState, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { useApp } from "../app-context";
-import { deriveKeys, fetchComputers, fetchSharedSettings, isServerUrl, sendDecision, type Computer } from "../logic/link";
+import { deriveKeys, fetchComputers, fetchSharedSettings, isServerUrl, parsePairing, sendDecision, type Computer } from "../logic/link";
 import { clearSecret, getSecret, setSecret, SYNC_CODE } from "../store";
 import { colors } from "../theme";
 
@@ -29,18 +31,21 @@ function Pair({ onPaired }: { onPaired: () => void }) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
-  const connect = async () => {
-    const keys = deriveKeys(code);
+  const [scanning, setScanning] = useState(false);
+  const [permission, requestPermission] = useCameraPermissions();
+
+  const connect = async (serverText = server, codeText = code) => {
+    const keys = deriveKeys(codeText);
     if (!keys) return setError(t("El código debe tener 64 caracteres (0-9, a-f), con o sin guiones."));
-    if (!isServerUrl(server)) return setError(t("La dirección del servidor debe empezar por https://"));
+    if (!isServerUrl(serverText)) return setError(t("La dirección del servidor debe empezar por https://"));
     setBusy(true);
     setError("");
     try {
       // Reading the shared settings proves the code and the server are right,
       // and brings your name and language from the PC.
-      const shared = await fetchSharedSettings(fetcher, server.trim(), keys);
-      await setSecret(SYNC_CODE, code.trim());
-      const patch: Partial<typeof settings> = { syncUrl: server.trim() };
+      const shared = await fetchSharedSettings(fetcher, serverText.trim(), keys);
+      await setSecret(SYNC_CODE, codeText.trim());
+      const patch: Partial<typeof settings> = { syncUrl: serverText.trim() };
       if (typeof shared?.userName === "string" && shared.userName && !settings.name) patch.name = shared.userName.slice(0, 40);
       if (shared?.language === "es" || shared?.language === "en") patch.language = shared.language;
       update(patch);
@@ -52,9 +57,51 @@ function Pair({ onPaired }: { onPaired: () => void }) {
     }
   };
 
+  // The PC's QR carries both the address and the code.
+  const onScanned = ({ data }: { data: string }) => {
+    const pairing = parsePairing(data);
+    if (!pairing) return; // not ours: keep looking, a stray QR must not interrupt
+    setScanning(false);
+    setServer(pairing.server);
+    setCode(pairing.code);
+    void connect(pairing.server, pairing.code);
+  };
+
+  if (scanning) {
+    return (
+      <View style={styles.card}>
+        <Text style={styles.title}>{t("Apunta al QR de tu PC")}</Text>
+        <CameraView
+          style={styles.camera}
+          facing="back"
+          barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
+          onBarcodeScanned={onScanned}
+        />
+        <Pressable style={styles.button} onPress={() => setScanning(false)}>
+          <Text style={styles.buttonText}>{t("Cancelar")}</Text>
+        </Pressable>
+        {error ? <Text style={styles.err}>{error}</Text> : null}
+      </View>
+    );
+  }
+
   return (
     <View style={styles.card}>
       <Text style={styles.title}>{t("Conecta tus PCs")}</Text>
+      {Platform.OS !== "web" ? (
+        <Pressable
+          style={[styles.button, styles.primary]}
+          onPress={async () => {
+            if (!permission?.granted && !(await requestPermission()).granted) {
+              return setError(t("Sin permiso de cámara no se puede leer el QR. Puedes escribir el código a mano."));
+            }
+            setError("");
+            setScanning(true);
+          }}
+        >
+          <Text style={[styles.buttonText, { color: colors.bg }]}>{t("Escanear el QR de mi PC")}</Text>
+        </Pressable>
+      ) : null}
       <Text style={styles.hint}>
         {t("En Coucou de tu PC: Ajustes → Sincronización → Mostrar código. Pega aquí esa dirección y ese código. Todo va cifrado: tu servidor no puede leerlo.")}
       </Text>
@@ -64,7 +111,7 @@ function Pair({ onPaired }: { onPaired: () => void }) {
       <Text style={styles.label}>{t("Código")}</Text>
       <TextInput style={styles.input} value={code} onChangeText={setCode} placeholder="xxxxxxxx-xxxxxxxx-…"
         placeholderTextColor={colors.dim} autoCapitalize="none" autoCorrect={false} secureTextEntry />
-      <Pressable style={[styles.button, styles.primary]} onPress={connect} disabled={busy}>
+      <Pressable style={[styles.button, styles.primary]} onPress={() => void connect()} disabled={busy}>
         <Text style={[styles.buttonText, { color: colors.bg }]}>{busy ? t("Conectando…") : t("Conectar")}</Text>
       </Pressable>
       {error ? <Text style={styles.err}>{error}</Text> : null}
@@ -159,8 +206,25 @@ export default function Computers() {
     }, [poll]),
   );
 
+  /**
+   * Allowing runs a command on a computer: confirm it is you first (Face ID,
+   * fingerprint or the phone's passcode). Deny never asks. A phone with no lock
+   * at all cannot ask, so it goes through; the switch in Settings turns this off.
+   */
+  const confirmed = async (): Promise<boolean> => {
+    if (!settings.requireAuth || Platform.OS === "web") return true;
+    try {
+      if ((await LocalAuthentication.getEnrolledLevelAsync()) === LocalAuthentication.SecurityLevel.NONE) return true;
+      const result = await LocalAuthentication.authenticateAsync({ promptMessage: t("Confirma que eres tú para permitir este comando") });
+      return result.success;
+    } catch {
+      return false;
+    }
+  };
+
   const decide = async (pc: Computer, d: "allow" | "deny") => {
     if (!keys || !pc.approval) return;
+    if (d === "allow" && !(await confirmed())) return setError(t("No se confirmó tu identidad: no se envió nada."));
     try {
       await sendDecision(fetcher, server, keys, pc.id, pc.approval.requestId, d, Crypto.getRandomBytes(12));
       setSent(pc.approval.requestId);
@@ -221,4 +285,5 @@ const styles = StyleSheet.create({
   danger: { borderColor: "rgba(244,80,94,0.4)" },
   buttonText: { color: colors.ink, fontSize: 15, fontWeight: "600" },
   err: { color: colors.red, fontSize: 13 },
+  camera: { width: "100%", aspectRatio: 1, borderRadius: 14, overflow: "hidden" },
 });

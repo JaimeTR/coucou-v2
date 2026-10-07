@@ -11,6 +11,28 @@ import { sha256 } from "@noble/hashes/sha256";
 /** https only, except a server running on this machine while developing. */
 export const isServerUrl = (u: string) => /^(https:\/\/|http:\/\/(127\.0\.0\.1|localhost)[:/])/.test(u.trim());
 
+/**
+ * What the PC's QR holds: coucou://pair?server=<address>&code=<code>. Anything
+ * else (a web page, a wrong code, a server that is not https) is refused, so a
+ * QR from somewhere else cannot point the phone at a stranger's server.
+ */
+export function parsePairing(text: string): { server: string; code: string } | null {
+  const m = /^coucou:\/\/pair\?(.*)$/.exec(text.trim());
+  if (!m) return null;
+  const params: Record<string, string> = {};
+  for (const part of m[1].split("&")) {
+    const [k, v = ""] = part.split("=");
+    try {
+      params[k] = decodeURIComponent(v);
+    } catch {
+      return null;
+    }
+  }
+  const server = (params.server ?? "").trim();
+  const code = (params.code ?? "").trim();
+  return isServerUrl(server) && deriveKeys(code) ? { server, code } : null;
+}
+
 export interface Keys {
   id: string;
   token: string;
