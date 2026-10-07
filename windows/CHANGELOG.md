@@ -4,6 +4,18 @@
 
 Coucou v2 is [JaimeTR](https://github.com/JaimeTR)'s fork of [Coucou by Louis Raillé](https://github.com/Louis-CFM/coucou) (MIT). The macOS release notes stay in the root [CHANGELOG.md](../CHANGELOG.md).
 
+## 0.3.3 — October 8, 2026
+
+**Mochi talks**
+- **The pet talks and cheers you on** (new **Pet** category in Settings): when it peeks out it says something that fits what you are doing, in a bubble and, if you like, aloud. Working with an agent: "Keep it up, {name}! Keep working for {friend}'s dinner"; when an agent finishes or fails it comes sooner, if it has not been out for a while; with music it dances and comments; with a video it just waves silently; in the small hours it sends you to rest; after a long stretch, to stretch your legs; plus morning, afternoon and evening greetings.
+- **All of it is yours to change**: its friend's name (default "Sven"), your own phrases per topic (one per line, with `{name}`, `{friend}` and `{minutes}`), whether it uses only yours, and whether it speaks in a bubble or also aloud (in the voice you chose).
+- "Show up now" in Settings → Pet.
+- The pet's window lets every click through except on Mochi and its bubble; its eyes follow the pointer across the whole screen.
+
+**Island and Mochi, always upright**
+- Against the left or right edge the island at rest is a **vertical capsule** with Mochi on top and the other pills under it, all upright (before, it was the bar turned). Opened, it is the usual card, flush with the edge.
+- The pet also peeks from the sides **upright**, without turning.
+
 ## 0.3.2 — October 7, 2026
 
 **Island**

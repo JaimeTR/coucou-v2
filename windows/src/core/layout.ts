@@ -104,10 +104,15 @@ export function chatPromptHeight(messageCount: number): number {
   return Math.min(300, 240 + messageCount * 40);
 }
 
+/** Resting against a side edge the island is a vertical capsule: Mochi on top, the other pills below. */
+export const VERTICAL_W = 46;
+export const VERTICAL_H = 104;
+
 export function islandSize(
   mode: IslandMode,
   view: IslandViewName,
   chatCount = 0,
+  vertical = false,
 ): { w: number; h: number } {
   switch (mode) {
     case "hidden":
@@ -115,7 +120,7 @@ export function islandSize(
       // slides into the top edge of the screen instead of sitting there as a bar.
       return { w: NOTCH_W, h: 0 };
     case "compact":
-      return { w: COMPACT_W, h: NOTCH_H };
+      return vertical ? { w: VERTICAL_W, h: VERTICAL_H } : { w: COMPACT_W, h: NOTCH_H };
     case "expanded": {
       const h = view === "prompt" ? chatPromptHeight(chatCount) : VIEW_LAYOUTS[view].height;
       return { w: EXPANDED_W, h };
@@ -136,12 +141,14 @@ export function botPosition(
   view: IslandViewName,
   islandH: number,
   uploadProgress = 0,
+  vertical = false,
 ): BotPlacement {
   switch (mode) {
     case "hidden":
       return { cx: 46, cy: 16, diameter: 6, opacity: 0 };
     case "compact":
-      return { cx: 40, cy: 16, diameter: 20, opacity: 1 };
+      // Upright, whichever way the capsule lies: Mochi at the top of the vertical one.
+      return vertical ? { cx: VERTICAL_W / 2, cy: 24, diameter: 26, opacity: 1 } : { cx: 40, cy: 16, diameter: 20, opacity: 1 };
     case "expanded": {
       const layout = VIEW_LAYOUTS[view];
       if (view === "uploading") {

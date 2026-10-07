@@ -1,7 +1,7 @@
 // Weekly recap: what a week of turns adds up to.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { RecapRecorder, weeklySummary, lastWeekStart, isoWeekKey, formatMinutes } from "../.test-build/island/recap.js";
+import { RecapRecorder, weeklySummary, lastWeekStart, isoWeekKey, formatMinutes, minutesToday } from "../.test-build/island/recap.js";
 
 const memory = () => {
   let saved = null;
@@ -65,4 +65,17 @@ test("an empty week has no recap; old turns are forgotten", () => {
   assert.equal(formatMinutes(45), "45m");
   assert.equal(formatMinutes(120), "2h");
   assert.equal(formatMinutes(200), "3h 20m");
+});
+
+test("today's minutes count only today, parallel work once", () => {
+  const day = (h, m = 0) => new Date(2026, 9, 7, h, m).getTime();
+  const turn = (start, end) => ({ pillId: "x", project: "p", start, end, files: 0, added: 0, removed: 0, commands: 0, questions: 0 });
+  const data = { decisions: [], turns: [
+    turn(day(9), day(10)),            // 60
+    turn(day(9, 30), day(10, 30)),    // overlaps: 30 more
+    turn(day(14), day(14, 20)),       // 20
+    turn(new Date(2026, 9, 6, 22).getTime(), new Date(2026, 9, 6, 23).getTime()), // yesterday
+  ] };
+  assert.equal(minutesToday(data, new Date(2026, 9, 7, 16)), 110);
+  assert.equal(minutesToday({ turns: [], decisions: [] }, new Date()), 0);
 });

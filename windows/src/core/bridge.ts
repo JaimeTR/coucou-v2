@@ -113,10 +113,16 @@ export const Bridge = {
   // ── Mochi the pet (its own small window) ────────────────────────────────────
   petShow: (edge: "left" | "right" | "bottom", along: number) => callOrThrow<void>("pet_show", { edge, along }),
   petHide: () => call<void>("pet_hide"),
+  /** A visit now, whatever the schedule (Settings → Mascota). */
+  petVisitNow: () => call<void>("pet_visit_now"),
+  /** The parts of the pet window that take the mouse: [x, y, w, h] in window px. */
+  petHit: (rects: number[][]) => call<void>("pet_hit", { rects }),
+  /** What the person is doing, for the pet to talk about (the island tells it). */
+  petContext: (context: Record<string, unknown>) => call<void>("pet_context", { context }),
   petAllowed: async () => (await call<boolean>("pet_allowed")) ?? false,
 
   /** What the computer is playing (system media controls); for Mochi's dance. */
-  nowPlaying: () => call<{ playing: boolean; title: string; artist: string }>("now_playing"),
+  nowPlaying: () => call<{ playing: boolean; title: string; artist: string; app: string }>("now_playing"),
 
   // ── Updates (GitHub releases, signed) ──────────────────────────────────────
   updateCheck: () => callOrThrow<UpdateInfo | null>("update_check"),

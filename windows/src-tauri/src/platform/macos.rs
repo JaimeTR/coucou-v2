@@ -190,6 +190,7 @@ pub fn now_playing() -> Option<super::NowPlaying> {
                 playing: true,
                 title: lines.next().unwrap_or("").to_string(),
                 artist: lines.next().unwrap_or("").to_string(),
+                app: app.to_string(),
             });
         }
     }

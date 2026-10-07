@@ -104,7 +104,7 @@ export function speak(text: string, onEnd?: () => void, opts: { free?: boolean }
   return premium ? speakEleven(said, onEnd) : speakSystem(said, onEnd);
 }
 
-export type Occasion = "greeting" | "events" | "replies" | "assistant";
+export type Occasion = "greeting" | "events" | "replies" | "assistant" | "pet";
 
 /**
  * Speech Mochi starts by itself. Nothing is said unless voice is switched on, and
@@ -116,6 +116,7 @@ export function speakAuto(occasion: Occasion, text: string, onEnd?: () => void):
   if (occasion === "greeting" && !s.voiceGreeting) return false;
   if (occasion === "events" && !s.voiceEvents) return false;
   if (occasion === "replies" && !s.voiceReplies) return false;
+  if (occasion === "pet" && !s.voicePet) return false;
   return speak(text, onEnd);
 }
 

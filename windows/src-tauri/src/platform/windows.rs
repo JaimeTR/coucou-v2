@@ -298,7 +298,8 @@ fn media_session() -> Option<super::NowPlaying> {
             )
         })
         .unwrap_or_default();
-    Some(super::NowPlaying { playing, title, artist })
+    let app = session.SourceAppUserModelId().map(|t| t.to_string()).unwrap_or_default();
+    Some(super::NowPlaying { playing, title, artist, app })
 }
 
 pub fn cursor_physical() -> Option<(f64, f64)> {

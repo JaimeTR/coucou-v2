@@ -5,12 +5,41 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Mochi</title>
     <style>
-      html, body { margin: 0; background: transparent; overflow: hidden; }
-      canvas { display: block; width: 100vw; height: 100vh; }
+      html, body { margin: 0; background: transparent; overflow: hidden; width: 340px; height: 220px; }
+      canvas { position: absolute; left: 0; top: 0; width: 340px; height: 220px; }
+      /* The speech bubble: placed by the page (brain.ts bubbleBox), a tail toward Mochi. */
+      #bubble {
+        position: absolute;
+        display: none;
+        box-sizing: border-box;
+        padding: 9px 13px;
+        background: #fff;
+        color: #15161a;
+        font: 500 13.5px/1.35 "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+        border-radius: 15px;
+        box-shadow: 0 6px 22px rgba(0, 0, 0, 0.35);
+        cursor: pointer;
+        user-select: none;
+        word-wrap: break-word;
+      }
+      #bubble.show { display: block; animation: pop 0.22s ease-out; }
+      #bubble::after {
+        content: "";
+        position: absolute;
+        width: 12px;
+        height: 12px;
+        background: #fff;
+        transform: rotate(45deg);
+      }
+      #bubble.edge-bottom::after { left: calc(50% - 6px); bottom: -5px; }
+      #bubble.edge-right::after { right: -5px; top: calc(50% - 6px); }
+      #bubble.edge-left::after { left: -5px; top: calc(50% - 6px); }
+      @keyframes pop { from { opacity: 0; transform: scale(0.85); } to { opacity: 1; transform: scale(1); } }
     </style>
   </head>
   <body>
     <canvas id="pet"></canvas>
+    <div id="bubble"></div>
     <script type="module" src="/src/pet/main.ts"></script>
   </body>
 </html>

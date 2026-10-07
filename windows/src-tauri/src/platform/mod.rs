@@ -38,6 +38,8 @@ pub struct NowPlaying {
     pub playing: bool,
     pub title: String,
     pub artist: String,
+    /// Which program plays it ("Spotify.exe", "chrome.exe", "Music"…), to tell music from video.
+    pub app: String,
 }
 
 /// The user's home directory, where `.claude/settings.json` lives.

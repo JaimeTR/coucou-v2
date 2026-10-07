@@ -2,6 +2,7 @@
 
 import { startRemote } from "./island/remote";
 import { startUpdates } from "./island/updates";
+import { startPetContext } from "./island/petContext";
 import { isoWeekKey, weeklySummary } from "./island/recap";
 import "./style.css";
 import { Bridge, IS_TAURI, onEvent } from "./core/bridge";
@@ -84,6 +85,9 @@ async function main() {
 
   // New versions: said aloud, and installed at a quiet moment when automatic.
   await startUpdates(island);
+
+  // What the person is doing, for Mochi the pet to talk about.
+  startPetContext();
 
   // The phone link (Settings → Sincronización): sessions up, Allow / Deny down.
   startRemote(island, boot?.computerName ?? "PC");

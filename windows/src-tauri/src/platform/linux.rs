@@ -29,6 +29,7 @@ pub fn now_playing() -> Option<super::NowPlaying> {
         playing,
         title: run(&["metadata", "title"]).unwrap_or_default(),
         artist: run(&["metadata", "artist"]).unwrap_or_default(),
+        app: run(&["metadata", "--format", "{{playerName}}"]).unwrap_or_default(),
     })
 }
 

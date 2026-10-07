@@ -215,6 +215,15 @@ export interface Settings {
   /** Mochi peeks out from the screen's edges now and then. */
   petEnabled: boolean;
   petFrequency: "rare" | "normal" | "often";
+  /** The pet talks (a speech bubble), and aloud when voice is on. */
+  petSpeech: boolean;
+  voicePet: boolean;
+  /** A name the pet can bring up ("para la comida de {friend}"). */
+  petFriend: string;
+  /** Only the person's own phrases. */
+  petOnlyMine: boolean;
+  /** The person's own phrases, by topic. */
+  petPhrases: Record<string, string[]>;
   /** Who speaks: the voices Windows has, or ElevenLabs. */
   voiceEngine: "system" | "elevenlabs";
   elevenVoice: string;
@@ -278,6 +287,11 @@ export const DEFAULT_SETTINGS: Settings = {
   mochiOutfit: "auto",
   petEnabled: false,
   petFrequency: "normal",
+  petSpeech: true,
+  voicePet: true,
+  petFriend: "Sven",
+  petOnlyMine: false,
+  petPhrases: {},
   voiceEngine: "system",
   elevenVoice: "21m00Tcm4TlvDq8ikWAM",
   elevenModel: "eleven_multilingual_v2",

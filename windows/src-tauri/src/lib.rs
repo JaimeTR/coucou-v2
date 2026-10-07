@@ -304,6 +304,8 @@ pub(crate) fn apply_settings(app: &AppHandle, mut settings: Settings) {
     let app = app.clone();
     let shared = app.state::<Shared>();
     settings.custom_pills = settings::sanitize_pills(std::mem::take(&mut settings.custom_pills));
+    settings.pet_phrases = settings::sanitize_phrases(std::mem::take(&mut settings.pet_phrases));
+    settings.pet_friend = settings.pet_friend.trim().chars().take(24).collect();
     let pills_changed = shared.settings.lock().unwrap().custom_pills != settings.custom_pills;
     let (screen_changed, autostart_changed, shortcuts_changed) = {
         let mut current = shared.settings.lock().unwrap();
@@ -390,6 +392,26 @@ fn pet_show(app: AppHandle, edge: String, along: f64) -> Result<(), String> {
 #[tauri::command]
 fn pet_hide(app: AppHandle) {
     pet::hide(&app);
+}
+
+/// What the person is doing, for the pet to talk about: told by the island
+/// (agents working, finishing, failing; time worked) and passed on to the pet's page.
+#[tauri::command]
+fn pet_context(app: AppHandle, context: serde_json::Value) {
+    let _ = app.emit_to(pet::LABEL, "pet-context", context);
+}
+
+/// Settings → Mascota → "Que aparezca ya": a visit now, whatever the schedule.
+#[tauri::command]
+fn pet_visit_now(app: AppHandle) {
+    let _ = app.emit_to(pet::LABEL, "pet-visit-now", ());
+}
+
+/// The parts of the pet window that take the mouse: `[x, y, w, h]` rectangles in
+/// logical window coordinates (Mochi's body, the speech bubble).
+#[tauri::command]
+fn pet_hit(rects: Vec<[f64; 4]>) {
+    pet::set_hit(rects);
 }
 
 /// Is this a good moment for the pet to appear? Not while paused, nor over a
@@ -1075,6 +1097,9 @@ pub fn run() {
             now_playing,
             pet_show,
             pet_hide,
+            pet_hit,
+            pet_context,
+            pet_visit_now,
             pet_allowed,
             update_check,
             update_install,

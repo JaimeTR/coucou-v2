@@ -4,6 +4,18 @@
 
 Coucou v2 es el fork de [JaimeTR](https://github.com/JaimeTR) de [Coucou, de Louis Raillé](https://github.com/Louis-CFM/coucou) (MIT). Las notas de la versión de macOS siguen en el [CHANGELOG.md](../CHANGELOG.md) de la raíz.
 
+## 0.3.3: 8 de octubre de 2026
+
+**Mochi habla**
+- **La mascota habla y te anima** (nueva categoría **Mascota** en Ajustes): cuando se asoma, dice algo que encaja con lo que haces, en un globo y, si quieres, en voz alta. Trabajando con un agente: «¡Ánimo, {name}! Sigue trabajando para la comida de {friend}»; cuando un agente termina o falla, antes si hace rato que no sale; con música baila y comenta; con un vídeo solo saluda en silencio; de madrugada te manda a descansar; si llevas mucho rato, a estirar las piernas; y saludos de mañana, tarde y noche.
+- **Todo se personaliza**: el nombre de su amigo (por defecto «Sven»), tus propias frases por tema (una por línea, con `{name}`, `{friend}` y `{minutes}`), si usa solo las tuyas, y si habla en globo o también en voz alta (con la voz que elegiste).
+- «Que aparezca ya» en Ajustes → Mascota.
+- La ventana de la mascota deja pasar todos los clics salvo sobre Mochi y su globo; sus ojos siguen el puntero por toda la pantalla.
+
+**Isla y Mochi, siempre derechos**
+- Pegada al borde izquierdo o derecho, la isla en reposo es una **cápsula vertical** con Mochi arriba y el resto de pills debajo, todo derecho (antes era la barra girada). Al abrirla sale la tarjeta de siempre, pegada al borde.
+- La mascota también se asoma por los lados, derecha, sin girarse.
+
 ## 0.3.2: 7 de octubre de 2026
 
 **Isla**

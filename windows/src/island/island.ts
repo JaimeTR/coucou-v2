@@ -647,7 +647,7 @@ export class Island {
   // ── Geometry ────────────────────────────────────────────────────────────────
 
   private targetSize(): { w: number; h: number; r: number } {
-    const { w, h } = islandSize(State.mode, State.view, State.chatHistory.length);
+    const { w, h } = islandSize(State.mode, State.view, State.chatHistory.length, this.vertical());
     const r = State.mode === "expanded" ? EXPANDED_CORNER : ROUNDED_CORNER;
     return { w, h, r };
   }
@@ -679,8 +679,14 @@ export class Island {
     this.islandEl.style.borderRadius = place.radius;
     // These follow the island as it resizes, so they belong here rather than in
     // the state-driven DOM sync.
-    this.miniGrid.style.left = `${w - 40 - 14.5}px`;
-    this.miniGrid.style.top = `${hh / 2 - 14.5}px`;
+    if (this.vertical()) {
+      // Under Mochi, centred.
+      this.miniGrid.style.left = `${(w - 29) / 2}px`;
+      this.miniGrid.style.top = `${46}px`;
+    } else {
+      this.miniGrid.style.left = `${w - 40 - 14.5}px`;
+      this.miniGrid.style.top = `${hh / 2 - 14.5}px`;
+    }
     this.greetingCanvas.style.left = `${(w - EXPANDED_W) / 2}px`;
     this.picker.style.left = `${(w - EXPANDED_W) / 2}px`;
     this.uploadCanvas.el.style.left = `${(w - EXPANDED_W) / 2}px`;
@@ -691,6 +697,12 @@ export class Island {
       this.pushedRect = rect;
       void Bridge.setIslandRect(rect.x, rect.y, rect.w, rect.h);
     }
+  }
+
+  /** Resting against the left or right edge: the capsule stands up. */
+  private vertical(): boolean {
+    const dock = State.settings.islandDock;
+    return State.settings.islandPosition === "free" && (dock === "left" || dock === "right") && State.mode === "compact";
   }
 
   private placement() {
@@ -858,7 +870,9 @@ export class Island {
   private async startDrag() {
     const dock = State.settings.islandDock;
     if (isDock(dock)) {
-      const { dx, dy } = undockNudge(dock, State.mode === "expanded", this.width.value, this.height.value, this.radius.value, PANEL_W, PANEL_H);
+      const docked = { w: this.width.value, h: this.height.value };
+      const floating = islandSize(State.mode, State.view, State.chatHistory.length, false);
+      const { dx, dy } = undockNudge(dock, docked, floating, this.radius.value, PANEL_W, PANEL_H);
       await Bridge.undockIsland(dx, dy);
     }
     await Bridge.startIslandDrag();
@@ -995,7 +1009,7 @@ export class Island {
   };
 
   private updateBotTargets() {
-    const p = botPosition(State.mode, State.view, this.height.value, State.uploadProgress);
+    const p = botPosition(State.mode, State.view, this.height.value, State.uploadProgress, this.vertical());
     this.botCx.target = p.cx;
     this.botCy.target = p.cy;
     this.botSize.target = p.diameter / 0.6;
@@ -1196,6 +1210,8 @@ export class Island {
     Sound.setEnabled(State.settings.soundEnabled);
     Sound.setVolume(State.settings.soundVolume);
     this.fsm.homeToPetitDelay = State.settings.autoCloseInterval;
+    // Docking to a side (or leaving it) changes the compact shape.
+    this.animateGeometry(false);
     this.fsm.neverHide = State.settings.islandPosition === "free";
     const outfit = isOutfit(State.settings.mochiOutfit) ? State.settings.mochiOutfit : "auto";
     wear(resolve(outfit, new Date()));

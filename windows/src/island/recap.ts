@@ -124,6 +124,12 @@ export function weeklySummary(data: RecapData, now: Date, names: Record<string, 
   };
 }
 
+/** Minutes of agent work started today (this PC's day), parallel sessions counted once. */
+export function minutesToday(data: RecapData, now: Date): number {
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  return Math.round(mergedMs(data.turns.filter((t) => t.start >= start && t.start <= now.getTime())) / 60000);
+}
+
 /** "45m", "2h", "3h 20m". */
 export function formatMinutes(m: number): string {
   if (m < 60) return `${m}m`;

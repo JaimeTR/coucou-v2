@@ -92,6 +92,21 @@ pub struct Settings {
     /// How often: "rare", "normal" or "often".
     #[serde(default = "default_pet_frequency")]
     pub pet_frequency: String,
+    /// The pet says things in a speech bubble.
+    #[serde(default = "default_true")]
+    pub pet_speech: bool,
+    /// ...and says them aloud too, when Mochi's voice is on.
+    #[serde(default = "default_true")]
+    pub voice_pet: bool,
+    /// A name that can come up in what it says ("para la comida de {friend}").
+    #[serde(default = "default_pet_friend")]
+    pub pet_friend: String,
+    /// Only the person's own phrases, none of the built-in ones.
+    #[serde(default)]
+    pub pet_only_mine: bool,
+    /// The person's own phrases, by topic (see `PET_TOPICS`), one per line in Settings.
+    #[serde(default)]
+    pub pet_phrases: std::collections::BTreeMap<String, Vec<String>>,
     /// Who speaks: "system" (the voices Windows has) or "elevenlabs".
     #[serde(default = "default_voice_engine")]
     pub voice_engine: String,
@@ -256,6 +271,38 @@ fn default_start_pill() -> String {
     "integration_claude".into()
 }
 
+fn default_pet_friend() -> String {
+    "Sven".into()
+}
+
+/// What the pet can talk about; the page has a built-in set for each.
+pub const PET_TOPICS: &[&str] = &[
+    "working", "finished", "error", "music", "video", "late", "break", "morning", "afternoon", "evening", "chat",
+];
+const PET_LINES_PER_TOPIC: usize = 20;
+const PET_LINE_CHARS: usize = 140;
+
+/// Keeps what the person wrote to the topics that exist, a bounded number of
+/// non-empty lines each, trimmed and cut: the rest never reaches the page.
+pub fn sanitize_phrases(
+    input: std::collections::BTreeMap<String, Vec<String>>,
+) -> std::collections::BTreeMap<String, Vec<String>> {
+    input
+        .into_iter()
+        .filter(|(topic, _)| PET_TOPICS.contains(&topic.as_str()))
+        .filter_map(|(topic, lines)| {
+            let kept: Vec<String> = lines
+                .into_iter()
+                .map(|l| l.split_whitespace().collect::<Vec<_>>().join(" "))
+                .filter(|l| !l.is_empty())
+                .map(|l| l.chars().take(PET_LINE_CHARS).collect())
+                .take(PET_LINES_PER_TOPIC)
+                .collect();
+            (!kept.is_empty()).then_some((topic, kept))
+        })
+        .collect()
+}
+
 fn default_pet_frequency() -> String {
     "normal".into()
 }
@@ -345,6 +392,11 @@ impl Default for Settings {
             mochi_outfit: default_outfit(),
             pet_enabled: false,
             pet_frequency: default_pet_frequency(),
+            pet_speech: true,
+            voice_pet: true,
+            pet_friend: default_pet_friend(),
+            pet_only_mine: false,
+            pet_phrases: Default::default(),
             voice_engine: default_voice_engine(),
             eleven_voice: default_eleven_voice(),
             eleven_model: default_eleven_model(),
@@ -474,5 +526,33 @@ mod custom_pill_tests {
     fn there_is_a_limit() {
         let many: Vec<_> = (0..20).map(|i| pill(&format!("custom_a{i}"))).collect();
         assert_eq!(sanitize_pills(many).len(), MAX_CUSTOM_PILLS);
+    }
+}
+
+#[cfg(test)]
+mod pet_phrase_tests {
+    use super::*;
+    use std::collections::BTreeMap;
+
+    #[test]
+    fn the_persons_phrases_are_kept_tidy_and_bounded() {
+        let mut input: BTreeMap<String, Vec<String>> = BTreeMap::new();
+        input.insert("working".into(), vec!["  ¡Ánimo,   {name}!  ".into(), "".into(), "   ".into(), "x".repeat(500)]);
+        input.insert("music".into(), (0..50).map(|i| format!("línea {i}")).collect());
+        input.insert("not-a-topic".into(), vec!["se descarta".into()]);
+        input.insert("late".into(), vec!["".into()]);
+        let out = sanitize_phrases(input);
+        assert_eq!(out["working"][0], "¡Ánimo, {name}!", "spaces are tidied");
+        assert_eq!(out["working"].len(), 2, "blank lines are dropped");
+        assert_eq!(out["working"][1].chars().count(), PET_LINE_CHARS, "a long line is cut");
+        assert_eq!(out["music"].len(), PET_LINES_PER_TOPIC, "at most this many lines per topic");
+        assert!(!out.contains_key("not-a-topic") && !out.contains_key("late"), "unknown or empty topics are dropped");
+    }
+
+    #[test]
+    fn an_old_settings_file_still_loads_with_a_friendly_pet() {
+        let s: Settings = serde_json::from_str("{}").unwrap_or_default();
+        assert!(s.pet_speech && s.voice_pet && !s.pet_only_mine && s.pet_phrases.is_empty());
+        assert_eq!(s.pet_friend, "Sven");
     }
 }

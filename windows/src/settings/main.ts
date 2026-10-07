@@ -15,6 +15,10 @@ import { h, clear, svg } from "../views/dom";
 import { ICONS } from "../views/icons";
 import { pairingQr } from "./qr";
 import { isOutfit, OUTFIT_NAMES, OUTFITS } from "../mochi/outfits";
+import { TOPIC_NAMES, TOPICS } from "../pet/phrases";
+
+/** A paw: the pet. */
+const PET_ICON = "M12 12.5c-2.6 0-5.2 1.7-5.2 4.2 0 1.6 1.2 2.7 2.7 2.7 1 0 1.6-.5 2.5-.5s1.5.5 2.5.5c1.5 0 2.7-1.1 2.7-2.7 0-2.5-2.600-4.200-5.200-4.200zM5.800 6.800a1.800 2.300 0 1 0 0 4.600 1.800 2.300 0 1 0 0-4.600zM9.600 3.600a1.800 2.400 0 1 0 0 4.800 1.800 2.400 0 1 0 0-4.800zM14.400 3.600a1.800 2.400 0 1 0 0 4.800 1.800 2.400 0 1 0 0-4.800zM18.200 6.800a1.800 2.300 0 1 0 0 4.600 1.800 2.300 0 1 0 0-4.600z";
 
 /** Two arrows chasing each other: sync. */
 const SYNC_ICON = "M12 4.5a7.5 7.5 0 0 1 6.7 4.1H16v2h6V4.6h-2v2.3A9.5 9.5 0 0 0 2.6 11h2a7.5 7.5 0 0 1 7.4-6.5zM19.4 13a7.5 7.5 0 0 1-14.1 2.4H8v-2H2v6h2v-2.3A9.5 9.5 0 0 0 21.4 13h-2z";
@@ -697,6 +701,50 @@ function voiceSection(present: Record<string, boolean>): HTMLElement {
 
 // ── Personalization ───────────────────────────────────────────────────────────
 
+/** Settings → Mascota: when Mochi the pet comes, what it says, and the person's own phrases. */
+function petSection(): HTMLElement {
+  const areas = TOPICS.map((topic) => {
+    const info = TOPIC_NAMES[topic];
+    const box = h("textarea", {
+      rows: "3",
+      spellcheck: "true",
+      placeholder: "Una frase por línea. Puedes usar {name}, {friend} y {minutes}.",
+    }) as HTMLTextAreaElement;
+    box.value = (settings.petPhrases[topic] ?? []).join("\n");
+    box.addEventListener("change", () => {
+      const lines = box.value.split("\n").map((l) => l.trim()).filter(Boolean).slice(0, 20);
+      if (lines.length) settings.petPhrases = { ...settings.petPhrases, [topic]: lines };
+      else {
+        const { [topic]: _gone, ...rest } = settings.petPhrases;
+        settings.petPhrases = rest;
+      }
+      void save();
+    });
+    return field(info.label, info.hint, box);
+  });
+  const friend = h("input", { type: "text", value: settings.petFriend, maxlength: "24", placeholder: "Sven", spellcheck: "false" }) as HTMLInputElement;
+  friend.addEventListener("change", () => {
+    settings.petFriend = friend.value.trim();
+    void save();
+  });
+  const now = h("button", { text: "Que aparezca ya", onclick: () => void Bridge.petVisitNow() });
+  return h("section", { class: "plain" },
+    h("p", { class: "lead", text: "Mochi se asoma por los bordes de la pantalla, te saluda, te anima y hace travesuras según lo que estés haciendo: trabajando con un agente, escuchando música, viendo un vídeo, de madrugada…" }),
+    group("Cuándo viene",
+      field("Mochi travieso", "De vez en cuando se asoma por un borde, hace una travesura y se esconde. Si le haces clic se enfada; si te acercas, a veces se asusta. No aparece sobre juegos, vídeos a pantalla completa ni con Coucou en pausa.",
+        toggle(settings.petEnabled, (v) => { settings.petEnabled = v; void save(); })),
+      field("Cada cuánto", "Cuando algo termina o falla viene antes, si hace un rato que no se asoma.", petFrequencySelect(), now),
+    ),
+    group("Qué dice",
+      field("Habla en un globo", "Frases que encajan con el momento.", toggle(settings.petSpeech, (v) => { settings.petSpeech = v; void save(); })),
+      field("Habla en voz alta", "Necesita «Mochi habla» activado en Voz. Con un vídeo en marcha nunca habla en voz alta.", toggle(settings.voicePet, (v) => { settings.voicePet = v; void save(); })),
+      field("Su amigo", "Un nombre que puede salir: «sigue trabajando para la comida de Sven». Vacío: no se nombra a nadie.", friend),
+      field("Solo mis frases", "Si está activo, usa únicamente las que escribas abajo (en los temas donde no escribas ninguna usa las suyas).", toggle(settings.petOnlyMine, (v) => { settings.petOnlyMine = v; void save(); })),
+    ),
+    group("Tus frases", h("div", { class: "group-note", text: "Escribe las tuyas, una por línea; se mezclan con las de Mochi. {name} es tu nombre, {friend} su amigo y {minutes} los minutos que llevas trabajando. En voz alta se leen con la voz que elegiste." }), ...areas),
+  );
+}
+
 function petFrequencySelect(): HTMLSelectElement {
   const select = h("select", {}) as HTMLSelectElement;
   select.append(
@@ -833,12 +881,6 @@ function personalSection(detectedName: string): HTMLElement {
       h("label", { text: "Atuendo de Mochi" }),
       outfitSelect(),
       h("span", { class: "hint", text: "Automático: gorro de Papá Noel en diciembre, sombrero de bruja en octubre, orejas de conejo en Pascua, gafas de sol en verano, gorro de fiesta en Año Nuevo." }),
-    ),
-    h("div", { class: "row" },
-      h("label", { text: "Mochi travieso" }),
-      toggle(settings.petEnabled, (v) => { settings.petEnabled = v; void save(); }),
-      petFrequencySelect(),
-      h("span", { class: "hint", text: "De vez en cuando Mochi se asoma por un borde de la pantalla, hace una travesura y se esconde. Si le haces clic se enfada; si te acercas, a veces se asusta. No aparece sobre juegos, vídeos a pantalla completa ni con Coucou en pausa." }),
     ),
     h("div", { class: "row" },
       h("label", { text: "Baila con la música" }),
@@ -1884,6 +1926,7 @@ async function main() {
   const groups: { id: string; label: string; icon: string; sections: HTMLElement[] }[] = [
     { id: "start", label: "Inicio", icon: ICONS.house, sections: [setupSection(status, present, hasProviderKey, tools, detectedName, agents)] },
     { id: "personal", label: "Personalización", icon: ICONS.star, sections: [personalSection(detectedName)] },
+    { id: "pet", label: "Mascota", icon: PET_ICON, sections: [petSection()] },
     { id: "voice", label: "Voz", icon: ICONS.speakerOn, sections: [voiceSection(present)] },
     { id: "claude", label: "Claude Code", icon: ICONS.doc, sections: [claudeSection(status), planSection(status), rulesSection((await Bridge.rulesList()) ?? [])] },
     { id: "agents", label: "Agentes", icon: ICONS.stack, sections: [agentsSection(agents)] },

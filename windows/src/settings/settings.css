@@ -726,3 +726,18 @@ section > h2[style*="none"] + .hint + .field {
   border-top: 1px solid var(--hairline);
   padding-bottom: 8px;
 }
+
+/* The pet's phrases: a roomy box per topic. */
+.field-ctrl textarea {
+  width: 360px;
+  max-width: 100%;
+  min-height: 70px;
+  resize: vertical;
+  line-height: 1.45;
+}
+
+@media (max-width: 560px) {
+  .field-ctrl textarea {
+    width: 100%;
+  }
+}
