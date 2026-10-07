@@ -2,6 +2,12 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+  <!-- No Dock icon: the island and the menu-bar item are the whole app. -->
+  <key>LSUIElement</key>
+  <true/>
+  <!-- Only used if you switch on voice input ("Oye Mochi" or the chat's microphone). -->
+  <key>NSMicrophoneUsageDescription</key>
+  <string>Coucou uses the microphone only when you talk to Mochi.</string>
   <!-- Mochi dances while Music or Spotify plays: macOS asks once to let Coucou read their play state. -->
   <key>NSAppleEventsUsageDescription</key>
   <string>Coucou mira si Music o Spotify están sonando para que Mochi baile. No guarda ni envía qué suena.</string>
