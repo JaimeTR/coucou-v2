@@ -1,5 +1,6 @@
 // Entry point: boot the bridge, wire the island, start the greeting.
 
+import { startRemote } from "./island/remote";
 import "./style.css";
 import { Bridge, IS_TAURI, onEvent } from "./core/bridge";
 import { Sound } from "./core/sound";
@@ -59,6 +60,9 @@ async function main() {
   });
 
   await onEvent<null>("screen-changed", () => void Bridge.reposition());
+
+  // The phone link (Settings → Sincronización): sessions up, Allow / Deny down.
+  startRemote(island, boot?.computerName ?? "PC");
 
   // Global shortcuts (Ctrl+Alt+Y / N / C), pressed in any other window.
   await onEvent<string>("shortcut", (name) => {

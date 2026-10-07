@@ -55,6 +55,8 @@ pub struct BootInfo {
     cursor_poll: bool,
     /// The name found for this account, used when the settings hold none.
     detected_name: String,
+    /// The computer's name, shown on the phone.
+    computer_name: String,
 }
 
 #[tauri::command]
@@ -70,6 +72,7 @@ fn boot(app: AppHandle, shared: State<Shared>) -> BootInfo {
         hook_path: settings::hook_exe_path().to_string_lossy().to_string(),
         cursor_poll: platform::CURSOR_POLL,
         detected_name: identity::detect_user_name(),
+        computer_name: std::env::var("COMPUTERNAME").or_else(|_| std::env::var("HOSTNAME")).unwrap_or_else(|_| "PC".into()),
     }
 }
 
@@ -382,6 +385,16 @@ fn sync_disconnect(app: AppHandle) {
 #[tauri::command]
 fn sync_code() -> Option<String> {
     secrets::get(sync::CODE_KEY)
+}
+
+#[tauri::command]
+async fn sync_publish(app: AppHandle, state: serde_json::Value) -> Result<(), String> {
+    sync::publish(&app, state).await
+}
+
+#[tauri::command]
+async fn sync_take_decisions(app: AppHandle) -> Result<Vec<serde_json::Value>, String> {
+    sync::take_decisions(&app).await
 }
 
 #[tauri::command]
@@ -988,6 +1001,8 @@ pub fn run() {
             sync_disconnect,
             sync_code,
             sync_now,
+            sync_publish,
+            sync_take_decisions,
             reset_island_position,
             open_url,
             open_in_vscode,

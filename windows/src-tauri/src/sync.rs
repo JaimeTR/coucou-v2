@@ -17,7 +17,7 @@ use base64::{engine::general_purpose::STANDARD as B64, Engine};
 use serde::Serialize;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Emitter, Manager};
 
 use crate::{log, secrets, settings, Shared};
 
@@ -185,6 +185,58 @@ pub async fn pull(app: &AppHandle) -> Result<bool, String> {
     Ok(true)
 }
 
+/// This computer's live state (its sessions, a waiting approval), for the phone.
+/// The island sends it when it changes; it is encrypted like everything else.
+pub async fn publish(app: &AppHandle, state: Value) -> Result<(), String> {
+    let Some((s, keys)) = current(app) else { return Ok(()) };
+    let blob = seal(&keys, state.to_string().as_bytes());
+    let res = client()
+        .put(endpoint(&s.sync_url, &keys, &format!("devices/{}", s.sync_device)))
+        .bearer_auth(&keys.token)
+        .json(&serde_json::json!({ "blob": blob }))
+        .send()
+        .await
+        .map_err(|e| format!("No se pudo llegar al servidor: {e}"))?;
+    if !res.status().is_success() {
+        return Err(http_error(res.status()));
+    }
+    Ok(())
+}
+
+/// A decision from the phone older than this is ignored: whatever it answered is gone.
+const DECISION_MAX_AGE_MS: i64 = 2 * 60 * 1000;
+
+/// The Allow / Deny taps waiting for this computer, each taken once. Only
+/// well-formed, recent ones; whether one matches the card on screen is the
+/// island's check (it knows which request is up).
+pub async fn take_decisions(app: &AppHandle) -> Result<Vec<Value>, String> {
+    let Some((s, keys)) = current(app) else { return Ok(Vec::new()) };
+    let res = client()
+        .get(endpoint(&s.sync_url, &keys, &format!("decisions/{}", s.sync_device)))
+        .bearer_auth(&keys.token)
+        .send()
+        .await
+        .map_err(|e| format!("No se pudo llegar al servidor: {e}"))?;
+    if !res.status().is_success() {
+        return Err(http_error(res.status()));
+    }
+    let list: Vec<Value> = res.json().await.map_err(|e| e.to_string())?;
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0);
+    Ok(list
+        .iter()
+        .filter_map(|d| d["blob"].as_str().and_then(|b| open(&keys, b)))
+        .filter_map(|plain| serde_json::from_slice::<Value>(&plain).ok())
+        .filter(|d| {
+            let fresh = d["at"].as_i64().map(|at| (now - at).abs() < DECISION_MAX_AGE_MS).unwrap_or(false);
+            let known = matches!(d["decision"].as_str(), Some("allow" | "deny"));
+            fresh && known && d["requestId"].is_string()
+        })
+        .collect())
+}
+
 fn remember_rev(app: &AppHandle, rev: u64) {
     let Some(shared) = app.try_state::<Shared>() else { return };
     let snapshot = {
@@ -248,6 +300,7 @@ pub async fn connect(app: &AppHandle, url: String, code: Option<String>) -> Resu
             s.sync_device = device_id();
         }
         let _ = settings::save(&s);
+        let _ = app.emit("settings-changed", s.clone());
     }
     let result = if creating { push(app).await } else { pull(app).await.map(|_| ()) };
     if let Err(err) = result {
@@ -264,6 +317,7 @@ pub fn disconnect(app: &AppHandle) {
     s.sync_url.clear();
     s.sync_rev = 0;
     let _ = settings::save(&s);
+    let _ = app.emit("settings-changed", s.clone());
 }
 
 /// "pc-jaime-3f9a": the computer's name, readable, plus a little randomness.

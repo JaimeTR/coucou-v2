@@ -31,6 +31,7 @@ export interface BootInfo {
   cursorPoll: boolean;
   /** The name found for this account (display name, else git identity). */
   detectedName: string;
+  computerName: string;
 }
 
 export interface AgentStatus {
@@ -114,6 +115,10 @@ export const Bridge = {
   syncDisconnect: () => call<void>("sync_disconnect"),
   syncCode: () => call<string>("sync_code"),
   syncNow: () => callOrThrow<boolean>("sync_now"),
+  /** This PC's sessions and waiting approval, for the phone (encrypted in Rust). */
+  syncPublish: (state: unknown) => call<void>("sync_publish", { state }),
+  /** Allow / Deny taps from the phone: [{ requestId, decision, at }]. */
+  syncTakeDecisions: () => call<{ requestId: string; decision: "allow" | "deny"; at: number }[]>("sync_take_decisions"),
 
   // ── Other agents (Gemini CLI, OpenCode, your terminal) ────────────────────
   agentsStatus: () => call<AgentStatus[]>("agents_status"),
