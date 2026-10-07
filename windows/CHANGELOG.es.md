@@ -4,6 +4,11 @@
 
 Coucou v2 es el fork de [JaimeTR](https://github.com/JaimeTR) de [Coucou, de Louis Raillé](https://github.com/Louis-CFM/coucou) (MIT). Las notas de la versión de macOS siguen en el [CHANGELOG.md](../CHANGELOG.md) de la raíz.
 
+## 0.3.2: 7 de octubre de 2026
+
+**Isla**
+- **Se pega a los bordes** en modo libre: si la sueltas junto al borde de arriba o de abajo se pega a él, y junto al izquierdo o el derecho se pega en vertical (una cápsula con Mochi de lado) y se abre desde ese lado, pegada al borde. En cualquier otro sitio se queda donde la dejes. Al arrastrar una isla pegada, primero se despega en su sitio.
+
 ## 0.3.1: 7 de octubre de 2026
 
 **Actualizaciones automáticas**
@@ -17,7 +22,7 @@ Coucou v2 es el fork de [JaimeTR](https://github.com/JaimeTR) de [Coucou, de Lou
 **Mochi**
 - Dice lo que siente (al hacerle clic, al marearse, al darle cariño), en Ajustes → Voz → «Dice lo que siente».
 - Avisa en voz de los errores también con la isla abierta, y de un deploy o CI que falla.
-- **Posición de la isla**: fija arriba al centro o libre (arrástrala a donde quieras). En modo libre, si la sueltas junto al borde de arriba o de abajo se pega a él, y junto al izquierdo o el derecho se pega en vertical (una cápsula con Mochi de lado) y se abre desde ese lado; en cualquier otro sitio se queda donde la dejes.
+- **Posición de la isla**: fija arriba al centro o libre (arrástrala a donde quieras).
 - **Resumen semanal**: los lunes, «Tu semana» con tiempo, sesiones, archivos, líneas y comandos; también desde la bandeja.
 
 **Más Mochi**

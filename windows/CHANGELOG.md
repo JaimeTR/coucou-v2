@@ -4,6 +4,11 @@
 
 Coucou v2 is [JaimeTR](https://github.com/JaimeTR)'s fork of [Coucou by Louis Raillé](https://github.com/Louis-CFM/coucou) (MIT). The macOS release notes stay in the root [CHANGELOG.md](../CHANGELOG.md).
 
+## 0.3.2 — October 7, 2026
+
+**Island**
+- **Sticks to the screen edges** in free mode: drop it near the top or bottom edge and it sticks to it, and near the left or right edge it sticks vertically (a capsule with Mochi sideways) and opens from that side, flush with the edge. Anywhere else it stays where you leave it. Dragging a docked island first lets it float again in place.
+
 ## 0.3.1 — October 7, 2026
 
 **Automatic updates**
@@ -17,7 +22,7 @@ Coucou v2 is [JaimeTR](https://github.com/JaimeTR)'s fork of [Coucou by Louis Ra
 **Mochi**
 - Says how it feels (clicked, dizzy, petted): Settings → Voice.
 - Speaks agent errors with the island open too, and a failed deploy or CI.
-- **Island position**: fixed at the top centre, or free (drag it anywhere). In free mode, drop it near the top or bottom edge and it sticks to it, and near the left or right edge it sticks vertically (a capsule with Mochi sideways) and opens from that side; anywhere else it stays where you leave it.
+- **Island position**: fixed at the top centre, or free (drag it anywhere).
 - **Weekly recap**: on Mondays, "Your week" with time, sessions, files, lines and commands; also from the tray.
 
 **More Mochi**
