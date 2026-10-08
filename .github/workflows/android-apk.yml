@@ -1,0 +1,64 @@
+name: Android APK (Coucou v2)
+
+# Builds an installable Android app (an .apk) from mobile/ on GitHub's own
+# Linux machine and attaches it to a release, so it can be downloaded on the
+# phone and installed without any account or cloud builder. Push a tag
+# `mobile-vX.Y.Z` to run it.
+#
+# The apk is signed with Expo's debug key: fine for trying it on your own phone,
+# not for the Play Store (that one comes from EAS, see mobile/README.md).
+#
+# The release is created with --latest=false on purpose: the desktop app's
+# updater reads /releases/latest, and a phone build must never take that slot.
+
+on:
+  push:
+    tags:
+      - 'mobile-v*'
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Install dependencies
+        working-directory: mobile
+        run: npm ci
+
+      - name: Tests
+        working-directory: mobile
+        run: npm test
+
+      # Generates the native project (it is never committed) and builds it.
+      - name: Build the apk
+        working-directory: mobile
+        run: |
+          npx expo prebuild --platform android --no-install
+          cd android
+          ./gradlew assembleRelease --no-daemon
+
+      - name: Publish it on a release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          apk="Coucou-Android-${GITHUB_REF_NAME#mobile-v}.apk"
+          cp mobile/android/app/build/outputs/apk/release/app-release.apk "$apk"
+          gh release create "$GITHUB_REF_NAME" "$apk" \
+            --title "Coucou for Android ${GITHUB_REF_NAME#mobile-v}" \
+            --notes "Coucou on your phone: the PCs tab, Allow / Deny, pairing by QR. Download the .apk on your Android phone and open it (Android asks to allow installing from this source). Signed with a test key: for trying it, not for the Play Store." \
+            --latest=false
