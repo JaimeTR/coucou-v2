@@ -14,6 +14,8 @@ export type SoundName = (typeof SOUND_NAMES)[number];
 
 class SoundEngine {
   enabled = true;
+  /** Over a game or a call: nothing plays, whatever the setting says. */
+  muted = false;
   volume = 0.12;
 
   private ctx: AudioContext | null = null;
@@ -85,7 +87,7 @@ class SoundEngine {
   }
 
   play(name: SoundName | string) {
-    if (!this.enabled) return;
+    if (!this.enabled || this.muted) return;
     const ctx = this.ctx;
     const master = this.master;
     const buf = this.buffers.get(name);

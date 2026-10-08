@@ -11,6 +11,7 @@ mod identity;
 mod integrations;
 mod island;
 mod log;
+mod modes;
 mod pet;
 mod pipe;
 mod platform;
@@ -306,6 +307,10 @@ pub(crate) fn apply_settings(app: &AppHandle, mut settings: Settings) {
     settings.custom_pills = settings::sanitize_pills(std::mem::take(&mut settings.custom_pills));
     settings.pet_phrases = settings::sanitize_phrases(std::mem::take(&mut settings.pet_phrases));
     settings.pet_friend = settings.pet_friend.trim().chars().take(24).collect();
+    settings.game_programs = settings::sanitize_programs(std::mem::take(&mut settings.game_programs));
+    if !["auto", "work", "game", "meeting", "video"].contains(&settings.work_mode.as_str()) {
+        settings.work_mode = "auto".into();
+    }
     let pills_changed = shared.settings.lock().unwrap().custom_pills != settings.custom_pills;
     let (screen_changed, autostart_changed, shortcuts_changed) = {
         let mut current = shared.settings.lock().unwrap();
@@ -418,7 +423,32 @@ fn pet_hit(rects: Vec<[f64; 4]>) {
 /// full-screen game, video or presentation.
 #[tauri::command]
 fn pet_allowed() -> bool {
-    !integrations::is_paused() && !platform::user_is_busy()
+    !integrations::is_paused() && !platform::user_is_busy() && modes::current().mode == modes::Mode::Work
+}
+
+/// The work mode in force (see modes.rs), for the island's Mode pill and the pet.
+#[tauri::command]
+fn mode_info() -> modes::Info {
+    modes::current()
+}
+
+/// Settings and the Mode pill: "auto", or a mode by hand. Takes effect at once.
+#[tauri::command]
+fn set_work_mode(app: AppHandle, shared: State<Shared>, mode: String) -> Result<(), String> {
+    if !["auto", "work", "game", "meeting", "video"].contains(&mode.as_str()) {
+        return Err("modo desconocido".into());
+    }
+    let snapshot = {
+        let mut s = shared.settings.lock().unwrap();
+        s.work_mode = mode;
+        s.clone()
+    };
+    if let Err(err) = settings::save(&snapshot) {
+        eprintln!("[coucou] could not save settings: {err}");
+    }
+    let _ = app.emit("settings-changed", snapshot);
+    modes::refresh(&app);
+    Ok(())
 }
 
 #[tauri::command]
@@ -1101,6 +1131,8 @@ pub fn run() {
             pet_context,
             pet_visit_now,
             pet_allowed,
+            mode_info,
+            set_work_mode,
             update_check,
             update_install,
             sync_connect,
@@ -1176,6 +1208,7 @@ pub fn run() {
             }
             gate.set_active(true);
             island::spawn_cursor_poll(handle.clone(), gate.clone());
+            modes::spawn(handle.clone());
 
             log::line(format!("--- Coucou {} started ---", env!("CARGO_PKG_VERSION")));
             hooks::ensure_hook_exe(&handle);

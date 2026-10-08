@@ -5,6 +5,7 @@
 // one timer.
 
 import { Bridge, IS_TAURI, onEvent } from "../core/bridge";
+import type { ModeInfo } from "../core/modes";
 import { Sound } from "../core/sound";
 import { applyLanguage, uiLanguage } from "../core/i18n";
 import { State, type Settings } from "../core/state";
@@ -192,10 +193,30 @@ async function listen(): Promise<void> {
   context = { ...context, media: classifyMedia(!!now?.playing, now?.app ?? "") };
 }
 
+/** Over a game: says a line aloud, nothing on screen, if the person wants it. */
+async function cheerInGame(): Promise<boolean> {
+  const m = await Bridge.modeInfo();
+  if (!m || m.mode !== "game" || !State.settings.petGameCheer || !State.settings.petSpeech || !State.settings.petEnabled) return false;
+  State.workMode = m.mode; // lets speakAuto allow the pet's voice, and only that
+  const vars = {
+    name: State.settings.userName.trim() || detectedName,
+    friend: State.settings.petFriend.trim(),
+    minutes: Math.round(context.workedToday),
+  };
+  const text = pickPhrase("chat", uiLanguage(), State.settings.petPhrases, State.settings.petOnlyMine, vars, Math.random, lastPhrase);
+  if (!text) return false;
+  lastPhrase = text;
+  return speakAuto("pet", text);
+}
+
 /** Plays a visit about `topic` (or what suits the moment); resolves when it starts. */
 async function visit(forceEdge?: Edge, forceTopic?: Topic, force = false) {
   if (visiting || (!State.settings.petEnabled && !force)) return;
-  if (IS_TAURI && !(await Bridge.petAllowed())) return schedule(2 * 60_000); // busy: try again soon
+  if (IS_TAURI && !(await Bridge.petAllowed())) {
+    // In a game only a voice may cheer (no window); in a meeting or over a video, nothing.
+    if (!force && (await cheerInGame())) return schedule();
+    return schedule(2 * 60_000); // busy: try again soon
+  }
   await listen();
   visitTopic = forceTopic ?? chooseTopic(context, new Date(), Date.now(), said);
   visiting = true;
@@ -340,6 +361,13 @@ async function main() {
     apply(boot.settings, true);
   }
   await onEvent<Settings>("settings-changed", (s) => apply(s));
+  await onEvent<ModeInfo>("mode-changed", (m) => {
+    State.workMode = m.mode;
+    if (m.mode !== "work") {
+      stopSpeaking();
+      if (visiting) flee();
+    }
+  });
   await onEvent<Partial<Context>>("pet-context", (c) => onContext(c));
   await onEvent<null>("pet-visit-now", () => void visit(undefined, undefined, true));
   await onEvent<{ x: number; y: number }>("pet-pointer", (p) => (pointer = p));

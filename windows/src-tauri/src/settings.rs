@@ -104,6 +104,18 @@ pub struct Settings {
     /// Only the person's own phrases, none of the built-in ones.
     #[serde(default)]
     pub pet_only_mine: bool,
+    /// "auto" detects what the person is doing; or "work", "game", "meeting", "video" by hand.
+    #[serde(default = "default_work_mode")]
+    pub work_mode: String,
+    /// In a game the pet may still cheer, by voice only (never a window over it).
+    #[serde(default = "default_true")]
+    pub pet_game_cheer: bool,
+    /// Programs that count as games, besides the ones Coucou knows (file names).
+    #[serde(default)]
+    pub game_programs: Vec<String>,
+    /// Treat the microphone or camera being in use as a meeting.
+    #[serde(default = "default_true")]
+    pub detect_meetings: bool,
     /// The person's own phrases, by topic (see `PET_TOPICS`), one per line in Settings.
     #[serde(default)]
     pub pet_phrases: std::collections::BTreeMap<String, Vec<String>>,
@@ -271,6 +283,25 @@ fn default_start_pill() -> String {
     "integration_claude".into()
 }
 
+fn default_work_mode() -> String {
+    "auto".into()
+}
+
+/// The file names the person listed as games: a bounded list of short names.
+pub fn sanitize_programs(input: Vec<String>) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for item in input {
+        let name: String = item.trim().chars().filter(|c| !c.is_control() && !"\\/:*?\"<>|".contains(*c)).take(60).collect();
+        if !name.is_empty() && !out.iter().any(|o| o.eq_ignore_ascii_case(&name)) {
+            out.push(name);
+        }
+        if out.len() >= 40 {
+            break;
+        }
+    }
+    out
+}
+
 fn default_pet_friend() -> String {
     "Sven".into()
 }
@@ -396,6 +427,10 @@ impl Default for Settings {
             voice_pet: true,
             pet_friend: default_pet_friend(),
             pet_only_mine: false,
+            work_mode: default_work_mode(),
+            pet_game_cheer: true,
+            game_programs: Vec::new(),
+            detect_meetings: true,
             pet_phrases: Default::default(),
             voice_engine: default_voice_engine(),
             eleven_voice: default_eleven_voice(),

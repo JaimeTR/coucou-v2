@@ -7,6 +7,7 @@ import { Bridge, onEvent } from "../core/bridge";
 import { Sound } from "../core/sound";
 import { applyLanguage, t } from "../core/i18n";
 import { speakAuto } from "../core/voice";
+import { mayNotify, mustDecline } from "../core/modes";
 import { State, type AskQuestion, type PlanUsage, type PlanWindow } from "../core/state";
 import { computeDiff, diffStepLabel } from "./diff";
 import { matchRule, ruleFor } from "./rules";
@@ -167,6 +168,8 @@ function approvalTarget(tool: string, input: Record<string, unknown>): string {
 function toast(title: string, body: string) {
   // The title is the short phrase ("Claude Code terminó"); the body can be a command.
   speakAuto("events", t(title));
+  // Nothing pops up over a game or a call.
+  if (!mayNotify(State.workMode)) return;
   if (!State.settings.nativeNotifications) return;
   void Bridge.notify(t(title), t(body));
 }
@@ -298,6 +301,12 @@ function handleHook(island: Island, payload: HookPayload) {
     // for a decision from an island that had already decided not to look. Say so,
     // and the terminal takes the question immediately.
     if (payload.request_id) void Bridge.approvalDecline(payload.request_id);
+    return;
+  }
+  // Over a game or a shared screen the island is not there to answer: a permission or a
+  // question goes back to the terminal at once. The rest is noted quietly.
+  if (mustDecline(State.workMode) && payload.request_id) {
+    void Bridge.approvalDecline(payload.request_id);
     return;
   }
 

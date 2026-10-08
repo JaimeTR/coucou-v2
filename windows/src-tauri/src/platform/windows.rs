@@ -248,6 +248,149 @@ pub fn current_user_sid() -> Option<String> {
 pub const CURSOR_POLL: bool = true;
 
 /// Cursor position in physical screen pixels.
+// ── What the person is doing (modes.rs) ───────────────────────────────────────
+
+/// The names of the subkeys of `HKCU\<path>`.
+fn reg_subkeys(path: &str) -> Vec<String> {
+    use ::windows::core::PCWSTR;
+    use ::windows::Win32::System::Registry::{RegCloseKey, RegEnumKeyExW, RegOpenKeyExW, HKEY, HKEY_CURRENT_USER, KEY_READ};
+    let wide: Vec<u16> = path.encode_utf16().chain(std::iter::once(0)).collect();
+    let mut key = HKEY::default();
+    let mut out = Vec::new();
+    unsafe {
+        if RegOpenKeyExW(HKEY_CURRENT_USER, PCWSTR(wide.as_ptr()), None, KEY_READ, &mut key).is_err() {
+            return out;
+        }
+        for index in 0.. {
+            let mut name = [0u16; 512];
+            let mut len = name.len() as u32;
+            let status = RegEnumKeyExW(key, index, Some(::windows::core::PWSTR(name.as_mut_ptr())), &mut len, None, None, None, None);
+            if status.is_err() {
+                break;
+            }
+            out.push(String::from_utf16_lossy(&name[..len as usize]));
+        }
+        let _ = RegCloseKey(key);
+    }
+    out
+}
+
+/// A numeric value (QWORD or DWORD) of `HKCU\<path>`.
+fn reg_number(path: &str, name: &str) -> Option<u64> {
+    use ::windows::core::PCWSTR;
+    use ::windows::Win32::System::Registry::{
+        RegCloseKey, RegOpenKeyExW, RegQueryValueExW, HKEY, HKEY_CURRENT_USER, KEY_READ, REG_VALUE_TYPE,
+    };
+    let wide: Vec<u16> = path.encode_utf16().chain(std::iter::once(0)).collect();
+    let value: Vec<u16> = name.encode_utf16().chain(std::iter::once(0)).collect();
+    let mut key = HKEY::default();
+    unsafe {
+        RegOpenKeyExW(HKEY_CURRENT_USER, PCWSTR(wide.as_ptr()), None, KEY_READ, &mut key).ok().ok()?;
+        let mut kind = REG_VALUE_TYPE(0);
+        let mut data = [0u8; 8];
+        let mut size = data.len() as u32;
+        let status = RegQueryValueExW(key, PCWSTR(value.as_ptr()), None, Some(&mut kind), Some(data.as_mut_ptr()), Some(&mut size));
+        let _ = RegCloseKey(key);
+        status.ok().ok()?;
+        match size {
+            8 => Some(u64::from_le_bytes(data)),
+            4 => Some(u32::from_le_bytes([data[0], data[1], data[2], data[3]]) as u64),
+            _ => None,
+        }
+    }
+}
+
+/// A text value of `HKCU\<path>`.
+fn reg_text(path: &str, name: &str) -> Option<String> {
+    use ::windows::core::PCWSTR;
+    use ::windows::Win32::System::Registry::{
+        RegCloseKey, RegOpenKeyExW, RegQueryValueExW, HKEY, HKEY_CURRENT_USER, KEY_READ,
+    };
+    let wide: Vec<u16> = path.encode_utf16().chain(std::iter::once(0)).collect();
+    let value: Vec<u16> = name.encode_utf16().chain(std::iter::once(0)).collect();
+    let mut key = HKEY::default();
+    unsafe {
+        RegOpenKeyExW(HKEY_CURRENT_USER, PCWSTR(wide.as_ptr()), None, KEY_READ, &mut key).ok().ok()?;
+        let mut data = [0u8; 1024];
+        let mut size = data.len() as u32;
+        let status = RegQueryValueExW(key, PCWSTR(value.as_ptr()), None, None, Some(data.as_mut_ptr()), Some(&mut size));
+        let _ = RegCloseKey(key);
+        status.ok().ok()?;
+        let units: Vec<u16> = data[..size as usize].chunks_exact(2).map(|c| u16::from_le_bytes([c[0], c[1]])).collect();
+        let text = String::from_utf16_lossy(&units);
+        let text = text.trim_end_matches('\0').trim().to_string();
+        (!text.is_empty()).then_some(text)
+    }
+}
+
+/// The file names (lowercase) of the running programs.
+fn running_programs() -> Vec<String> {
+    use ::windows::Win32::System::Diagnostics::ToolHelp::{
+        CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W, TH32CS_SNAPPROCESS,
+    };
+    let mut out = Vec::new();
+    unsafe {
+        let Ok(snapshot) = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) else { return out };
+        let mut entry = PROCESSENTRY32W { dwSize: std::mem::size_of::<PROCESSENTRY32W>() as u32, ..Default::default() };
+        if Process32FirstW(snapshot, &mut entry).is_ok() {
+            loop {
+                let len = entry.szExeFile.iter().position(|&c| c == 0).unwrap_or(entry.szExeFile.len());
+                out.push(String::from_utf16_lossy(&entry.szExeFile[..len]).to_lowercase());
+                if Process32NextW(snapshot, &mut entry).is_err() {
+                    break;
+                }
+            }
+        }
+        let _ = CloseHandle(snapshot);
+    }
+    out
+}
+
+/// The Steam game running now, by name: Steam keeps its id in the registry.
+fn steam_game() -> Option<String> {
+    let id = reg_number("Software\\Valve\\Steam", "RunningAppID").filter(|id| *id != 0)?;
+    reg_text(&format!("Software\\Valve\\Steam\\Apps\\{id}"), "Name").or_else(|| Some("un juego de Steam".into()))
+}
+
+/// Is another program using the microphone or the camera right now? Windows
+/// keeps, for each program, when it started and stopped using them: started and
+/// not stopped means in use. Our own program (its listening for "Oye Mochi") does not count.
+fn camera_or_microphone_in_use() -> bool {
+    for device in ["microphone", "webcam"] {
+        let base = format!("Software\\Microsoft\\Windows\\CurrentVersion\\CapabilityAccessManager\\ConsentStore\\{device}");
+        let mut keys: Vec<String> = reg_subkeys(&base).into_iter().filter(|k| k != "NonPackaged").map(|k| format!("{base}\\{k}")).collect();
+        keys.extend(reg_subkeys(&format!("{base}\\NonPackaged")).into_iter().map(|k| format!("{base}\\NonPackaged\\{k}")));
+        for key in keys {
+            if key.to_lowercase().contains("coucou") {
+                continue;
+            }
+            let started = reg_number(&key, "LastUsedTimeStart").unwrap_or(0);
+            let stopped = reg_number(&key, "LastUsedTimeStop").unwrap_or(1);
+            if started > 0 && stopped == 0 {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+/// Everything modes.rs decides from. `extra_games` are the programs the person listed.
+pub fn signals(extra_games: &[String]) -> super::Signals {
+    use ::windows::Win32::UI::Shell::{SHQueryUserNotificationState, QUNS_BUSY, QUNS_PRESENTATION_MODE, QUNS_RUNNING_D3D_FULL_SCREEN};
+    let state = unsafe { SHQueryUserNotificationState() }.ok();
+    let programs = running_programs();
+    let game = programs
+        .iter()
+        .find_map(|p| crate::modes::known_game(p, extra_games))
+        .or_else(steam_game);
+    super::Signals {
+        fullscreen: state.map(|s| s == QUNS_BUSY || s == QUNS_RUNNING_D3D_FULL_SCREEN).unwrap_or(false),
+        presentation: state.map(|s| s == QUNS_PRESENTATION_MODE).unwrap_or(false),
+        game,
+        call: camera_or_microphone_in_use(),
+    }
+}
+
 /// True when the person should not be interrupted: a full-screen game or video,
 /// a presentation, or Windows' own "busy" state (Focus assist).
 pub fn user_is_busy() -> bool {
@@ -394,5 +537,18 @@ mod now_playing_tests {
     #[ignore]
     fn now_playing_smoke() {
         println!("{:?}", super::now_playing());
+    }
+}
+
+#[cfg(test)]
+mod signals_tests {
+    /// Asks the real system. Prints what it finds; it only fails if the calls themselves break.
+    /// `cargo test signals_smoke -- --ignored --nocapture`
+    #[test]
+    #[ignore]
+    fn signals_smoke() {
+        println!("{:?}", super::signals(&[]));
+        println!("steam: {:?}", super::steam_game());
+        println!("programs: {}", super::running_programs().len());
     }
 }

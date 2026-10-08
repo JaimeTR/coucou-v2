@@ -4,6 +4,12 @@
 
 Coucou v2 is [JaimeTR](https://github.com/JaimeTR)'s fork of [Coucou by Louis Raillé](https://github.com/Louis-CFM/coucou) (MIT). The macOS release notes stay in the root [CHANGELOG.md](../CHANGELOG.md).
 
+## Unreleased
+
+**Work modes**
+- **Coucou knows what you are doing** (Windows): Game, Meeting, Video or Work, detected every 2 s (known and Steam games, full-screen apps, presentation mode, microphone/camera in use by another program) or chosen by hand. Over a game, a call or a video the island and the pet are put away, nothing plays or pops up, and permissions go straight back to the terminal, so Claude Code is never blocked and a full-screen game is never disturbed. In a game the pet can still cheer you by voice only.
+- **New "Modo" pill** shows the mode (and the game) and switches it; it takes one of the 4 pill slots when switched on. Settings → General → Modos: mode, meeting detection, game cheering, extra game programs.
+
 ## 0.3.3 — October 8, 2026
 
 **Mochi talks**

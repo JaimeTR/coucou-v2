@@ -9,6 +9,7 @@ import { ICONS } from "./icons";
 import { State, type AgentTask, type ProjectInfo } from "../core/state";
 import { Bridge } from "../core/bridge";
 import { miniUsage } from "./plan";
+import { MODE_CHOICES, MODE_COLORS, MODE_NAMES, modeLabel } from "../core/modes";
 
 /** Same shape as the Swift `timeAgo` computed properties. */
 export function timeAgo(value: unknown): string {
@@ -732,7 +733,33 @@ export function hasIntegrationData(id: string): boolean {
   }
 }
 
+/** The Mode pill: what the person is doing, and a button per mode to choose it by hand. */
+function modeCard(): HTMLElement {
+  const color = MODE_COLORS[State.workMode];
+  const actions = h("div", { class: "int-actions" });
+  const current = State.modeAuto ? "auto" : State.workMode;
+  for (const choice of MODE_CHOICES) {
+    actions.append(
+      h("button", {
+        class: "link-btn",
+        style: `color:${choice === current ? color : "#8e939c"};${choice === current ? "font-weight:700" : ""}`,
+        text: MODE_NAMES[choice],
+        onclick: () => void Bridge.setWorkMode(choice),
+      }),
+    );
+  }
+  return h(
+    "div",
+    { class: "int-card" },
+    header(color, "Modo", "Sistema"),
+    h("div", { class: "int-sub", style: "font-weight:600;font-size:13px", text: modeLabel({ mode: State.workMode, auto: State.modeAuto, game: State.modeGame }) }),
+    h("div", { class: "int-sub", text: State.modeAuto ? "Detectado automáticamente" : "Elegido por ti" }),
+    actions,
+  );
+}
+
 export function renderIntegrationCard(task: AgentTask, hooks: IntegrationCardHooks): HTMLElement {
+  if (task.id === "integration_system") return modeCard();
   // Claude Code and VS Code each have a card of their own, whatever their state.
   if (task.id === "integration_claude") return claudeCard(task, hooks.openSettings);
   if (task.id === "agent_vscode") return vscodeCard(task, hooks.openSettings);

@@ -2,6 +2,7 @@
 // page is opened in a plain browser, so the island can be iterated on with
 // `npm run dev` alone.
 
+import type { ModeInfo } from "./modes";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
@@ -109,6 +110,11 @@ export const Bridge = {
   /** Only from the "Always" button: the person's own, explicit click. */
   rulesAdd: (draft: RuleDraft) => callOrThrow<Rule>("rules_add", { ...draft }),
   rulesRemove: (id: string) => callOrThrow<void>("rules_remove", { id }),
+
+  // ── Work modes: Work, Game, Meeting, Video (see core/modes.ts) ───────────────
+  modeInfo: () => call<ModeInfo>("mode_info"),
+  /** "auto" detects; or "work", "game", "meeting", "video" by hand. */
+  setWorkMode: (mode: string) => callOrThrow<void>("set_work_mode", { mode }),
 
   // ── Mochi the pet (its own small window) ────────────────────────────────────
   petShow: (edge: "left" | "right" | "bottom", along: number) => callOrThrow<void>("pet_show", { edge, along }),

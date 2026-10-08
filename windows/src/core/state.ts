@@ -4,6 +4,7 @@ import type { BotEmoteName, BotStateName, IslandMode, IslandViewName } from "./l
 import type { EyeShape } from "../mochi/engine";
 import type { FileDiff } from "../island/diff";
 import type { WeeklySummary } from "../island/recap";
+import type { WorkMode } from "./modes";
 import type { Rule, RuleDraft } from "../island/rules";
 
 const MAX_DIFFS = 50;
@@ -111,6 +112,8 @@ export const INTEGRATION_AGENTS: AgentTask[] = [
   task("integration_notion", "Notion", "#8C8C8C", "n8n"),
   task("integration_calcom", "Cal.com", "#C9956A", "n8n"),
   task("integration_stripe", "Stripe", "#0570DE", "n8n"),
+  // What the person is doing (Work, Game, Meeting, Video): shows it and switches it.
+  task("integration_system", "Modo", "#A78BFA", "n8n"),
   // Other agents next to Claude Code. Their ids are the contract the relay's
   // `--agent <name>` produces (agent_<name>); the colours follow the Mac catalog.
   task("agent_gemini", "Gemini CLI", "#8AB4F8", "agent"),
@@ -124,7 +127,7 @@ export const INTEGRATION_AGENTS: AgentTask[] = [
 export const TOGGLEABLE_INTEGRATION_IDS = [
   "integration_resend", "integration_vercel", "integration_github",
   "integration_notion", "integration_calcom", "integration_stripe",
-  "agent_gemini", "agent_opencode", "agent_copilot", "agent_muse", "agent_vscode",
+  "agent_gemini", "agent_opencode", "agent_copilot", "agent_muse", "agent_vscode", "integration_system",
 ];
 
 /** The agents that have a pill of their own to switch on in Settings. */
@@ -222,6 +225,14 @@ export interface Settings {
   petFriend: string;
   /** Only the person's own phrases. */
   petOnlyMine: boolean;
+  /** "auto" detects what the person is doing; or a mode by hand (see core/modes.ts). */
+  workMode: "auto" | "work" | "game" | "meeting" | "video";
+  /** In a game the pet may cheer, by voice only. */
+  petGameCheer: boolean;
+  /** Programs that count as games, besides the ones Coucou knows. */
+  gamePrograms: string[];
+  /** The microphone or camera in use by another program means a meeting. */
+  detectMeetings: boolean;
   /** The person's own phrases, by topic. */
   petPhrases: Record<string, string[]>;
   /** Who speaks: the voices Windows has, or ElevenLabs. */
@@ -291,6 +302,10 @@ export const DEFAULT_SETTINGS: Settings = {
   voicePet: true,
   petFriend: "Sven",
   petOnlyMine: false,
+  workMode: "auto",
+  petGameCheer: true,
+  gamePrograms: [],
+  detectMeetings: true,
   petPhrases: {},
   voiceEngine: "system",
   elevenVoice: "21m00Tcm4TlvDq8ikWAM",
@@ -338,6 +353,10 @@ class AppState {
   promptContext: PromptContext | null = null;
   droppedFile: { name: string; path: string } | null = null;
   noteMessage: string | null = null;
+  /** What the person is doing, from Rust (see core/modes.ts). */
+  workMode: WorkMode = "work";
+  modeAuto = true;
+  modeGame: string | null = null;
   /** Last week's numbers, worked out when the recap card is opened. */
   recap: WeeklySummary | null = null;
   /** Said to Mochi by voice: the chat takes it when it opens. */

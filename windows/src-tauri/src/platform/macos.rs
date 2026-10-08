@@ -167,6 +167,12 @@ fn main_scale() -> f64 {
     }
 }
 
+/// ponytail: modes are chosen by hand on a Mac: there is no cheap test for a
+/// full-screen app, a game or a call that does not ask for more permissions.
+pub fn signals(_extra_games: &[String]) -> super::Signals {
+    super::Signals::default()
+}
+
 /// ponytail: macOS has no cheap "full screen app" test; the pet may peek over a
 /// full-screen app. NSApplication.presentationOptions of another app is private.
 pub fn user_is_busy() -> bool {

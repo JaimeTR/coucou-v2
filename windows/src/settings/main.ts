@@ -16,6 +16,7 @@ import { ICONS } from "../views/icons";
 import { pairingQr } from "./qr";
 import { isOutfit, OUTFIT_NAMES, OUTFITS } from "../mochi/outfits";
 import { TOPIC_NAMES, TOPICS } from "../pet/phrases";
+import { MODE_CHOICES, MODE_NAMES } from "../core/modes";
 
 /** A paw: the pet. */
 const PET_ICON = "M12 12.5c-2.6 0-5.2 1.7-5.2 4.2 0 1.6 1.2 2.7 2.7 2.7 1 0 1.6-.5 2.5-.5s1.5.5 2.5.5c1.5 0 2.7-1.1 2.7-2.7 0-2.5-2.600-4.200-5.200-4.200zM5.800 6.800a1.800 2.300 0 1 0 0 4.600 1.800 2.300 0 1 0 0-4.600zM9.600 3.600a1.800 2.400 0 1 0 0 4.800 1.800 2.400 0 1 0 0-4.800zM14.400 3.600a1.800 2.400 0 1 0 0 4.800 1.800 2.400 0 1 0 0-4.800zM18.200 6.800a1.800 2.300 0 1 0 0 4.600 1.800 2.300 0 1 0 0-4.600z";
@@ -841,7 +842,7 @@ function personalSection(detectedName: string): HTMLElement {
   const names: Record<string, string> = {
     integration_claude: "Claude Code", integration_github: "GitHub",
     integration_vercel: "Vercel", integration_resend: "Resend", integration_notion: "Notion",
-    integration_calcom: "Cal.com", integration_stripe: "Stripe",
+    integration_calcom: "Cal.com", integration_stripe: "Stripe", integration_system: "Modo",
     agent_gemini: "Gemini CLI", agent_opencode: "OpenCode", agent_copilot: "Copilot CLI", agent_muse: "Muse Code", agent_vscode: "VS Code",
   };
   for (const id of ["integration_claude", ...settings.activeIntegrations]) {
@@ -1527,6 +1528,7 @@ interface IntegrationDef {
 }
 
 const INTEGRATIONS: IntegrationDef[] = [
+  { id: "integration_system", name: "Modo", color: "#A78BFA", fields: [] },
   { id: "integration_stripe", name: "Stripe", color: "#0570DE",
     fields: [{ key: "stripe-api-key", label: "Clave secreta", placeholder: "sk_live_…", secret: true }] },
   { id: "integration_github", name: "GitHub", color: "#F4505E",
@@ -1698,10 +1700,34 @@ function generalSection(): HTMLElement {
   });
   const resetPosition = h("button", { text: "Volver arriba al centro", onclick: () => void Bridge.resetIslandPosition() });
 
+  const modeSel = h("select", {}) as HTMLSelectElement;
+  for (const c of MODE_CHOICES) modeSel.append(h("option", { value: c, text: MODE_NAMES[c] }));
+  modeSel.value = settings.workMode;
+  modeSel.addEventListener("change", () => {
+    settings.workMode = modeSel.value as Settings["workMode"];
+    void save();
+  });
+  const games = h("textarea", {
+    rows: "3", spellcheck: "false", placeholder: "mijuego.exe, otro.exe",
+    style: "width:100%",
+  }) as HTMLTextAreaElement;
+  games.value = settings.gamePrograms.join(", ");
+  games.addEventListener("change", () => {
+    settings.gamePrograms = games.value.split(/[,\n]/).map((x) => x.trim()).filter(Boolean);
+    void save();
+  });
+  const modesGroup = group("Modos",
+    field("Modo", "Automático detecta lo que haces. En Juego, Reunión o Vídeo la isla y la mascota se esconden, no suena nada y los permisos vuelven a la terminal: nunca estorba ni cierra tu juego.", modeSel),
+    field("Detectar reuniones", "Si otro programa usa el micrófono o la cámara, es una reunión: silencio total.", toggle(settings.detectMeetings, (v) => { settings.detectMeetings = v; void save(); })),
+    field("Ánimo en los juegos", "La mascota te anima solo con la voz mientras juegas; sin ventana ni sonidos.", toggle(settings.petGameCheer, (v) => { settings.petGameCheer = v; void save(); })),
+    field("Otros juegos", "Programas que cuentan como juego, separados por comas. Coucou ya conoce los comunes y los de Steam.", games),
+  );
+
   return h(
     "section",
     {},
     h("h2", {}, h("span", { text: "General" })),
+    modesGroup,
     h("div", { class: "row" },
       h("label", { text: "Sonido" }),
       toggle(settings.soundEnabled, (v) => { settings.soundEnabled = v; void save(); }),

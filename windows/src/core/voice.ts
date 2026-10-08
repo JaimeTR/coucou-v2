@@ -4,6 +4,7 @@
 
 import { Bridge } from "./bridge";
 import { State } from "./state";
+import { voiceAllowed } from "./modes";
 import { t, uiLanguage } from "./i18n";
 import { emotionLine, pickVoice, speakable, type Emotion } from "./voiceText";
 
@@ -113,6 +114,8 @@ export type Occasion = "greeting" | "events" | "replies" | "assistant" | "pet";
 export function speakAuto(occasion: Occasion, text: string, onEnd?: () => void): boolean {
   const s = State.settings;
   if (!s.voiceEnabled) return false;
+  // Not in a meeting or over a video; in a game only the pet's cheering.
+  if (!voiceAllowed(State.workMode, occasion, s.petGameCheer)) return false;
   if (occasion === "greeting" && !s.voiceGreeting) return false;
   if (occasion === "events" && !s.voiceEvents) return false;
   if (occasion === "replies" && !s.voiceReplies) return false;

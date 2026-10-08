@@ -10,6 +10,11 @@
 //   * the cursor comes from the page's own mouse events, which only fire over
 //     the island — Mochi's eyes follow the pointer there, not across the screen.
 
+/// ponytail: modes are chosen by hand on Linux: no portable test for a game or a call.
+pub fn signals(_extra_games: &[String]) -> super::Signals {
+    super::Signals::default()
+}
+
 /// ponytail: no portable "full screen app" test on Linux; the pet may peek over one.
 pub fn user_is_busy() -> bool {
     false

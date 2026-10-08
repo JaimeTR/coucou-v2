@@ -42,6 +42,19 @@ pub struct NowPlaying {
     pub app: String,
 }
 
+/// What the computer says about what the person is doing (see modes.rs).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Signals {
+    /// A full-screen application is in front.
+    pub fullscreen: bool,
+    /// Windows is in presentation mode.
+    pub presentation: bool,
+    /// A game is running: its name.
+    pub game: Option<String>,
+    /// A call: some other program is using the microphone or the camera.
+    pub call: bool,
+}
+
 /// The user's home directory, where `.claude/settings.json` lives.
 pub fn home_dir() -> PathBuf {
     std::env::var_os(HOME_VAR)

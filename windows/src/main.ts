@@ -3,6 +3,8 @@
 import { startRemote } from "./island/remote";
 import { startUpdates } from "./island/updates";
 import { startPetContext } from "./island/petContext";
+import { mayPlaySound, type ModeInfo } from "./core/modes";
+import { stopSpeaking } from "./core/voice";
 import { isoWeekKey, weeklySummary } from "./island/recap";
 import "./style.css";
 import { Bridge, IS_TAURI, onEvent } from "./core/bridge";
@@ -87,6 +89,19 @@ async function main() {
   await startUpdates(island);
 
   // What the person is doing, for Mochi the pet to talk about.
+  // Work, Game, Meeting or Video: what the island may show and say (Rust detects it).
+  const takeMode = (m: ModeInfo | null) => {
+    if (!m) return;
+    State.workMode = m.mode;
+    State.modeAuto = m.auto;
+    State.modeGame = m.game;
+    Sound.muted = !mayPlaySound(m.mode);
+    if (m.mode !== "work") stopSpeaking();
+    State.notify();
+  };
+  takeMode(await Bridge.modeInfo());
+  await onEvent<ModeInfo>("mode-changed", takeMode);
+
   startPetContext();
 
   // The phone link (Settings → Sincronización): sessions up, Allow / Deny down.
