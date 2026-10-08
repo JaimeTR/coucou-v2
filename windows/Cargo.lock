@@ -666,7 +666,7 @@ dependencies = [
 
 [[package]]
 name = "coucou"
-version = "0.3.4"
+version = "1.0.0"
 dependencies = [
  "aes-gcm",
  "base64 0.22.1",
@@ -691,7 +691,7 @@ dependencies = [
 
 [[package]]
 name = "coucou-hook"
-version = "0.3.4"
+version = "1.0.0"
 dependencies = [
  "libc",
  "serde_json",

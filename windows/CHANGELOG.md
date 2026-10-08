@@ -4,6 +4,11 @@
 
 Coucou v2 is [JaimeTR](https://github.com/JaimeTR)'s fork of [Coucou by Louis Raillé](https://github.com/Louis-CFM/coucou) (MIT). The macOS release notes stay in the root [CHANGELOG.md](../CHANGELOG.md).
 
+## 1.0.0 — October 8, 2026
+
+**First stable version.** Everything from 0.3.x plus:
+- **Music detection fixed**: chat and call apps (WhatsApp, Telegram, Teams, Zoom, Discord...) that report "playing" for a voice note or a ring are no longer taken for music, so Mochi does not dance to them.
+
 ## 0.3.4 — October 8, 2026
 
 **Work modes**

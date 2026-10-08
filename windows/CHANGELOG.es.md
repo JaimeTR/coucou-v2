@@ -4,6 +4,11 @@
 
 Coucou v2 es el fork de [JaimeTR](https://github.com/JaimeTR) de [Coucou, de Louis Raillé](https://github.com/Louis-CFM/coucou) (MIT). Las notas de la versión de macOS siguen en el [CHANGELOG.md](../CHANGELOG.md) de la raíz.
 
+## 1.0.0 — 8 de octubre de 2026
+
+**Primera versión estable.** Todo lo de 0.3.x más:
+- **Detección de música corregida**: las apps de chat y llamadas (WhatsApp, Telegram, Teams, Zoom, Discord...) que dicen "reproduciendo" por una nota de voz o un tono ya no se toman por música: Mochi no baila con ellas.
+
 ## 0.3.4 — 8 de octubre de 2026
 
 **Modos de trabajo**
