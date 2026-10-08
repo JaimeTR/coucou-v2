@@ -21,6 +21,10 @@ Approve Claude Code permissions, watch your session work, drop a file, chat with
 
 <img src="screenshots/greeting.png" width="640" alt="Mochi waving hello at launch">
 
+<img src="../docs/media/coucou-windows-demo.gif" width="640" alt="Coucou v2 on Windows: the greeting, a Claude Code session working, a permission request and the finished card">
+
+<sub>This is the Windows app: [full video (webm)](../docs/media/coucou-windows-demo.webm).</sub>
+
 ---
 
 ## What's new in v2
@@ -48,6 +52,17 @@ Coucou v2 turns Mochi into a small personal assistant. Everything below is new o
 | **Global shortcuts** | `Ctrl+Alt+Y` allow · `Ctrl+Alt+N` deny (only while a request is up) · `Ctrl+Alt+C` open or close the island — that last one is yours to change (one key like `F8`, or two like `Ctrl+Space`) in Settings → General → "Abrir Coucou con". |
 | **Windows notifications** | A toast when Claude needs permission, asks something, or finishes while the island is closed. |
 | **Chat with Claude, DEVMARK AI, Gemini or Groq** | Pick who answers under Settings → Proveedor de chat. DEVMARK AI is the company's private model (see [below](#devmark-ai-chat-provider)); Gemini and Groq use your own key. If a provider retires the configured model, Coucou switches to one your key can use. |
+| **Local models** | **Ollama** and **LM Studio** as a chat provider: free, no key, and nothing leaves your network. |
+| **Mochi the mischievous pet** | Optional (Settings → Pet and Personalization). Every so often it peeks over the screen's edges, plays a prank (waves, looks around, falls asleep and wakes up scared, hides and pops out elsewhere, sends hearts) and hides again. It gets angry if you click it, and never appears over games, full-screen video or while Coucou is paused. |
+| **Mochi talks and cheers you on** | When it peeks out it says something that fits what you're doing: encouragement while an agent works, a heads-up when one finishes or fails, comments with the music, rest at night, «stretch your legs» after a long stretch. In a bubble and, if you want, out loud. You set its friend's name, your own phrases per topic (`{name}`, `{friend}`, `{minutes}`) and whether it uses only yours. It also says how it feels (click, dizzy, petted) and announces errors, deploys and failing CI. |
+| **Wardrobe** | Twelve outfits for Mochi (hats, glasses, bow, scarf, pumpkin, bunny ears…) or **Automatic** by date: Santa hat in December, witch hat in October, bunny ears at Easter, sunglasses in summer, party hat on New Year. |
+| **Dances to the music** | While something plays (Spotify, the browser, Music on Mac…) Mochi dances to the beat. It only looks *whether* something plays, never what; chat and call apps (WhatsApp, Telegram, Teams, Zoom, Discord…) don't count as music. |
+| **Work modes** | Coucou knows what you're doing: **Game**, **Meeting**, **Video** or **Work**, detected every 2 s (known and Steam games, full-screen apps, presentation mode, microphone or camera in use) or chosen by hand. Over a game, a call or a video the island and the pet hide, nothing sounds and permissions go back to the terminal: Claude Code is never blocked. A **Mode** pill shows and changes it (Settings → General → Modes). Full detection on Windows; on Mac, full-screen apps, some games and Zoom; on Linux, manual. |
+| **Island docks to the edges** | In free mode, drop it near the top or bottom edge and it docks there; near the left or right edge it becomes an upright **vertical capsule** with Mochi on top and opens from that side. |
+| **Weekly recap** | On Mondays, the «Your week» card: last week's time, sessions, files, lines and commands. Also from the tray. |
+| **Automatic updates** | Coucou checks GitHub for new versions at launch and every 6 hours. Settings → General → Updates: **Automatic** (installs itself when no session is working and no permission is waiting), **Notify only** or **Off**. Every release is signed and the app rejects a mismatched signature. |
+| **Sync between your PCs** | Your settings follow your other PCs and Macs through your own Cloudflare server (`sync/`), end-to-end encrypted. API keys, the screen, the island position and launch-at-login don't travel. |
+| **Your phone** | The `mobile/` app (iPhone and Android) has a **PCs** tab with each computer's agents and **Allow / Deny** for the permission that's waiting, with **Face ID or fingerprint** before sending an Allow. Push alerts when a PC needs you, even with the app closed, and pairing by **QR** (Settings → Sync). |
 
 ## Install
 

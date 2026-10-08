@@ -21,11 +21,15 @@ Aprueba los permisos de Claude Code, mira trabajar tu sesión, suelta un archivo
 
 <img src="screenshots/greeting.png" width="640" alt="Mochi saludando al iniciar">
 
+<img src="../docs/media/coucou-windows-demo.gif" width="640" alt="Coucou v2 en Windows: el saludo, una sesión de Claude Code trabajando, un permiso y la tarjeta de terminado">
+
+<sub>Así se ve en Windows: [vídeo completo (webm)](../docs/media/coucou-windows-demo.webm).</sub>
+
 ---
 
 ## Novedades de la v2
 
-Coucou v2 convierte a Mochi en un pequeño asistente personal. Todo lo de abajo es nuevo respecto a la app original; la lista completa está en [CHANGELOG.es.md](CHANGELOG.es.md).
+Coucou v2 convierte a Mochi en un pequeño asistente personal. Todo lo de abajo es nuevo respecto a la app original; la lista completa está en [CHANGELOG.es.md](CHANGELOG.es.md). **Versión actual: 1.0.0** (8 de octubre de 2026), la primera estable.
 
 | | |
 |---|---|
@@ -48,6 +52,17 @@ Coucou v2 convierte a Mochi en un pequeño asistente personal. Todo lo de abajo 
 | **Atajos globales** | `Ctrl+Alt+Y` permitir · `Ctrl+Alt+N` denegar (solo mientras hay una petición) · `Ctrl+Alt+C` abrir o cerrar la isla; este último lo cambias tú (una tecla como `F8`, o dos como `Ctrl+Espacio`) en Ajustes → General → "Abrir Coucou con". |
 | **Notificaciones de Windows** | Un aviso cuando Claude pide permiso, pregunta algo o termina mientras la isla está cerrada. |
 | **Chat con Claude, DEVMARK AI, Gemini o Groq** | Elige quién responde en Ajustes → Proveedor de chat. DEVMARK AI es el modelo privado de la empresa (ver [abajo](#devmark-ai-proveedor-de-chat)); Gemini y Groq usan tu propia clave. Si el proveedor retira el modelo configurado, Coucou usa otro que tu clave pueda usar. |
+| **Modelos locales** | **Ollama** y **LM Studio** como proveedor de chat: gratis, sin clave, y nada sale de tu red. |
+| **Mochi, la mascota traviesa** | Opcional (Ajustes → Mascota y Personalización). De vez en cuando se asoma por los bordes de la pantalla, hace una travesura (saludar, mirar, dormirse y despertar asustado, esconderse y salir en otro sitio, mandar corazones) y se esconde. Se enfada si le haces clic y no aparece sobre juegos, vídeos a pantalla completa ni con Coucou en pausa. |
+| **Mochi habla y te anima** | Cuando se asoma dice algo que encaja con lo que haces: ánimo mientras trabajas con un agente, aviso cuando uno termina o falla, comentarios con la música, descanso de madrugada, «estira las piernas» si llevas mucho rato. En un globo y, si quieres, en voz alta. Personalizas el nombre de su amigo, tus propias frases por tema (`{name}`, `{friend}`, `{minutes}`) y si usa solo las tuyas. Dice también lo que siente (clic, mareo, cariño) y avisa de errores, deploys y CI que fallan. |
+| **Guardarropa** | Doce atuendos para Mochi (gorros, gafas, lazo, bufanda, calabaza, orejas de conejo…) o **Automático** según la fecha: gorro de Papá Noel en diciembre, sombrero de bruja en octubre, orejas de conejo en Pascua, gafas de sol en verano, gorro de fiesta en Año Nuevo. |
+| **Baila con la música** | Mientras suena algo (Spotify, el navegador, Music en Mac…) Mochi baila al ritmo. Solo mira *si* suena; nunca guarda ni envía qué. Las apps de chat y llamadas (WhatsApp, Telegram, Teams, Zoom, Discord…) no cuentan como música. |
+| **Modos de trabajo** | Coucou sabe qué haces: **Juego**, **Reunión**, **Vídeo** o **Trabajo**, detectado cada 2 s (juegos conocidos y de Steam, apps a pantalla completa, modo presentación, micrófono o cámara en uso) o elegido a mano. Sobre un juego, una llamada o un vídeo la isla y la mascota se esconden, no suena nada y los permisos vuelven a la terminal: Claude Code nunca se bloquea. Un pill **Modo** lo muestra y lo cambia (Ajustes → General → Modos). Detección completa en Windows; en Mac, apps a pantalla completa, algunos juegos y Zoom; en Linux, a mano. |
+| **Isla pegada a los bordes** | En modo libre, si la sueltas junto al borde de arriba o de abajo se pega a él; junto al izquierdo o el derecho se vuelve una **cápsula vertical**, derecha, con Mochi arriba, y se abre desde ese lado. |
+| **Resumen semanal** | Los lunes, la tarjeta «Tu semana»: tiempo, sesiones, archivos, líneas y comandos de la semana pasada. También desde la bandeja. |
+| **Actualizaciones automáticas** | Coucou busca versiones nuevas en GitHub al iniciar y cada 6 horas. Ajustes → General → Actualizaciones: **Automáticas** (se instala sola cuando ninguna sesión trabaja ni hay un permiso esperando), **Solo avisar** o **Desactivadas**. Cada versión viene firmada y la app rechaza una firma que no coincide. |
+| **Sincronización entre tus PCs** | Tus ajustes siguen a tus otros PCs y Macs a través de tu propio servidor de Cloudflare (`sync/`), cifrados de extremo a extremo. Las claves API, la pantalla, la posición de la isla y el inicio con Windows no viajan. |
+| **Tu teléfono** | La app de `mobile/` (iPhone y Android) tiene una pestaña **PCs** con los agentes de cada computadora y **Permitir / Denegar** el permiso que espera, con **Face ID o huella** antes de enviar un «Permitir». Avisos push cuando un PC te necesita, aunque la app esté cerrada, y emparejamiento con un **QR** (Ajustes → Sincronización). |
 
 ## Instalación
 
@@ -180,6 +195,8 @@ Cada uno se conecta en **Ajustes → Agentes** (ves el diff exacto, se hace una 
 | Cualquier otro | `coucou-hook.exe --agent <nombre> <Evento>` desde sus hooks | en su terminal |
 
 Amp, por ahora, solo en Mac.
+
+**Isla en modo libre o fija:** Ajustes → General → Posición de la isla: fija arriba al centro o libre (arrástrala a donde quieras).
 
 ## Qué cambia respecto a la versión de Mac
 

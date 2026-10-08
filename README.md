@@ -23,7 +23,13 @@ iPhone y Android (una sola app): [mobile](mobile/README.md) Â· Windows y Linux Â
 ![Code: MIT](https://img.shields.io/badge/code-MIT-green)
 ![GitHub stars](https://img.shields.io/github/stars/JaimeTR/coucou-v2?style=social)
 
-<img src="docs/media/demo.gif" width="760" alt="Coucou in action">
+<img src="docs/media/demo.gif" width="760" alt="Coucou in action on the Mac">
+
+<sub>On the Mac, in the notch. Below: Coucou v2 on Windows, the same session at the top of the screen.</sub>
+
+<img src="docs/media/coucou-windows-demo.gif" width="640" alt="Coucou v2 on Windows: the greeting, a Claude Code session working, a permission request and the finished card">
+
+<sub>[Full video (webm)](docs/media/coucou-windows-demo.webm)</sub>
 
 </div>
 
