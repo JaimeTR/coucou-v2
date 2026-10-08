@@ -4,10 +4,10 @@
 
 Coucou v2 es el fork de [JaimeTR](https://github.com/JaimeTR) de [Coucou, de Louis Raillé](https://github.com/Louis-CFM/coucou) (MIT). Las notas de la versión de macOS siguen en el [CHANGELOG.md](../CHANGELOG.md) de la raíz.
 
-## Sin publicar
+## 0.3.4 — 8 de octubre de 2026
 
 **Modos de trabajo**
-- **Coucou sabe qué haces** (Windows): Juego, Reunión, Vídeo o Trabajo, detectado cada 2 s (juegos conocidos y de Steam, apps a pantalla completa, modo presentación, micrófono/cámara en uso por otro programa) o elegido a mano. Sobre un juego, una llamada o un vídeo la isla y la mascota se esconden, no suena ni aparece nada y los permisos vuelven a la terminal: Claude Code nunca se bloquea y un juego a pantalla completa nunca se molesta. En un juego la mascota aún puede animarte solo con la voz.
+- **Coucou sabe qué haces** (Windows completo; en Mac detecta apps a pantalla completa, algunos juegos y llamadas de Zoom, y siempre puedes elegir a mano; en Linux, a mano): Juego, Reunión, Vídeo o Trabajo, detectado cada 2 s (juegos conocidos y de Steam, apps a pantalla completa, modo presentación, micrófono/cámara en uso por otro programa) o elegido a mano. Sobre un juego, una llamada o un vídeo la isla y la mascota se esconden, no suena ni aparece nada y los permisos vuelven a la terminal: Claude Code nunca se bloquea y un juego a pantalla completa nunca se molesta. En un juego la mascota aún puede animarte solo con la voz.
 - **Nuevo pill "Modo"**: muestra el modo (y el juego) y lo cambia; ocupa uno de los 4 pills si lo activas. Ajustes → General → Modos: modo, detección de reuniones, ánimo en juegos, otros programas de juego.
 
 ## 0.3.3: 8 de octubre de 2026

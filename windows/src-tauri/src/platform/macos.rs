@@ -167,10 +167,67 @@ fn main_scale() -> f64 {
     }
 }
 
-/// ponytail: modes are chosen by hand on a Mac: there is no cheap test for a
-/// full-screen app, a game or a call that does not ask for more permissions.
-pub fn signals(_extra_games: &[String]) -> super::Signals {
-    super::Signals::default()
+/// Lists the on-screen windows and the screens, as text, through JXA (the ObjC bridge):
+/// no extra permission is needed for owner names and sizes, and nothing is linked.
+const WINDOWS_JXA: &str = r#"ObjC.import('CoreGraphics');ObjC.import('AppKit');
+var o=[],n=$.NSScreen.screens.count;
+for(var i=0;i<n;i++){var f=$.NSScreen.screens.objectAtIndex(i).frame;o.push('S|'+Math.round(f.size.width)+'|'+Math.round(f.size.height));}
+var l=ObjC.deepUnwrap(ObjC.castRefToObject($.CGWindowListCopyWindowInfo(17,0)));
+for(var j=0;j<l.length;j++){var w=l[j],b=w.kCGWindowBounds||{};o.push('W|'+(w.kCGWindowOwnerName||'')+'|'+w.kCGWindowLayer+'|'+Math.round(b.Width)+'|'+Math.round(b.Height));}
+o.join('\n')"#;
+
+/// The owner of a normal window as big as a whole screen (a full-screen app or game).
+fn fullscreen_owner(text: &str) -> Option<String> {
+    let screens: Vec<(&str, &str)> = text
+        .lines()
+        .filter_map(|l| l.strip_prefix("S|"))
+        .filter_map(|l| l.split_once('|'))
+        .collect();
+    text.lines().filter_map(|l| l.strip_prefix("W|")).find_map(|l| {
+        let p: Vec<&str> = l.split('|').collect();
+        let [owner, layer, w, h] = p[..] else { return None };
+        let system = ["Finder", "Dock", "Window Server", "Coucou", "Coucou v2", "SystemUIServer", "Control Center"];
+        (layer == "0" && !system.contains(&owner) && screens.iter().any(|&(sw, sh)| sw == w && sh == h))
+            .then(|| owner.to_string())
+    })
+}
+
+/// Games that run on a Mac, by the name of the process (lower case).
+const MAC_GAMES: &[(&str, &str)] = &[
+    ("dota2", "Dota 2"),
+    ("cs2", "Counter-Strike 2"),
+    ("minecraft", "Minecraft"),
+    ("world of warcraft", "World of Warcraft"),
+    ("hearthstone", "Hearthstone"),
+    ("league of legends", "League of Legends"),
+    ("civilization vi", "Civilization VI"),
+    ("stardew valley", "Stardew Valley"),
+];
+
+fn run_text(cmd: &str, args: &[&str]) -> String {
+    Command::new(cmd).args(args).output().map(|o| String::from_utf8_lossy(&o.stdout).into_owned()).unwrap_or_default()
+}
+
+/// What the Mac says the person is doing. Any failure reads as "nothing special", so a
+/// problem here can only mean the island stays as it was.
+/// ponytail: a Zoom call (its CptHost helper) is the one call told apart; the rest of the
+/// meetings are chosen by hand. Spawns two small processes every 2 s.
+pub fn signals(extra_games: &[String]) -> super::Signals {
+    let windows = run_text("osascript", &["-l", "JavaScript", "-e", WINDOWS_JXA]);
+    let owner = fullscreen_owner(&windows);
+    let processes = run_text("ps", &["-axco", "comm"]).to_lowercase();
+    let running = |name: &str| processes.lines().any(|p| p.trim() == name);
+    let game = MAC_GAMES
+        .iter()
+        .find(|(file, _)| running(file))
+        .map(|(_, name)| name.to_string())
+        .or_else(|| {
+            extra_games.iter().map(|e| e.trim().trim_end_matches(".app").to_string()).find(|e| {
+                let e = e.to_lowercase();
+                !e.is_empty() && running(&e)
+            })
+        });
+    super::Signals { fullscreen: owner.is_some(), presentation: false, game, call: running("cpthost") }
 }
 
 /// ponytail: macOS has no cheap "full screen app" test; the pet may peek over a
@@ -242,3 +299,16 @@ pub fn set_activating(win: &WebviewWindow, activating: bool) {
 
 /// Click-through here is the poll's ignore-cursor toggle, not a region.
 pub fn set_input_region(_win: &WebviewWindow, _rect: Option<(f64, f64, f64, f64)>) {}
+
+#[cfg(test)]
+mod mode_tests {
+    use super::fullscreen_owner;
+
+    #[test]
+    fn a_window_as_big_as_a_screen_is_full_screen_unless_it_is_the_desktop() {
+        let t = "S|1512|982\nW|Dock|20|1512|982\nW|Finder|0|1512|982\nW|Safari|0|1200|800\nW|Dota 2|0|1512|982";
+        assert_eq!(fullscreen_owner(t).as_deref(), Some("Dota 2"));
+        assert_eq!(fullscreen_owner("S|1512|982\nW|Safari|0|1200|800"), None);
+        assert_eq!(fullscreen_owner(""), None);
+    }
+}
