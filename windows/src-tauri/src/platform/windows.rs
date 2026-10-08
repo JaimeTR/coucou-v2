@@ -422,6 +422,14 @@ pub fn now_playing() -> Option<super::NowPlaying> {
     .flatten()
 }
 
+/// Apps that show up as a media session while a message, a call or a ringtone plays.
+fn is_not_music(app: &str) -> bool {
+    let app = app.to_lowercase();
+    ["whatsapp", "telegram", "teams", "zoom", "skype", "discord", "slack", "signal", "viber", "webex", "messenger"]
+        .iter()
+        .any(|w| app.contains(w))
+}
+
 fn media_session() -> Option<super::NowPlaying> {
     use windows::Media::Control::{
         GlobalSystemMediaTransportControlsSessionManager as Manager,
@@ -442,6 +450,8 @@ fn media_session() -> Option<super::NowPlaying> {
         })
         .unwrap_or_default();
     let app = session.SourceAppUserModelId().map(|t| t.to_string()).unwrap_or_default();
+    // A chat or call app reports "playing" for a voice note or a ring: not music.
+    let playing = playing && !is_not_music(&app);
     Some(super::NowPlaying { playing, title, artist, app })
 }
 
@@ -550,5 +560,16 @@ mod signals_tests {
         println!("{:?}", super::signals(&[]));
         println!("steam: {:?}", super::steam_game());
         println!("programs: {}", super::running_programs().len());
+    }
+}
+
+#[cfg(test)]
+mod not_music_tests {
+    #[test]
+    fn chat_and_call_apps_are_not_music() {
+        assert!(super::is_not_music("5319275A.WhatsAppDesktop_cv1g1gvanyjgm!App"));
+        assert!(super::is_not_music("MSTeams_8wekyb3d8bbwe!MSTeams"));
+        assert!(!super::is_not_music("Spotify.exe"));
+        assert!(!super::is_not_music("chrome.exe"));
     }
 }
