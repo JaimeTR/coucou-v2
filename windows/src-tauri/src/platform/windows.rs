@@ -384,7 +384,7 @@ fn camera_or_microphone_in_use() -> bool {
 
 /// Everything modes.rs decides from. `extra_games` are the programs the person listed.
 pub fn signals(extra_games: &[String]) -> super::Signals {
-    use ::windows::Win32::UI::Shell::{SHQueryUserNotificationState, QUNS_BUSY, QUNS_PRESENTATION_MODE, QUNS_RUNNING_D3D_FULL_SCREEN};
+    use ::windows::Win32::UI::Shell::{SHQueryUserNotificationState, QUNS_PRESENTATION_MODE, QUNS_RUNNING_D3D_FULL_SCREEN};
     let state = unsafe { SHQueryUserNotificationState() }.ok();
     let programs = running_programs();
     let game = programs
@@ -392,7 +392,10 @@ pub fn signals(extra_games: &[String]) -> super::Signals {
         .find_map(|p| crate::modes::known_game(p, extra_games))
         .or_else(|| steam_game(&programs));
     super::Signals {
-        fullscreen: state.map(|s| s == QUNS_BUSY || s == QUNS_RUNNING_D3D_FULL_SCREEN).unwrap_or(false),
+        // QUNS_BUSY is any full-screen window (a maximized-to-the-edge app, F11 in a browser,
+        // the Claude app...), not only a game: it kept the island hidden for good. Only a
+        // real exclusive D3D full-screen counts; known games and Steam cover the rest.
+        fullscreen: state.map(|s| s == QUNS_RUNNING_D3D_FULL_SCREEN).unwrap_or(false),
         presentation: state.map(|s| s == QUNS_PRESENTATION_MODE).unwrap_or(false),
         game,
         call: camera_or_microphone_in_use(),
@@ -566,7 +569,7 @@ mod signals_tests {
     #[ignore]
     fn signals_smoke() {
         println!("{:?}", super::signals(&[]));
-        println!("steam: {:?}", super::steam_game());
+        println!("steam: {:?}", super::steam_game(&super::running_programs()));
         println!("programs: {}", super::running_programs().len());
     }
 }
