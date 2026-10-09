@@ -347,16 +347,24 @@ fn running_programs() -> Vec<String> {
 }
 
 /// The Steam game running now, by name: Steam keeps its id in the registry.
-fn steam_game() -> Option<String> {
+/// Steam leaves a stale id behind when it is closed or crashes, so with no
+/// steam.exe running it means nothing (it kept Dota 2 "running" forever and the
+/// island stayed hidden in Game mode).
+fn steam_game(programs: &[String]) -> Option<String> {
+    if !programs.iter().any(|p| p.trim().eq_ignore_ascii_case("steam.exe")) {
+        return None;
+    }
     let id = reg_number("Software\\Valve\\Steam", "RunningAppID").filter(|id| *id != 0)?;
     reg_text(&format!("Software\\Valve\\Steam\\Apps\\{id}"), "Name").or_else(|| Some("un juego de Steam".into()))
 }
 
-/// Is another program using the microphone or the camera right now? Windows
-/// keeps, for each program, when it started and stopped using them: started and
-/// not stopped means in use. Our own program (its listening for "Oye Mochi") does not count.
+/// Is another program using the microphone right now? Windows keeps, for each
+/// program, when it started and stopped using it: started and not stopped means
+/// in use. Our own program (its listening for "Oye Mochi") does not count. The
+/// camera alone is no sign of a call: camera tools (OBSBOT Center, webcam
+/// utilities) hold it open all day and kept Coucou in Meeting mode, island hidden.
 fn camera_or_microphone_in_use() -> bool {
-    for device in ["microphone", "webcam"] {
+    for device in ["microphone"] {
         let base = format!("Software\\Microsoft\\Windows\\CurrentVersion\\CapabilityAccessManager\\ConsentStore\\{device}");
         let mut keys: Vec<String> = reg_subkeys(&base).into_iter().filter(|k| k != "NonPackaged").map(|k| format!("{base}\\{k}")).collect();
         keys.extend(reg_subkeys(&format!("{base}\\NonPackaged")).into_iter().map(|k| format!("{base}\\NonPackaged\\{k}")));
@@ -382,7 +390,7 @@ pub fn signals(extra_games: &[String]) -> super::Signals {
     let game = programs
         .iter()
         .find_map(|p| crate::modes::known_game(p, extra_games))
-        .or_else(steam_game);
+        .or_else(|| steam_game(&programs));
     super::Signals {
         fullscreen: state.map(|s| s == QUNS_BUSY || s == QUNS_RUNNING_D3D_FULL_SCREEN).unwrap_or(false),
         presentation: state.map(|s| s == QUNS_PRESENTATION_MODE).unwrap_or(false),
