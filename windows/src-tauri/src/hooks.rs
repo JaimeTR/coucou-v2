@@ -147,6 +147,10 @@ fn sh_quote(s: &str) -> String {
 }
 
 pub(crate) fn entry_is_ours(entry: &Value) -> bool {
+    // Cursor's entries are flat: {"command": "..."}.
+    if entry.get("command").and_then(Value::as_str).is_some_and(|c| c.contains(MARKER)) {
+        return true;
+    }
     entry
         .get("hooks")
         .and_then(Value::as_array)

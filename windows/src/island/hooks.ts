@@ -295,6 +295,9 @@ export function registerHookHandlers(island: Island) {
   }
 }
 
+/** The agents whose permission requests the relay can answer (hook/src: takes decisions). */
+const APPROVAL_AGENTS = new Set(["codex", "copilot", "muse"]);
+
 function handleHook(island: Island, payload: HookPayload) {
   if (State.paused) {
     // Silence here used to cost Claude Code nearly two minutes: the relay waited
@@ -510,14 +513,14 @@ function handleHook(island: Island, payload: HookPayload) {
       break;
 
     case "PermissionRequest": {
-      // External agents do not get an approval card — showing one would look like
-      // a Claude Code request. Decline immediately so the agent re-asks in its
-      // terminal. Approval support for other agents will come with Codex support.
-      if (isExternalAgent) {
+      // Only the agents the relay answers (Codex, Copilot CLI, Muse Code) get a card:
+      // any other agent's request goes straight back to its own terminal.
+      if (isExternalAgent && !APPROVAL_AGENTS.has(validAgent ?? "")) {
         if (payload.request_id) void Bridge.approvalDecline(payload.request_id);
         break;
       }
 
+      const agentName = isExternalAgent ? State.tasks.find((t) => t.id === agentId)?.name ?? validAgent : "Claude Code";
       const requestId = payload.request_id ?? "";
       // Older Claude Code sends a question as a permission request. The island
       // answers questions from the dedicated hook, so this one goes back at once.
@@ -536,8 +539,9 @@ function handleHook(island: Island, payload: HookPayload) {
       if (covered) {
         void Bridge.log(`auto-allowed ${tool} by rule ${covered.id} (${covered.label})`);
         void Bridge.approvalDecision(requestId, "allow");
-        upsert(projectName, cwd);
-        State.appendStep(CLAUDE_ID, `✓ Permitido siempre · ${covered.label}`);
+        if (isExternalAgent) ensurePill();
+        else upsert(projectName, cwd);
+        State.appendStep(agentId, `✓ Permitido siempre · ${covered.label}`);
         break;
       }
 
@@ -551,7 +555,8 @@ function handleHook(island: Island, payload: HookPayload) {
         if (requestId) void Bridge.approvalDecline(requestId);
         break;
       }
-      upsert(projectName, cwd);
+      if (isExternalAgent) ensurePill();
+      else upsert(projectName, cwd);
       if (pendingTimeout != null) window.clearTimeout(pendingTimeout);
       State.pendingApproval = {
         requestId,
@@ -559,13 +564,14 @@ function handleHook(island: Island, payload: HookPayload) {
         tool,
         command: approvalTarget(tool, input),
         rule: ruleFor(tool, input, cwd),
+        agentId,
       };
       // The relay's short ack window closes in 800 ms; everything below this
       // line is synchronous, so the card really is up by the time it lands.
       if (requestId) void Bridge.approvalAck(requestId);
       void Bridge.setDecisionShortcuts(true);
-      toast("Claude Code pide permiso", State.pendingApproval.command);
-      State.updateTask(CLAUDE_ID, "approval");
+      toast(`${agentName} pide permiso`, State.pendingApproval.command);
+      State.updateTask(agentId, "approval");
       State.isPinned = true;
       Sound.play("approval");
       if (focused) {
@@ -574,7 +580,7 @@ function handleHook(island: Island, payload: HookPayload) {
         // Another agent holds the view, so the card would yank it away. The badge
         // is the signal instead — but it has to be on screen for that to mean
         // anything, hence the reveal. We just told the relay a human can act.
-        State.setPillBadge(CLAUDE_ID, "approval");
+        State.setPillBadge(agentId, "approval");
         island.reveal();
       }
       // Coucou answers within 108 s or not at all; after that the terminal has
@@ -586,8 +592,8 @@ function handleHook(island: Island, payload: HookPayload) {
         State.pendingApproval = null;
         State.isPinned = false;
         island.dropPin();
-        State.updateTask(CLAUDE_ID, "working");
-        State.setPillBadge(CLAUDE_ID, null);
+        State.updateTask(agentId, "working");
+        State.setPillBadge(agentId, null);
         if (State.view === "approval") island.setView(State.defaultView());
         State.notify();
       }, 110_000);

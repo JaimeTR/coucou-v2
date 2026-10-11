@@ -252,13 +252,33 @@ const AGENTS: AgentDef[] = [
   },
   {
     id: "copilot", color: "#818CF8",
-    what: "Crea ~/.copilot/hooks/coucou.json con los eventos de Copilot CLI. Los permisos se siguen respondiendo en su terminal.",
+    what: "Crea ~/.copilot/hooks/coucou.json con los eventos de Copilot CLI. Permitir / Denegar se responde en la isla; si no contestas, Copilot pregunta en su terminal.",
     missing: "No se encontró Copilot CLI en este PC. Aun así puedes conectarlo para cuando lo instales.",
   },
   {
     id: "muse", color: "#38BDF8",
     what: "Añade los hooks de Coucou a ~/.config/muse/settings.json, sin tocar lo demás.",
     missing: "No se encontró Muse Code en este PC. Aun así puedes conectarlo para cuando lo instales.",
+  },
+  {
+    id: "codex", color: "#10A37F",
+    what: "Añade los hooks de Coucou a ~/.codex/hooks.json, sin tocar lo demás. Los permisos de Codex se responden en la isla con Permitir / Denegar; si no contestas, Codex pregunta en su terminal.",
+    missing: "No se encontró Codex en este PC. Aun así puedes conectarlo para cuando lo instales.",
+  },
+  {
+    id: "cursor", color: "#F54E00",
+    what: "Añade los hooks de Coucou a ~/.cursor/hooks.json, sin tocar lo demás. Las sesiones de Cursor Agent salen en su pill; los permisos se siguen respondiendo en Cursor.",
+    missing: "No se encontró Cursor en este PC. Aun así puedes conectarlo para cuando lo instales.",
+  },
+  {
+    id: "amp", color: "#F34E3F",
+    what: "Añade un pequeño plugin (coucou.ts) a ~/.config/amp/plugins. Solo muestra lo que hace Amp: nunca decide nada por él.",
+    missing: "No se encontró Amp en este PC. Aun así puedes conectarlo para cuando lo instales.",
+  },
+  {
+    id: "hermes", color: "#C084FC",
+    what: "Crea un plugin en ~/.hermes/plugins/coucou. Las sesiones de Hermes salen en su pill; Hermes decide sus aprobaciones él mismo. Después actívalo una vez con `hermes plugins enable coucou`.",
+    missing: "No se encontró Hermes Agent en este PC. Aun así puedes conectarlo para cuando lo instales.",
   },
   {
     id: "vscode", color: "#2DA8F5",
@@ -277,7 +297,8 @@ function agentsSection(initial: AgentStatus[]): HTMLElement {
   const list = h("div", { style: "display:flex;flex-direction:column;gap:14px" });
   const statuses = new Map(initial.map((s) => [s.id, s]));
   const NAMES: Record<string, string> = {
-    gemini: "Gemini CLI", opencode: "OpenCode", copilot: "Copilot CLI", muse: "Muse Code", vscode: "VS Code",
+    gemini: "Gemini CLI", opencode: "OpenCode", copilot: "Copilot CLI", muse: "Muse Code",
+    codex: "Codex", cursor: "Cursor Agent", amp: "Amp", hermes: "Hermes Agent", vscode: "VS Code",
   };
 
   function updateNote() {
@@ -843,7 +864,8 @@ function personalSection(detectedName: string): HTMLElement {
     integration_claude: "Claude Code", integration_github: "GitHub",
     integration_vercel: "Vercel", integration_resend: "Resend", integration_notion: "Notion",
     integration_calcom: "Cal.com", integration_stripe: "Stripe", integration_system: "Modo",
-    agent_gemini: "Gemini CLI", agent_opencode: "OpenCode", agent_copilot: "Copilot CLI", agent_muse: "Muse Code", agent_vscode: "VS Code",
+    agent_gemini: "Gemini CLI", agent_opencode: "OpenCode", agent_copilot: "Copilot CLI", agent_muse: "Muse Code",
+    agent_codex: "Codex", agent_cursor: "Cursor Agent", agent_amp: "Amp", agent_hermes: "Hermes Agent", agent_vscode: "VS Code",
   };
   for (const id of ["integration_claude", ...settings.activeIntegrations]) {
     if (names[id]) startPill.append(h("option", { value: id, text: names[id] }));

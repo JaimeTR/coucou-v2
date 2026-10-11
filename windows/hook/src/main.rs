@@ -127,7 +127,7 @@ fn main() {
 /// arguments under the names the live diff expects.
 fn normalize_agent(agent: &str, map: &mut serde_json::Map<String, serde_json::Value>) {
     use serde_json::Value;
-    if agent == "copilot" || agent == "muse" {
+    if agent == "copilot" || agent == "muse" || agent == "cursor" {
         normalize_copilot_muse(map);
         return;
     }
@@ -197,6 +197,11 @@ fn normalize_copilot_muse(map: &mut serde_json::Map<String, serde_json::Value>) 
         "permissionRequest" => "PermissionRequest",
         "agentStop" | "stop" => "Stop",
         "notification" => "Notification",
+        // Cursor Agent
+        "beforeSubmitPrompt" => "UserPromptSubmit",
+        "postToolUseFailure" => "PostToolUseFailure",
+        "subagentStart" => "SubagentStart",
+        "subagentStop" => "SubagentStop",
         _ => "",
     };
     if !renamed.is_empty() {
@@ -214,6 +219,24 @@ fn normalize_copilot_muse(map: &mut serde_json::Map<String, serde_json::Value>) 
         if let Ok(parsed @ Value::Object(_)) = serde_json::from_str::<Value>(raw) {
             map.insert("tool_input".into(), parsed);
         }
+    }
+    // Cursor reports the project as workspace_roots; a stop that failed is a StopFailure.
+    if !map.contains_key("cwd") {
+        let root = map
+            .get("workspace_roots")
+            .and_then(|r| r.as_array())
+            .and_then(|r| r.first())
+            .and_then(|r| r.as_str())
+            .filter(|r| !r.is_empty())
+            .map(str::to_string);
+        if let Some(root) = root {
+            map.insert("cwd".into(), Value::String(root));
+        }
+    }
+    if map.get("hook_event_name").and_then(|v| v.as_str()) == Some("Stop")
+        && map.get("status").and_then(|v| v.as_str()) == Some("error")
+    {
+        map.insert("hook_event_name".into(), Value::String("StopFailure".into()));
     }
     if !map.contains_key("session_id") {
         let id = ["sessionId", "conversationId", "conversation_id"].iter().find_map(|k| map.get(*k).cloned());
@@ -667,6 +690,24 @@ mod tests {
         let mut m = serde_json::json!({ "hook_event_name": "post_tool_use" });
         normalize_agent("muse", m.as_object_mut().unwrap());
         assert_eq!(m["hook_event_name"], "PostToolUse");
+    }
+
+    #[test]
+    fn cursor_events_and_workspace_get_the_names_the_island_knows() {
+        let mut m = serde_json::json!({
+            "hook_event_name": "beforeSubmitPrompt", "conversation_id": "c-1", "workspace_roots": ["C:/proj"]
+        });
+        normalize_agent("cursor", m.as_object_mut().unwrap());
+        assert_eq!(m["hook_event_name"], "UserPromptSubmit");
+        assert_eq!(m["session_id"], "c-1");
+        assert_eq!(m["cwd"], "C:/proj");
+
+        let mut m = serde_json::json!({ "hook_event_name": "stop", "status": "error" });
+        normalize_agent("cursor", m.as_object_mut().unwrap());
+        assert_eq!(m["hook_event_name"], "StopFailure");
+        let mut m = serde_json::json!({ "hook_event_name": "stop", "status": "completed" });
+        normalize_agent("cursor", m.as_object_mut().unwrap());
+        assert_eq!(m["hook_event_name"], "Stop");
     }
 
     #[test]

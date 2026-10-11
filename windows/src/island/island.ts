@@ -122,7 +122,8 @@ export class Island {
     const req = State.pendingApproval;
     void Bridge.log(`decide ${d} req=${req?.requestId ?? "none"}`);
     if (!req) return;
-    Recap.decision("integration_claude", d);
+    const pill = req.agentId ?? "integration_claude";
+    Recap.decision(pill, d);
     Sound.play(d === "deny" ? "blip" : "approve");
     if (d === "always" && req.rule) {
       // The person just clicked "Always": that click is what creates the rule.
@@ -133,8 +134,8 @@ export class Island {
     State.pendingApproval = null;
     State.isPinned = false;
     this.fsm.pinned = false;
-    State.updateTask("integration_claude", "working");
-    State.setPillBadge("integration_claude", null);
+    State.updateTask(pill, "working");
+    State.setPillBadge(pill, null);
     this.setView(State.defaultView());
   }
 

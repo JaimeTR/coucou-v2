@@ -42,6 +42,8 @@ export interface ApprovalInfo {
   command: string;
   /** What the "Always" button would remember; null when this request cannot be. */
   rule?: RuleDraft | null;
+  /** The pill the request belongs to; absent means Claude Code. */
+  agentId?: string;
 }
 
 /** One question from Claude (AskUserQuestion): 2–4 options, optionally several. */
@@ -120,6 +122,10 @@ export const INTEGRATION_AGENTS: AgentTask[] = [
   task("agent_opencode", "OpenCode", "#FACC15", "agent"),
   task("agent_copilot", "Copilot CLI", "#818CF8", "agent"),
   task("agent_muse", "Muse Code", "#38BDF8", "agent"),
+  task("agent_codex", "Codex", "#10A37F", "agent"),
+  task("agent_cursor", "Cursor Agent", "#F54E00", "agent"),
+  task("agent_amp", "Amp", "#F34E3F", "agent"),
+  task("agent_hermes", "Hermes Agent", "#C084FC", "agent"),
   // VS Code has its own pill: its projects, and the long commands of its terminal.
   task("agent_vscode", "VS Code", "#2DA8F5", "agent"),
 ];
@@ -127,11 +133,14 @@ export const INTEGRATION_AGENTS: AgentTask[] = [
 export const TOGGLEABLE_INTEGRATION_IDS = [
   "integration_resend", "integration_vercel", "integration_github",
   "integration_notion", "integration_calcom", "integration_stripe",
-  "agent_gemini", "agent_opencode", "agent_copilot", "agent_muse", "agent_vscode", "integration_system",
+  "agent_gemini", "agent_opencode", "agent_copilot", "agent_muse", "agent_codex", "agent_cursor", "agent_amp", "agent_hermes",
+  "agent_vscode", "integration_system",
 ];
 
 /** The agents that have a pill of their own to switch on in Settings. */
-export const KNOWN_AGENT_IDS = ["agent_gemini", "agent_opencode", "agent_copilot", "agent_muse", "agent_vscode"];
+export const KNOWN_AGENT_IDS = [
+  "agent_gemini", "agent_opencode", "agent_copilot", "agent_muse", "agent_codex", "agent_cursor", "agent_amp", "agent_hermes", "agent_vscode",
+];
 
 /** A project folder, as listed on the Claude Code and VS Code cards. */
 export interface ProjectInfo {

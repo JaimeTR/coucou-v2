@@ -28,12 +28,17 @@ pub const OPENCODE: &str = "opencode";
 pub const VSCODE: &str = "vscode";
 pub const COPILOT: &str = "copilot";
 pub const MUSE: &str = "muse";
+pub const CODEX: &str = "codex";
+pub const CURSOR: &str = "cursor";
+pub const AMP: &str = "amp";
+pub const HERMES: &str = "hermes";
 
 /// Markers for the files and blocks that are ours. (Gemini's hook entries are
 /// recognised the same way as Claude's: by the relay's name in the command.)
 const PROFILE_START: &str = "# >>> coucou >>>";
 const PROFILE_END: &str = "# <<< coucou <<<";
 const PLUGIN_MARKER: &str = "// coucou-managed";
+const PY_MARKER: &str = "# coucou-managed";
 
 /// Gemini CLI's hook events (the relay renames them for the island). Timeout is
 /// in milliseconds there, and the relay answers well inside it.
@@ -53,6 +58,20 @@ const COPILOT_EVENTS: &[(&str, u64)] = &[
 const MUSE_EVENTS: &[(&str, u64)] = &[
     ("SessionStart", 10), ("UserPromptSubmit", 5), ("PreToolUse", 5), ("PermissionRequest", 120),
     ("PostToolUse", 5), ("Stop", 5), ("SessionEnd", 3),
+];
+
+/// Codex's events (timeouts in seconds). A permission waits for a click; the
+/// status line tells the person, in Codex's own terminal, where to answer.
+const CODEX_EVENTS: &[(&str, u64)] = &[
+    ("SessionStart", 10), ("UserPromptSubmit", 10), ("PreToolUse", 10), ("PermissionRequest", 120),
+    ("PostToolUse", 10), ("Stop", 10), ("SubagentStart", 10), ("SubagentStop", 10), ("Interrupt", 3),
+    ("SessionEnd", 3),
+];
+const CODEX_WAITING: &str = "Esperando tu respuesta en la isla (Coucou)";
+
+/// Cursor Agent's events (camelCase). Cursor only reports; it never waits for a decision.
+const CURSOR_EVENTS: &[&str] = &[
+    "sessionStart", "sessionEnd", "beforeSubmitPrompt", "preToolUse", "postToolUse", "postToolUseFailure", "stop",
 ];
 
 #[derive(Serialize)]
@@ -76,6 +95,15 @@ enum Kind {
     CopilotHooks,
     /// ~/.config/muse/settings.json: merged, like Gemini's.
     MuseSettings,
+    /// ~/.codex/hooks.json: Claude-style groups, merged.
+    CodexHooks,
+    /// ~/.cursor/hooks.json: flat entries per event, merged.
+    CursorHooks,
+    /// ~/.config/amp/plugins/coucou.ts: a file of ours.
+    AmpPlugin,
+    /// ~/.hermes/plugins/coucou/__init__.py and plugin.yaml: files of ours.
+    HermesPlugin,
+    HermesManifest,
     PowerShellProfile,
 }
 
@@ -154,6 +182,19 @@ fn targets(id: &str) -> Result<Vec<Target>, String> {
             kind: Kind::CopilotHooks,
         }]),
         MUSE => Ok(vec![Target { path: home().join(".config").join("muse").join("settings.json"), kind: Kind::MuseSettings }]),
+        CODEX => Ok(vec![Target { path: home().join(".codex").join("hooks.json"), kind: Kind::CodexHooks }]),
+        CURSOR => Ok(vec![Target { path: home().join(".cursor").join("hooks.json"), kind: Kind::CursorHooks }]),
+        AMP => Ok(vec![Target {
+            path: home().join(".config").join("amp").join("plugins").join("coucou.ts"),
+            kind: Kind::AmpPlugin,
+        }]),
+        HERMES => {
+            let dir = home().join(".hermes").join("plugins").join("coucou");
+            Ok(vec![
+                Target { path: dir.join("__init__.py"), kind: Kind::HermesPlugin },
+                Target { path: dir.join("plugin.yaml"), kind: Kind::HermesManifest },
+            ])
+        }
         other => Err(format!("agente desconocido {other}")),
     }
 }
@@ -240,6 +281,162 @@ fn muse_merged(existing: &Value) -> Value {
     root.insert("hooks".into(), Value::Object(hooks));
     root.entry("schema_version").or_insert(json!(1));
     Value::Object(root)
+}
+
+fn codex_merged(existing: &Value) -> Value {
+    let mut root = existing.as_object().cloned().unwrap_or_default();
+    let mut hooks = root.get("hooks").and_then(Value::as_object).cloned().unwrap_or_default();
+    for (event, secs) in CODEX_EVENTS {
+        let mut list = hooks.get(*event).and_then(Value::as_array).cloned().unwrap_or_default();
+        list.retain(|entry| !hooks::entry_is_ours(entry));
+        let mut hook = json!({
+            "type": "command",
+            "command": format!("\"{}\" --agent codex", exe()),
+            "timeout": secs,
+        });
+        if *event == "PermissionRequest" {
+            hook["statusMessage"] = json!(CODEX_WAITING);
+        }
+        list.push(json!({ "hooks": [hook] }));
+        hooks.insert((*event).to_string(), Value::Array(list));
+    }
+    root.insert("hooks".into(), Value::Object(hooks));
+    Value::Object(root)
+}
+
+fn cursor_merged(existing: &Value) -> Value {
+    let mut root = existing.as_object().cloned().unwrap_or_default();
+    let mut hooks = root.get("hooks").and_then(Value::as_object).cloned().unwrap_or_default();
+    for event in CURSOR_EVENTS {
+        let mut list = hooks.get(*event).and_then(Value::as_array).cloned().unwrap_or_default();
+        list.retain(|entry| !hooks::entry_is_ours(entry));
+        list.push(json!({ "command": format!("\"{}\" --agent cursor", exe()) }));
+        hooks.insert((*event).to_string(), Value::Array(list));
+    }
+    root.insert("hooks".into(), Value::Object(hooks));
+    root.entry("version").or_insert(json!(1));
+    Value::Object(root)
+}
+
+const HERMES_MANIFEST: &str = "# coucou-managed\nname: coucou\nversion: \"1.0\"\ndescription: Isla de Coucou\n";
+
+/// A JSON string is also a valid string literal in TypeScript and Python.
+fn hook_literal() -> String {
+    serde_json::to_string(&exe()).unwrap_or_default()
+}
+
+/// The Amp plugin: Amp's events go to the relay without waiting. Display only.
+fn amp_plugin_source() -> String {
+    format!(
+        r#"{PLUGIN_MARKER} — escrito por Coucou (Ajustes → Agentes). Usa Desconectar allí, o borra este archivo, para quitarlo.
+// Reenvía los eventos de Amp al relé de Coucou (coucou-hook), sin esperar: Amp nunca decide nada aquí.
+import {{ spawn }} from 'node:child_process';
+
+const HOOK = {hook};
+
+function forward(hook_event_name: string, fields: Record<string, unknown>): void {{
+  try {{
+    const p = spawn(HOOK, ['--agent', 'amp'], {{
+      stdio: ['pipe', 'ignore', 'ignore'],
+      detached: process.platform !== 'win32',
+      windowsHide: true,
+    }});
+    p.on('error', () => {{}});
+    p.stdin?.on('error', () => {{}});
+    p.stdin?.end(JSON.stringify({{ hook_event_name, ...fields }}) + '\n');
+    p.unref();
+  }} catch {{}}
+}}
+
+export default function (amp: any): void {{
+  const session = (e: any) => ({{ session_id: e?.thread?.id ?? '' }});
+  amp.on('session.start', (e: any) => {{ forward('SessionStart', session(e)); }});
+  amp.on('agent.start', (e: any) => {{
+    forward('UserPromptSubmit', {{ ...session(e), prompt: typeof e?.message === 'string' ? e.message : '' }});
+  }});
+  // One step per tool once it has run: listening to tool.call would mean returning a verdict for Amp.
+  amp.on('tool.result', (e: any) => {{
+    forward('PreToolUse', {{ ...session(e), tool_name: typeof e?.tool === 'string' ? e.tool : '', tool_input: e?.input ?? null }});
+  }});
+  amp.on('agent.end', (e: any) => {{ forward('Stop', {{ ...session(e), status: e?.status ?? '' }}); }});
+}}
+"#,
+        hook = hook_literal()
+    )
+}
+
+/// The Hermes plugin: session and tool events to the relay, fire-and-forget.
+/// Hermes keeps every approval decision to itself.
+fn hermes_plugin_source() -> String {
+    format!(
+        r#"{PY_MARKER} — escrito por Coucou (Ajustes → Agentes). Usa Desconectar allí para quitarlo.
+# Los eventos de sesión y de herramientas van al relé de Coucou (coucou-hook), sin esperar.
+import json, os, subprocess, threading
+
+HOOK = {hook}
+_current_session_id = ''
+
+
+def _fire(fields):
+    def _run():
+        try:
+            extra = {{'start_new_session': True}} if os.name != 'nt' else {{
+                'creationflags': getattr(subprocess, 'CREATE_NO_WINDOW', 0)}}
+            p = subprocess.Popen([HOOK, '--agent', 'hermes'], stdin=subprocess.PIPE,
+                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **extra)
+            p.stdin.write(json.dumps(fields).encode() + b'\n')
+            p.stdin.close()
+            p.wait(timeout=5)
+        except Exception:
+            pass
+    threading.Thread(target=_run, daemon=True).start()
+
+
+def register(ctx):
+    def on_session_start(**kwargs):
+        global _current_session_id
+        sid = kwargs.get('session_id', '')
+        _current_session_id = sid
+        _fire({{'hook_event_name': 'SessionStart', 'session_id': sid,
+               'platform': kwargs.get('platform', 'cli') or 'cli'}})
+
+    def on_session_end(**kwargs):
+        if kwargs.get('interrupted'):
+            _fire({{'hook_event_name': 'StopFailure', 'session_id': kwargs.get('session_id', '')}})
+
+    def post_llm_call(**kwargs):
+        _fire({{'hook_event_name': 'Stop',
+               'session_id': kwargs.get('session_id', '') or _current_session_id,
+               'last_assistant_message': kwargs.get('assistant_response', '')}})
+
+    def pre_tool_call(**kwargs):
+        _fire({{'hook_event_name': 'PreToolUse',
+               'session_id': kwargs.get('session_id', '') or _current_session_id,
+               'tool_name': kwargs.get('tool_name', ''),
+               'tool_input': kwargs.get('args') or {{}}}})
+
+    def post_tool_call(**kwargs):
+        _fire({{'hook_event_name': 'PostToolUse',
+               'session_id': kwargs.get('session_id', '') or _current_session_id,
+               'tool_name': kwargs.get('tool_name', '')}})
+
+    def pre_approval_request(**kwargs):
+        # Observer only: Hermes asks and decides; the island just says so.
+        _fire({{'hook_event_name': 'PreToolUse',
+               'session_id': kwargs.get('session_key', '') or _current_session_id,
+               'tool_name': '⏳ Aprobación pendiente en Hermes',
+               'tool_input': {{'command': kwargs.get('command', ''),
+                              'description': kwargs.get('description', '')}}}})
+
+    ctx.register_hook('on_session_start', on_session_start)
+    ctx.register_hook('on_session_end', on_session_end)
+    ctx.register_hook('post_llm_call', post_llm_call)
+    ctx.register_hook('pre_tool_call', pre_tool_call)
+    ctx.register_hook('post_tool_call', post_tool_call)
+    ctx.register_hook('pre_approval_request', pre_approval_request)
+"#,
+        hook = hook_literal()
+    )
 }
 
 /// The OpenCode plugin. It renames OpenCode's events and tools to the ones the
@@ -390,7 +587,19 @@ fn without_block(text: &str) -> String {
 /// should not exist at all.
 fn render(kind: Kind, install: bool, path: &Path, current: &Content) -> Result<Option<String>, String> {
     match kind {
-        Kind::GeminiSettings | Kind::MuseSettings => {
+        Kind::AmpPlugin | Kind::HermesPlugin | Kind::HermesManifest => match (&current.text, install) {
+            (Some(text), _) if !(text.contains(PLUGIN_MARKER) || text.contains(PY_MARKER)) => Err(format!(
+                "{} ya existe y no es de Coucou. Renómbralo o quítalo primero.",
+                path.display()
+            )),
+            (_, true) => Ok(Some(match kind {
+                Kind::AmpPlugin => amp_plugin_source(),
+                Kind::HermesPlugin => hermes_plugin_source(),
+                _ => HERMES_MANIFEST.to_string(),
+            })),
+            (_, false) => Ok(None),
+        },
+        Kind::GeminiSettings | Kind::MuseSettings | Kind::CodexHooks | Kind::CursorHooks => {
             let existing = hooks::parse_settings(
                 current.text.as_deref().unwrap_or("").as_bytes(),
                 &path.display().to_string(),
@@ -400,6 +609,8 @@ fn render(kind: Kind, install: bool, path: &Path, current: &Content) -> Result<O
             }
             let next = match (install, kind) {
                 (true, Kind::MuseSettings) => muse_merged(&existing),
+                (true, Kind::CodexHooks) => codex_merged(&existing),
+                (true, Kind::CursorHooks) => cursor_merged(&existing),
                 (true, _) => gemini_merged(&existing),
                 (false, _) => hooks::without_ours(&existing),
             };
@@ -448,7 +659,9 @@ fn render(kind: Kind, install: bool, path: &Path, current: &Content) -> Result<O
 
 fn is_installed(kind: Kind, text: &str) -> bool {
     match kind {
-        Kind::GeminiSettings | Kind::MuseSettings => serde_json::from_str::<Value>(text)
+        Kind::AmpPlugin => text.contains(PLUGIN_MARKER),
+        Kind::HermesPlugin | Kind::HermesManifest => text.contains(PY_MARKER),
+        Kind::GeminiSettings | Kind::MuseSettings | Kind::CodexHooks | Kind::CursorHooks => serde_json::from_str::<Value>(text)
             .ok()
             .and_then(|v| v.get("hooks").cloned())
             .and_then(|h| h.as_object().cloned())
@@ -502,6 +715,34 @@ pub fn status() -> Vec<AgentStatus> {
             detected: home.join(".config").join("muse").is_dir() || on_path("muse"),
             installed: installed(MUSE),
             target: home.join(".config").join("muse").join("settings.json").to_string_lossy().to_string(),
+        },
+        AgentStatus {
+            id: CODEX,
+            name: "Codex",
+            detected: home.join(".codex").is_dir() || on_path("codex"),
+            installed: installed(CODEX),
+            target: home.join(".codex").join("hooks.json").to_string_lossy().to_string(),
+        },
+        AgentStatus {
+            id: CURSOR,
+            name: "Cursor Agent",
+            detected: home.join(".cursor").is_dir() || on_path("cursor") || on_path("cursor-agent"),
+            installed: installed(CURSOR),
+            target: home.join(".cursor").join("hooks.json").to_string_lossy().to_string(),
+        },
+        AgentStatus {
+            id: AMP,
+            name: "Amp",
+            detected: home.join(".config").join("amp").is_dir() || on_path("amp"),
+            installed: installed(AMP),
+            target: home.join(".config").join("amp").join("plugins").join("coucou.ts").to_string_lossy().to_string(),
+        },
+        AgentStatus {
+            id: HERMES,
+            name: "Hermes Agent",
+            detected: home.join(".hermes").is_dir() || on_path("hermes"),
+            installed: installed(HERMES),
+            target: home.join(".hermes").join("plugins").join("coucou").to_string_lossy().to_string(),
         },
         AgentStatus {
             id: VSCODE,
@@ -702,6 +943,67 @@ mod tests {
                 Err(e) => println!("preview refused: {e}\n"),
             }
         }
+    }
+
+    fn installed_text(kind: Kind, existing: Option<&str>) -> String {
+        let content = Content { text: existing.map(str::to_string), bom: false };
+        render(kind, true, Path::new("x"), &content).unwrap().unwrap()
+    }
+
+    #[test]
+    fn codex_hooks_are_merged_and_removed_without_touching_the_rest() {
+        let mine = r#"{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"other-tool"}]}]}}"#;
+        let text = installed_text(Kind::CodexHooks, Some(mine));
+        let v: Value = serde_json::from_str(&text).unwrap();
+        assert!(is_installed(Kind::CodexHooks, &text));
+        assert_eq!(v["hooks"]["Stop"].as_array().unwrap().len(), 2, "the other tool's hook stays");
+        assert_eq!(v["hooks"]["PermissionRequest"][0]["hooks"][0]["timeout"], 120);
+        assert!(v["hooks"]["PermissionRequest"][0]["hooks"][0]["statusMessage"].is_string());
+        assert!(v["hooks"]["PreToolUse"][0]["hooks"][0]["command"].as_str().unwrap().contains("--agent codex"));
+        // Connecting twice does not duplicate.
+        let again = installed_text(Kind::CodexHooks, Some(&text));
+        let v2: Value = serde_json::from_str(&again).unwrap();
+        assert_eq!(v2["hooks"]["Stop"].as_array().unwrap().len(), 2);
+        // Removing leaves exactly the other tool's hook.
+        let removed = render(Kind::CodexHooks, false, Path::new("x"), &Content { text: Some(text), bom: false })
+            .unwrap()
+            .unwrap();
+        assert_eq!(serde_json::from_str::<Value>(&removed).unwrap(), serde_json::from_str::<Value>(mine).unwrap());
+    }
+
+    #[test]
+    fn cursor_hooks_are_flat_entries_and_leave_other_tools_alone() {
+        let mine = r#"{"version":1,"hooks":{"stop":[{"command":"other"}]}}"#;
+        let text = installed_text(Kind::CursorHooks, Some(mine));
+        let v: Value = serde_json::from_str(&text).unwrap();
+        assert!(is_installed(Kind::CursorHooks, &text));
+        assert_eq!(v["hooks"]["stop"].as_array().unwrap().len(), 2);
+        assert_eq!(v["hooks"]["preToolUse"].as_array().unwrap().len(), 1);
+        assert_eq!(v["version"], 1);
+        let removed = render(Kind::CursorHooks, false, Path::new("x"), &Content { text: Some(text), bom: false })
+            .unwrap()
+            .unwrap();
+        assert_eq!(serde_json::from_str::<Value>(&removed).unwrap(), serde_json::from_str::<Value>(mine).unwrap());
+    }
+
+    #[test]
+    fn amp_and_hermes_plugins_are_ours_alone() {
+        let amp = installed_text(Kind::AmpPlugin, None);
+        assert!(is_installed(Kind::AmpPlugin, &amp));
+        assert!(amp.contains("'--agent', 'amp'") && amp.contains("tool.result"));
+        let hermes = installed_text(Kind::HermesPlugin, None);
+        assert!(is_installed(Kind::HermesPlugin, &hermes));
+        assert!(hermes.contains("'--agent', 'hermes'") && hermes.contains("def register(ctx)"));
+        assert!(is_installed(Kind::HermesManifest, &installed_text(Kind::HermesManifest, None)));
+        // A file with that name that is not ours is refused, never overwritten.
+        for kind in [Kind::AmpPlugin, Kind::HermesPlugin, Kind::HermesManifest] {
+            let theirs = Content { text: Some("their own plugin".into()), bom: false };
+            assert!(render(kind, true, Path::new("x"), &theirs).is_err());
+            assert!(render(kind, false, Path::new("x"), &theirs).is_err());
+        }
+        // Uninstall removes the file.
+        let ours = Content { text: Some(amp), bom: false };
+        assert_eq!(render(Kind::AmpPlugin, false, Path::new("x"), &ours).unwrap(), None);
     }
 
     #[test]
