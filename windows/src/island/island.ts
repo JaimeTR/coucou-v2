@@ -26,6 +26,7 @@ import { IslandStateMachine } from "./fsm";
 import { endQuestion, Recap } from "./hooks";
 import { startMusic } from "./music";
 import { startSpotify } from "./spotify";
+import { refreshCodexPlan } from "./integrations";
 import { isDock, placement, undockNudge } from "./dock";
 import { isOutfit, resolve, wear } from "../mochi/outfits";
 import { greetingLines } from "./greetingText";
@@ -186,6 +187,7 @@ export class Island {
         Sound.play("blip");
         // Their project lists change as you work: look again when one is opened.
         if (id === "integration_claude" || id.startsWith("agent_")) void refreshProjects();
+        if (id === "agent_codex") void refreshCodexPlan();
       },
       openTerminal: () => this.openSessionTerminal(),
       // The ↗ button — same targets as openAgentTarget() on macOS.

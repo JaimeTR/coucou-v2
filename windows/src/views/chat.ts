@@ -3,6 +3,7 @@
 
 import { h, svg, clear } from "./dom";
 import { ICONS } from "./icons";
+import { renderMarkdown } from "./markdown";
 import { Bridge, type ChatContext } from "../core/bridge";
 import { Sound } from "../core/sound";
 import { speak, speakAuto, stopSpeaking, voiceAvailable } from "../core/voice";
@@ -23,7 +24,8 @@ function bubble(message: ChatMessage): HTMLElement {
       h("div", { class: "bubble", text: message.content }),
     );
   }
-  const reply = h("div", { class: "reply", text: message.content });
+  const reply = h("div", { class: "reply" });
+  renderMarkdown(reply, message.content);
   if (!voiceAvailable()) return h("div", { class: "chat-row" }, reply);
   const listen = h(
     "button",

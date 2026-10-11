@@ -29,7 +29,7 @@ Aprueba los permisos de Claude Code, mira trabajar tu sesión, suelta un archivo
 
 ## Novedades de la v2
 
-Coucou v2 convierte a Mochi en un pequeño asistente personal. Todo lo de abajo es nuevo respecto a la app original; la lista completa está en [CHANGELOG.es.md](CHANGELOG.es.md). **Versión actual: 1.0.0** (8 de octubre de 2026), la primera estable.
+Coucou v2 convierte a Mochi en un pequeño asistente personal. Todo lo de abajo es nuevo respecto a la app original; la lista completa está en [CHANGELOG.es.md](CHANGELOG.es.md). **Versión actual: 1.1.0** (10 de octubre de 2026).
 
 | | |
 |---|---|
@@ -52,6 +52,14 @@ Coucou v2 convierte a Mochi en un pequeño asistente personal. Todo lo de abajo 
 | **Atajos globales** | `Ctrl+Alt+Y` permitir · `Ctrl+Alt+N` denegar (solo mientras hay una petición) · `Ctrl+Alt+C` abrir o cerrar la isla; este último lo cambias tú (una tecla como `F8`, o dos como `Ctrl+Espacio`) en Ajustes → General → "Abrir Coucou con". |
 | **Notificaciones de Windows** | Un aviso cuando Claude pide permiso, pregunta algo o termina mientras la isla está cerrada. |
 | **Chat con Claude, DEVMARK AI, Gemini o Groq** | Elige quién responde en Ajustes → Proveedor de chat. DEVMARK AI es el modelo privado de la empresa (ver [abajo](#devmark-ai-proveedor-de-chat)); Gemini y Groq usan tu propia clave. Si el proveedor retira el modelo configurado, Coucou usa otro que tu clave pueda usar. |
+| **Pill de Spotify** | La canción, su portada, el progreso y pausa/anterior/siguiente, leídos de los controles multimedia de Windows (sin clave ni cuenta). Solo funciona si lo activas (Ajustes → Integraciones) y no pregunta nada mientras la isla está escondida. |
+| **Más agentes** | **Codex** (con Permitir / Denegar en la isla y los límites de su plan), **Cursor Agent**, **Amp** y **Hermes Agent**, cada uno con su pill; las sesiones que empiezas en la **app de Claude** tienen su pill **Claude Desktop**. Copilot CLI y Muse Code también se permiten o deniegan desde la isla. |
+| **OpenAI y OpenRouter** | Dos proveedores de chat más (Ajustes → Proveedor de chat), con tu propia clave. |
+| **Respuestas en Markdown** | El chat muestra listas, **negritas**, `código` y bloques de código con botón de copiar; los enlaces solo abren si son http(s). |
+| **Abrir al pasar el puntero** | Opcional: la isla se abre al llegar el puntero y se pliega poco después de irse; un clic dentro la mantiene abierta. |
+| **Tus propios sonidos** | Un archivo con el nombre de un sonido de Mochi (`finish.wav`, `approval.mp3`, `greet.m4a`…) en la carpeta de sonidos lo reemplaza (Ajustes → General → Abrir carpeta de sonidos, Recargar sonidos). |
+| **Un color para cada pill** | Haz clic en el punto de color de un pill en Ajustes para elegir el tuyo; doble clic para volver al original. |
+| **Teclado** | `Ctrl+Alt+D` saca a Mochi al borde de la pantalla y lo trae de vuelta. En la isla abierta: `Ctrl+↓` / `Ctrl+↑` recorren las listas de GitHub, `Ctrl+O` abre la fila, `Ctrl+E` el último diff. |
 | **Modelos locales** | **Ollama** y **LM Studio** como proveedor de chat: gratis, sin clave, y nada sale de tu red. |
 | **Mochi, la mascota traviesa** | Opcional (Ajustes → Mascota y Personalización). De vez en cuando se asoma por los bordes de la pantalla, hace una travesura (saludar, mirar, dormirse y despertar asustado, esconderse y salir en otro sitio, mandar corazones) y se esconde. Se enfada si le haces clic y no aparece sobre juegos, vídeos a pantalla completa ni con Coucou en pausa. |
 | **Mochi habla y te anima** | Cuando se asoma dice algo que encaja con lo que haces: ánimo mientras trabajas con un agente, aviso cuando uno termina o falla, comentarios con la música, descanso de madrugada, «estira las piernas» si llevas mucho rato. En un globo y, si quieres, en voz alta. Personalizas el nombre de su amigo, tus propias frases por tema (`{name}`, `{friend}`, `{minutes}`) y si usa solo las tuyas. Dice también lo que siente (clic, mareo, cariño) y avisa de errores, deploys y CI que fallan. |
@@ -189,12 +197,17 @@ Cada uno se conecta en **Ajustes → Agentes** (ves el diff exacto, se hace una 
 | Claude Code | `%USERPROFILE%\.claude\settings.json` (Ajustes → Claude Code) | Permitir / Denegar en la isla |
 | Gemini CLI | `%USERPROFILE%\.gemini\settings.json` | en su terminal |
 | OpenCode | `%USERPROFILE%\.config\opencode\plugins\coucou.js` | en su terminal |
-| Copilot CLI | `%USERPROFILE%\.copilot\hooks\coucou.json` | en su terminal (el relay responde `ask`) |
-| Muse Code | `%USERPROFILE%\.config\muse\settings.json` | en su terminal |
+| Copilot CLI | `%USERPROFILE%\.copilot\hooks\coucou.json` | Permitir / Denegar en la isla (sin respuesta el relay dice `ask`) |
+| Muse Code | `%USERPROFILE%\.config\muse\settings.json` | Permitir / Denegar en la isla |
+| Codex | `%USERPROFILE%\.codex\hooks.json` | Permitir / Denegar en la isla |
+| Cursor Agent | `%USERPROFILE%\.cursor\hooks.json` | en Cursor |
+| Amp | `%USERPROFILE%\.config\amp\plugins\coucou.ts` | en Amp (solo muestra) |
+| Hermes Agent | `%USERPROFILE%\.hermes\plugins\coucou\` (luego `hermes plugins enable coucou`) | en Hermes (solo muestra) |
+| Claude Desktop | nada que instalar: los hooks de Claude Code marcan las sesiones que empiezan en la app de Claude | en la app de Claude |
 | VS Code | un bloque marcado en tu perfil de PowerShell (solo la terminal de VS Code) | — |
 | Cualquier otro | `coucou-hook.exe --agent <nombre> <Evento>` desde sus hooks | en su terminal |
 
-Amp, por ahora, solo en Mac.
+Amp, Hermes y Cursor solo muestran lo que hacen: nunca esperan a la isla. Codex además muestra los límites de su plan (5 horas y semana) en su tarjeta.
 
 **Isla en modo libre o fija:** Ajustes → General → Posición de la isla: fija arriba al centro o libre (arrástrala a donde quieras).
 

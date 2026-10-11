@@ -4,6 +4,29 @@
 
 Coucou v2 es el fork de [JaimeTR](https://github.com/JaimeTR) de [Coucou, de Louis Raillé](https://github.com/Louis-CFM/coucou) (MIT). Las notas de la versión de macOS siguen en el [CHANGELOG.md](../CHANGELOG.md) de la raíz.
 
+## 1.1.0 — 10 de octubre de 2026
+
+**Lo que el Coucou original añadió después de nuestro fork, traído a Windows y Linux** (los idiomas siguen siendo español e inglés; la voz de Mac y las sesiones de terminal de Mac no están aquí).
+
+Pills y agentes nuevos
+- Pill de **Spotify**: canción, portada, progreso y controles, leídos de los controles multimedia de Windows.
+- **Codex** (hooks en `~/.codex/hooks.json`): sesiones en su pill, Permitir / Denegar en la isla y los límites de su plan, que se piden al propio CLI de Codex mientras su tarjeta está abierta.
+- **Cursor Agent** (`~/.cursor/hooks.json`), **Amp** (plugin) y **Hermes Agent** (plugin, que se activa una vez con `hermes plugins enable coucou`): sus sesiones en su propio pill, solo para mostrar.
+- Pill **Claude Desktop**: las sesiones que empiezas desde la app de Claude (el relay las marca con `CLAUDE_CODE_ENTRYPOINT`); «Abrir Claude» trae la app al frente.
+- Permitir / Denegar en la isla ahora también sirve para **Copilot CLI** y **Muse Code**; un agente que pide permiso se trae al frente.
+
+Chat
+- **OpenAI** y **OpenRouter** como proveedores de chat (los modelos nuevos de OpenAI reciben `max_completion_tokens`).
+- Respuestas en **Markdown** con botón de copiar en los bloques de código; a los modelos se les dice que pueden usar Markdown ligero.
+
+Isla
+- **Abrir al pasar el puntero**, **tus propios sonidos**, **un color propio para cada pill**, `Ctrl+Alt+D` para la mascota y atajos de teclado en la isla abierta (`Ctrl+↑/↓`, `Ctrl+O`, `Ctrl+E`).
+
+Arreglos (encontrados al probarlo)
+- La isla se quedaba escondida para siempre: un id de Steam viejo (Steam cerrado) se leía como un juego, el estado «ocupado» de Windows (cualquier ventana a pantalla completa, como la app de Claude) se leía como un juego, y una cámara que una utilidad deja abierta todo el día (OBSBOT Center) se leía como una reunión. Ahora solo cuentan una pantalla completa D3D real, un juego que corre o el micrófono.
+
+No se trajo: los otros ocho idiomas, la voz de Mac («OK Coucou») y el correo por voz, las sesiones de terminal de Warp e iTerm, el portal de atajos de Wayland y Spotify en Linux (MPRIS), ni la imagen compartible del resumen semanal.
+
 ## 1.0.0 — 8 de octubre de 2026
 
 **Primera versión estable.** Todo lo de 0.3.x más:

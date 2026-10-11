@@ -8,7 +8,9 @@ import { h, svg, clear, dot } from "./dom";
 import { ICONS } from "./icons";
 import { State, type AgentTask, type ProjectInfo } from "../core/state";
 import { Bridge } from "../core/bridge";
-import { miniUsage } from "./plan";
+import { miniUsage, planRows } from "./plan";
+import { codexResetsLabel } from "../core/codexPlan";
+import { refreshCodexPlan } from "../island/integrations";
 import { MODE_CHOICES, MODE_COLORS, MODE_NAMES, modeLabel } from "../core/modes";
 import { clock, positionAt, type SpotifyAction } from "../core/spotify";
 import { refreshSpotify } from "../island/spotify";
@@ -812,6 +814,34 @@ function modeCard(): HTMLElement {
   );
 }
 
+/** Codex: its connection and, from the Codex CLI itself, its plan limits. */
+function codexCard(task: AgentTask, openSettings: () => void): HTMLElement {
+  const connected = State.integrations[task.id]?.configured ?? false;
+  const card = h("div", { class: "int-card" }, header(task.color, task.name, connected ? "Conectado" : "Sin conectar"));
+  if (!connected) {
+    card.append(
+      h("div", { class: "int-status" }, dot("#F4505E", 5), h("span", { text: "Sin conectar" })),
+      h("div", { class: "int-actions" }, h("button", { class: "link-btn", style: "color:#8e939c", text: "Ajustes…", onclick: openSettings })),
+    );
+  } else {
+    card.append(h("div", { class: "int-sub", text: "Las sesiones de Codex salen aquí; Permitir / Denegar se responde en la isla." }));
+  }
+  const plan = State.codexPlan;
+  if (plan) {
+    card.append(planRows(plan));
+    const extra = [plan.planType ? `Plan ${plan.planType}` : "", codexResetsLabel(plan)].filter(Boolean).join(" · ");
+    if (extra) card.append(h("div", { class: "int-sub", text: extra }));
+  } else {
+    card.append(h("div", { class: "int-sub", text: "Preguntando a Codex por sus límites…" }));
+  }
+  card.append(
+    h("div", { class: "int-actions" },
+      h("button", { class: "link-btn", style: `color:${task.color}d9`, text: "Actualizar límites", onclick: () => void refreshCodexPlan(true) }),
+    ),
+  );
+  return card;
+}
+
 /** Claude Code sessions started from the Claude app: shown here, answered in the Claude app. */
 function claudeDesktopCard(task: AgentTask, openSettings: () => void): HTMLElement {
   const connected = State.integrations[task.id]?.configured ?? false;
@@ -836,6 +866,7 @@ export function renderIntegrationCard(task: AgentTask, hooks: IntegrationCardHoo
   if (task.id === "integration_claude") return claudeCard(task, hooks.openSettings);
   if (task.id === "agent_vscode") return vscodeCard(task, hooks.openSettings);
   if (task.id === "agent_claude-desktop") return claudeDesktopCard(task, hooks.openSettings);
+  if (task.id === "agent_codex") return codexCard(task, hooks.openSettings);
   if (task.id.startsWith("custom_")) return customCard(task, hooks.openSettings);
   if (AGENT_LAUNCH[task.id]) return agentCard(task, hooks.openSettings);
   if (task.id === "integration_github" && hasIntegrationData(task.id)) {

@@ -4,6 +4,29 @@
 
 Coucou v2 is [JaimeTR](https://github.com/JaimeTR)'s fork of [Coucou by Louis Raillé](https://github.com/Louis-CFM/coucou) (MIT). The macOS release notes stay in the root [CHANGELOG.md](../CHANGELOG.md).
 
+## 1.1.0 — October 10, 2026
+
+**What the original Coucou added after our fork, brought to Windows and Linux** (languages stay English and Spanish; the Mac-only voice and terminal sessions are not here).
+
+New pills and agents
+- **Spotify** pill: track, cover, progress and controls, read from Windows' media controls.
+- **Codex** (hooks in `~/.codex/hooks.json`): sessions on its pill, Allow / Deny on the island, and the plan limits asked of the Codex CLI itself while its card is open.
+- **Cursor Agent** (`~/.cursor/hooks.json`), **Amp** (plugin) and **Hermes Agent** (plugin, enabled once with `hermes plugins enable coucou`): their sessions on their own pills, display only.
+- **Claude Desktop** pill: sessions started from the Claude app (the relay tags them from `CLAUDE_CODE_ENTRYPOINT`); "Open Claude" brings the app forward.
+- Allow / Deny on the island now also works for **Copilot CLI** and **Muse Code**; an agent asking for permission is brought forward.
+
+Chat
+- **OpenAI** and **OpenRouter** as chat providers (OpenAI's newer models get `max_completion_tokens`).
+- Answers in **Markdown** with a copy button on code blocks; the models are told they may use light Markdown.
+
+Island
+- **Open on hover**, **your own sounds**, **a colour of your own for each pill**, `Ctrl+Alt+D` for the pet, and keyboard shortcuts in the open island (`Ctrl+↑/↓`, `Ctrl+O`, `Ctrl+E`).
+
+Fixes (found by running it)
+- The island stayed hidden for good: a stale Steam id (Steam closed) read as a game, Windows' "busy" state (any full-screen window, like the Claude app) read as a game, and a camera held open all day by a utility (OBSBOT Center) read as a meeting. Now only a real D3D full-screen, a game that is running, or the microphone count.
+
+Not brought over: the other eight languages, the Mac voice ("OK Coucou") and email by voice, terminal sessions in Warp and iTerm, the Wayland shortcuts portal and Linux's Spotify (MPRIS), and the shareable weekly recap image.
+
 ## 1.0.0 — October 8, 2026
 
 **First stable version.** Everything from 0.3.x plus:

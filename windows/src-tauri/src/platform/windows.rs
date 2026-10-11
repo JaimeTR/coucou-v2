@@ -569,6 +569,26 @@ pub fn spotify_control(action: crate::spotify::Action) -> bool {
     on_com_thread(move || spotify_control_inner(action)).unwrap_or(false)
 }
 
+/// Where the Codex CLI may be, best first: %PATH% (codex.exe or npm's codex.cmd),
+/// then npm's global folder and the Volta / Bun / pnpm ones.
+pub fn codex_candidates() -> Vec<PathBuf> {
+    let mut out: Vec<PathBuf> = find_on_path("codex").into_iter().collect();
+    let var = |k: &str| std::env::var_os(k).map(PathBuf::from).filter(|p| p.is_absolute());
+    if let Some(appdata) = var("APPDATA") {
+        out.push(appdata.join("npm").join("codex.cmd"));
+    }
+    if let Some(local) = var("LOCALAPPDATA") {
+        out.push(local.join("Volta").join("bin").join("codex.exe"));
+        out.push(local.join("pnpm").join("codex.cmd"));
+    }
+    if let Some(home) = var("USERPROFILE") {
+        out.push(home.join(".bun").join("bin").join("codex.exe"));
+        out.push(home.join(".local").join("bin").join("codex.exe"));
+    }
+    out.retain(|p| p.is_file());
+    out
+}
+
 pub fn cursor_physical() -> Option<(f64, f64)> {
     let mut p = POINT::default();
     unsafe { GetCursorPos(&mut p).ok()? };

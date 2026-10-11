@@ -43,6 +43,16 @@ export function untilReset(resetsAt: number | null, nowMs = Date.now()): string 
   return `${Math.max(1, minutes)}m`;
 }
 
+/** The two windows as bars, for a card. */
+export function planRows(plan: PlanUsage): HTMLElement {
+  return h(
+    "div",
+    { class: "plan-rows" },
+    windowRow({ short: "5h", long: "Ventana de 5 horas" }, plan.fiveHour),
+    windowRow({ short: "7d", long: "Ventana de 7 días" }, plan.sevenDay),
+  );
+}
+
 function windowRow(label: { short: string; long: string }, w: PlanWindow | null): HTMLElement {
   const percent = planNow(w);
   const color = planColor(percent);

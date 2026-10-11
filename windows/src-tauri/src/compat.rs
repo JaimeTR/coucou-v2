@@ -128,7 +128,7 @@ const MAX_CHARS: usize = 100_000;
 const SYSTEM_PROMPT: &str = "You are Mochi, a personal AI assistant living at the top of the user's screen. \
 You can help with anything: questions, coding, research, recommendations, everyday tasks. \
 Respond in the user's language. Be clear and complete without padding. \
-No markdown formatting (no **, no ##, no bullet dashes). Use plain text with line breaks.";
+Light Markdown is fine (short lists, **bold**, `code`, fenced code blocks); no tables.";
 
 /// Plain-text history, shared by Gemini, Groq and the local model (the conversation starts over
 /// whenever the provider changes, which the app already guarantees).

@@ -24,6 +24,8 @@ export const ICONS = {
   chevronLeft: "M15 5.5 8.5 12 15 18.5",
   // checkmark
   check: "M5 12.5 9.5 17 19 7.5",
+  // doc.on.doc (copy)
+  copy: "M9 3.5h8.5L21 7v10.5H9v-14zm1.8 1.8v10.4h8.4V7.8l-2.5-2.5h-5.9zM3 7.5h4.2v1.8H4.8v10.4h8.4v-2.2H15v4H3v-14z",
   // arrow.up (send)
   arrowUp: "M12 4.5 5.5 11l1.5 1.5 4-4V19.5h2V8.5l4 4L18.5 11 12 4.5z",
   // exclamationmark

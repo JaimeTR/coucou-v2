@@ -1,6 +1,7 @@
 // App state — mirror of AppState.swift (the parts the island needs).
 
 import type { SpotifyState } from "./spotify";
+import type { CodexPlanUsage } from "./codexPlan";
 import type { BotEmoteName, BotStateName, IslandMode, IslandViewName } from "./layout";
 import type { EyeShape } from "../mochi/engine";
 import type { FileDiff } from "../island/diff";
@@ -398,6 +399,8 @@ class AppState {
 
   /** Plan usage from the statusLine relay; null until Claude Code reports it. */
   plan: PlanUsage | null = null;
+  /** Codex's limits, asked of the Codex CLI while its card is on screen. */
+  codexPlan: CodexPlanUsage | null = null;
   /** The header pill was clicked: the plan card replaces the current one. */
   showingPlanDetail = false;
 

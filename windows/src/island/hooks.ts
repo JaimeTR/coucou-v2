@@ -574,7 +574,9 @@ function handleHook(island: Island, payload: HookPayload) {
       State.updateTask(agentId, "approval");
       State.isPinned = true;
       Sound.play("approval");
-      if (focused) {
+      // An agent that asks for permission is brought forward: the card is for it.
+      if (isExternalAgent && !focused) State.setFocus(agentId);
+      if (focused || isExternalAgent) {
         island.alert("approval");
       } else {
         // Another agent holds the view, so the card would yank it away. The badge

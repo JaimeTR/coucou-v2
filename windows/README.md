@@ -29,7 +29,7 @@ Approve Claude Code permissions, watch your session work, drop a file, chat with
 
 ## What's new in v2
 
-Coucou v2 turns Mochi into a small personal assistant. Everything below is new on top of the original app; the full list is in [CHANGELOG.md](CHANGELOG.md).
+Coucou v2 turns Mochi into a small personal assistant. Everything below is new on top of the original app; the full list is in [CHANGELOG.md](CHANGELOG.md). **Current version: 1.1.0** (October 10, 2026).
 
 | | |
 |---|---|
@@ -52,6 +52,14 @@ Coucou v2 turns Mochi into a small personal assistant. Everything below is new o
 | **Global shortcuts** | `Ctrl+Alt+Y` allow · `Ctrl+Alt+N` deny (only while a request is up) · `Ctrl+Alt+C` open or close the island — that last one is yours to change (one key like `F8`, or two like `Ctrl+Space`) in Settings → General → "Abrir Coucou con". |
 | **Windows notifications** | A toast when Claude needs permission, asks something, or finishes while the island is closed. |
 | **Chat with Claude, DEVMARK AI, Gemini or Groq** | Pick who answers under Settings → Proveedor de chat. DEVMARK AI is the company's private model (see [below](#devmark-ai-chat-provider)); Gemini and Groq use your own key. If a provider retires the configured model, Coucou switches to one your key can use. |
+| **Spotify pill** | The track, its cover, progress and play/pause/previous/next, read from Windows' own media controls (no key, no account). It is on only if you switch it on (Settings → Integrations), and asks nothing while the island is hidden. |
+| **More agents** | **Codex** (with Allow / Deny on the island and its plan limits), **Cursor Agent**, **Amp** and **Hermes Agent**, each with its own pill; sessions started from the **Claude app** get a **Claude Desktop** pill. Copilot CLI and Muse Code can now be allowed or denied from the island too. |
+| **OpenAI and OpenRouter** | Two more chat providers (Settings → Chat provider), with your own key. |
+| **Answers in Markdown** | The chat shows lists, **bold**, `code` and code blocks with a copy button; links open only if they are http(s). |
+| **Open on hover** | Optional: the island opens when the pointer reaches it and folds shortly after it leaves; a click inside keeps it open. |
+| **Your own sounds** | A file named like one of Mochi's sounds (`finish.wav`, `approval.mp3`, `greet.m4a`…) in the sounds folder replaces it (Settings → General → Open sounds folder, Reload sounds). |
+| **A colour for each pill** | Click a pill's colour dot in Settings to choose yours; double click to go back. |
+| **Keyboard** | `Ctrl+Alt+D` sends Mochi out to the screen's edge and brings him home. In the open island: `Ctrl+↓` / `Ctrl+↑` move through the GitHub lists, `Ctrl+O` opens the row, `Ctrl+E` the latest diff. |
 | **Local models** | **Ollama** and **LM Studio** as a chat provider: free, no key, and nothing leaves your network. |
 | **Mochi the mischievous pet** | Optional (Settings → Pet and Personalization). Every so often it peeks over the screen's edges, plays a prank (waves, looks around, falls asleep and wakes up scared, hides and pops out elsewhere, sends hearts) and hides again. It gets angry if you click it, and never appears over games, full-screen video or while Coucou is paused. |
 | **Mochi talks and cheers you on** | When it peeks out it says something that fits what you're doing: encouragement while an agent works, a heads-up when one finishes or fails, comments with the music, rest at night, «stretch your legs» after a long stretch. In a bubble and, if you want, out loud. You set its friend's name, your own phrases per topic (`{name}`, `{friend}`, `{minutes}`) and whether it uses only yours. It also says how it feels (click, dizzy, petted) and announces errors, deploys and failing CI. |
@@ -191,12 +199,17 @@ Connect each one in **Settings → Agents** (you see the exact diff first, a dat
 | Claude Code | `%USERPROFILE%\.claude\settings.json` (Settings → Claude Code) | Allow / Deny on the island |
 | Gemini CLI | `%USERPROFILE%\.gemini\settings.json` | in its terminal |
 | OpenCode | `%USERPROFILE%\.config\opencode\plugins\coucou.js` | in its terminal |
-| Copilot CLI | `%USERPROFILE%\.copilot\hooks\coucou.json` | in its terminal (the relay answers `ask`) |
-| Muse Code | `%USERPROFILE%\.config\muse\settings.json` | in its terminal |
+| Copilot CLI | `%USERPROFILE%\.copilot\hooks\coucou.json` | Allow / Deny on the island (without an answer the relay says `ask`) |
+| Muse Code | `%USERPROFILE%\.config\muse\settings.json` | Allow / Deny on the island |
+| Codex | `%USERPROFILE%\.codex\hooks.json` | Allow / Deny on the island |
+| Cursor Agent | `%USERPROFILE%\.cursor\hooks.json` | in Cursor |
+| Amp | `%USERPROFILE%\.config\amp\plugins\coucou.ts` | in Amp (display only) |
+| Hermes Agent | `%USERPROFILE%\.hermes\plugins\coucou\` (then `hermes plugins enable coucou`) | in Hermes (display only) |
+| Claude Desktop | nothing to install: Claude Code's own hooks tag sessions started from the Claude app | in the Claude app |
 | VS Code | a marked block in your PowerShell profile (VS Code's terminal only) | — |
 | Any other | run `coucou-hook.exe --agent <name> <Event>` from its hooks | in its terminal |
 
-Amp is Mac only for now.
+Amp, Hermes and Cursor only show what they do: they never wait for the island. Codex also shows its plan limits (5 hours and week) on its card.
 
 ## What's different from the Mac version
 

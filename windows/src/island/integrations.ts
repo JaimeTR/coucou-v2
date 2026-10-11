@@ -7,6 +7,7 @@ import { Sound } from "../core/sound";
 import { t } from "../core/i18n";
 import { speakAuto } from "../core/voice";
 import { State } from "../core/state";
+import { codexIsStale, parseCodexPlan } from "../core/codexPlan";
 import type { Island } from "./island";
 
 /** Which Credential Manager key backs each pill. */
@@ -60,6 +61,22 @@ export async function refreshConfigured() {
     State.integrations[id] = { ...info, configured: agent.installed };
   }
   State.notify();
+}
+
+let codexInFlight = false;
+
+/** Asks the Codex CLI for its limits: only when the numbers are older than a minute, one at a time. */
+export async function refreshCodexPlan(force = false) {
+  if (codexInFlight || State.paused || (!force && !codexIsStale(State.codexPlan))) return;
+  codexInFlight = true;
+  try {
+    const usage = parseCodexPlan(await Bridge.codexPlanUsage());
+    // A failed ask keeps the last numbers; they get older and say so.
+    if (usage) State.codexPlan = usage;
+  } finally {
+    codexInFlight = false;
+    State.notify();
+  }
 }
 
 function handle(island: Island, update: IntegrationUpdate) {

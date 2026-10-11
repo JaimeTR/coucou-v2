@@ -325,3 +325,8 @@ pub fn spotify_state() -> crate::spotify::SpotifyState {
 pub fn spotify_control(_action: crate::spotify::Action) -> bool {
     false
 }
+
+/// Where the Codex CLI is: on the PATH.
+pub fn codex_candidates() -> Vec<std::path::PathBuf> {
+    find_on_path("codex").into_iter().collect()
+}

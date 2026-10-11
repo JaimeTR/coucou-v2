@@ -2,6 +2,7 @@
 
 mod agents;
 mod claude;
+mod codex_plan;
 mod compat;
 mod custom;
 mod devmark;
@@ -487,6 +488,13 @@ fn open_sounds_folder() {
 #[tauri::command]
 fn reload_sounds(app: AppHandle) {
     let _ = app.emit_to(island::WINDOW_LABEL, "sounds-reload", ());
+}
+
+/// Codex's limits, asked of the Codex CLI itself (see codex_plan.rs); nothing when
+/// Codex is missing, signed out, slow or Coucou is paused.
+#[tauri::command]
+async fn codex_plan_usage() -> Option<serde_json::Value> {
+    tauri::async_runtime::spawn_blocking(codex_plan::read).await.ok().flatten()
 }
 
 #[tauri::command]
@@ -1193,6 +1201,7 @@ pub fn run() {
             custom_sound,
             open_sounds_folder,
             reload_sounds,
+            codex_plan_usage,
             spotify_refresh,
             spotify_control,
             spotify_open,

@@ -100,6 +100,7 @@ export const Bridge = {
   /** True when Spotify took it. `value`: seconds, for a seek. */
   spotifyControl: (action: SpotifyAction, value?: number) =>
     call<boolean>("spotify_control", { action, value: value ?? null }),
+  codexPlanUsage: () => call<unknown>("codex_plan_usage"),
   spotifyOpen: () => call<boolean>("spotify_open"),
   openClaudeDesktop: () => call<boolean>("open_claude_desktop"),
   openInVSCode: (path: string | null) => call<boolean>("open_in_vscode", { path }),
