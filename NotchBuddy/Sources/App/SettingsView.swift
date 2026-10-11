@@ -73,6 +73,16 @@ struct SettingsView: View {
     @State private var showAmpDiff: Bool = false
     @State private var pendingAmpContent: String = ""
     @State private var ampPendingInstall: Bool = true
+
+    @State private var hermesPluginInstalled: Bool = HookServer.hermesPluginInstalled()
+    @State private var showHermesPluginDiff: Bool = false
+    @State private var pendingHermesPluginContent: String = ""
+    @State private var hermesPluginPendingInstall: Bool = true
+
+    @State private var showHermesConfigDiff: Bool = false
+    @State private var pendingHermesConfigContent: String = ""
+    @AppStorage("hermesApprovalsEnabled") private var hermesApprovalsEnabled: Bool = false
+    @State private var hermesSupportsApprovals: Bool = false
     #endif
 
     // Multi-provider chat keys
@@ -114,13 +124,20 @@ struct SettingsView: View {
         )
     }
 
+    // Connected screens for the Display picker, refreshed when screens change
+    @State private var connectedScreens: [(uuid: String, name: String)] = []
+
     // Sidebar selection persisted across sessions
     @AppStorage("settingsSection") private var selectedSection: String = "general"
+    // Active pills: the pill whose colour palette is open, if any
+    @State private var colorPalettePill: String? = nil
     #if PHONE_LINK
     @AppStorage("iPhoneSyncEnabled") private var iPhoneSyncEnabled = false
     @AppStorage("iPhoneLiveActivityEnabled") private var iPhoneLiveActivityEnabled = false
     @AppStorage("iPhoneInstructionsEnabled") private var iPhoneInstructionsEnabled = false
     #endif
+    @AppStorage(ClaudeHost.terminalCardsKey) private var terminalCardsEnabled = false
+    @State private var customSoundCount = SoundEngine.shared.customized.count
 
     private var appVersion: String {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
@@ -160,6 +177,9 @@ struct SettingsView: View {
                         SettingsSidebarRow(title: "Agents",       icon: "terminal.fill",                     color: "#3B9EFF").tag("agents")
                         SettingsSidebarRow(title: "Chat",         icon: "bubble.left.and.bubble.right.fill", color: "#E07950").tag("chat")
                         SettingsSidebarRow(title: "Integrations", icon: "puzzlepiece.extension.fill",        color: "#7C5CFF").tag("integrations")
+                        #if !APPSTORE
+                        SettingsSidebarRow(title: "Voice",        icon: "mic.fill",                          color: "#F97316").tag("voice")
+                        #endif
                         SettingsSidebarRow(title: "Shortcuts",    icon: "keyboard.fill",                     color: "#6366F1").tag("shortcuts")
                     }
                     .listStyle(.sidebar)
@@ -228,6 +248,7 @@ struct SettingsView: View {
         case "agents":       return String(localized: "Agents")
         case "chat":         return String(localized: "Chat")
         case "integrations": return String(localized: "Integrations")
+        case "voice":        return String(localized: "Voice")
         case "shortcuts":    return String(localized: "Shortcuts")
         default:             return String(localized: "General")
         }
@@ -239,6 +260,9 @@ struct SettingsView: View {
         case "agents":       agentsSection
         case "chat":         chatSection
         case "integrations": integrationsSection
+        #if !APPSTORE
+        case "voice":        voiceSection
+        #endif
         case "shortcuts":    ShortcutsSettingsView()
         default:             generalSection
         }
@@ -274,12 +298,32 @@ struct SettingsView: View {
                         .frame(width: 36, alignment: .trailing)
                         .monospacedDigit()
                 }
+                HStack(spacing: 8) {
+                    Button("Open sounds folder") { SoundEngine.shared.revealCustomFolder() }
+                    Button("Reload sounds") {
+                        SoundEngine.shared.reload()
+                        customSoundCount = SoundEngine.shared.customized.count
+                        SoundEngine.shared.play("pop")
+                    }
+                    if customSoundCount > 0 {
+                        Text(String(format: String(localized: "%lld custom"), Int64(customSoundCount)))
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .disabled(!state.soundEnabled)
+                Text("Drop a file named like one of Mochi's sounds (finish.wav, approval.mp3, greet.m4a…) in the sounds folder to replace it, then Reload.")
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             .padding(6)
         }
 
         GroupBox("Behavior") {
             VStack(alignment: .leading, spacing: 10) {
+                Toggle("Open on hover", isOn: $state.openOnHover)
+                    .help("Hovering the island opens it; it folds again shortly after the pointer leaves. Click inside to keep it open.")
                 HStack(spacing: 8) {
                     Text("Close after")
                     TextField("60", value: $state.autoCloseInterval, format: .number)
@@ -296,6 +340,35 @@ struct SettingsView: View {
                 }
             }
             .padding(6)
+        }
+
+        GroupBox("Display") {
+            VStack(alignment: .leading, spacing: 10) {
+                Picker("Show Mochi on", selection: $state.islandDisplay) {
+                    Text("Screen with the notch").tag(IslandDisplayChoice.notch)
+                    Text("Main screen (menu bar)").tag(IslandDisplayChoice.menuBar)
+                    Text("Follow the mouse").tag(IslandDisplayChoice.followMouse)
+                    Divider()
+                    ForEach(connectedScreens, id: \.uuid) { screen in
+                        Text(screen.name).tag(IslandDisplayChoice.display(uuid: screen.uuid))
+                    }
+                    if case .display(let uuid) = state.islandDisplay,
+                       !connectedScreens.contains(where: { $0.uuid == uuid }) {
+                        Text("Saved screen (not connected)").tag(state.islandDisplay)
+                    }
+                }
+                .frame(maxWidth: 360)
+                Text("On a screen without a notch, Mochi sits in a small bar at the top. Follow the mouse moves it to your cursor's screen while it is closed.")
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(6)
+            .onAppear { refreshConnectedScreens() }
+            .onReceive(NotificationCenter.default.publisher(
+                for: NSApplication.didChangeScreenParametersNotification)) { _ in
+                refreshConnectedScreens()
+            }
         }
 
         GroupBox("Hotkey") {
@@ -421,6 +494,13 @@ struct SettingsView: View {
         #endif
     }
 
+    private func refreshConnectedScreens() {
+        connectedScreens = NSScreen.screens.compactMap { screen in
+            guard let uuid = IslandWindowController.displayUUID(screen) else { return nil }
+            return (uuid, screen.localizedName)
+        }
+    }
+
     // MARK: - Active pills section
 
     @ViewBuilder private var activePillsSection: some View {
@@ -440,9 +520,7 @@ struct SettingsView: View {
                     }
                 }
                 .onChange(of: state.mainPillId) { _, newId in
-                    state.activeIntegrations.remove(newId)
-                    state.loadIntegrationTasks()
-                    state.setFocus(newId)
+                    state.setMainPill(newId)
                 }
 
                 ForEach(PillCategory.allCases, id: \.self) { cat in
@@ -502,6 +580,11 @@ struct SettingsView: View {
                         .buttonStyle(.bordered)
                 }
                 #endif
+                Toggle("Answer questions and permissions from terminal sessions in the notch", isOn: $terminalCardsEnabled)
+                Text("Off: sessions in Warp, Terminal, iTerm… show in the notch, but their questions and permission requests are asked in the terminal. On: the notch shows them first, and the terminal waits until you answer there or close the island (up to 2 min).")
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
 
                 #if !APPSTORE
                 if showDiff {
@@ -758,6 +841,87 @@ struct SettingsView: View {
             .padding(6)
         }
 
+        GroupBox(String(localized: "plugin.hermes.title")) {
+            VStack(alignment: .leading, spacing: 10) {
+                Text(hermesPluginInstalled
+                     ? String(localized: "plugin.hermes.installed")
+                     : "~/.hermes/plugins/coucou/__init__.py")
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundColor(.secondary)
+                HStack(spacing: 10) {
+                    if !hermesPluginInstalled {
+                        Button(String(localized: "plugin.install")) { triggerHermesPluginPreview(install: true) }
+                            .buttonStyle(.borderedProminent)
+                    } else {
+                        Button(String(localized: "hooks.uninstall")) { triggerHermesPluginPreview(install: false) }
+                            .buttonStyle(.bordered)
+                    }
+                }
+                if showHermesPluginDiff {
+                    ScrollView {
+                        Text(pendingHermesPluginContent)
+                            .font(.system(size: 10, design: .monospaced))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .frame(height: 180)
+                    .background(Color(NSColor.textBackgroundColor))
+                    .cornerRadius(6)
+                    HStack {
+                        Button(String(localized: "hooks.confirm-write")) { confirmHermesPluginOp() }
+                            .buttonStyle(.borderedProminent)
+                        Button(String(localized: "Cancel")) { showHermesPluginDiff = false; pendingHermesPluginContent = "" }
+                            .buttonStyle(.bordered)
+                    }
+                }
+
+                if hermesPluginInstalled {
+                    Divider()
+                    Toggle(String(localized: "plugin.hermes.approvals"), isOn: $hermesApprovalsEnabled)
+                        .onChange(of: hermesApprovalsEnabled) { _, _ in triggerHermesConfigPreview() }
+                        .disabled(!hermesSupportsApprovals)
+                    if !hermesSupportsApprovals {
+                        Text("Requires a newer version of Hermes — run: hermes update")
+                            .font(.caption)
+                            .foregroundColor(.orange)
+                            .fixedSize(horizontal: false, vertical: true)
+                    } else {
+                        Text(hermesApprovalsEnabled
+                             ? String(localized: "plugin.hermes.approvals.enabled")
+                             : String(localized: "plugin.hermes.approvals.disabled"))
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    if showHermesConfigDiff {
+                        ScrollView {
+                            Text(pendingHermesConfigContent)
+                                .font(.system(size: 10, design: .monospaced))
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .frame(height: 120)
+                        .background(Color(NSColor.textBackgroundColor))
+                        .cornerRadius(6)
+                        HStack {
+                            Button(String(localized: "hooks.confirm-write")) { confirmHermesConfigOp() }
+                                .buttonStyle(.borderedProminent)
+                            Button(String(localized: "Cancel")) { showHermesConfigDiff = false; pendingHermesConfigContent = "" }
+                                .buttonStyle(.bordered)
+                        }
+                    }
+                }
+            }
+            .padding(6)
+        }
+        #if !APPSTORE
+        .task(id: hermesPluginInstalled) {
+            guard hermesPluginInstalled else { hermesSupportsApprovals = false; return }
+            let result = await Task.detached(priority: .background) {
+                HookServer.hermesSupportsApprovalTransport()
+            }.value
+            await MainActor.run { hermesSupportsApprovals = result }
+        }
+        #endif
+
         GroupBox(String(localized: "plan.title")) {
             VStack(alignment: .leading, spacing: 10) {
                 Text(String(localized: "plan.description"))
@@ -815,6 +979,15 @@ struct SettingsView: View {
                         .buttonStyle(.bordered)
                     }
                 }
+                Divider()
+                Text("Shows your Codex plan usage (weekly limit and free resets left) in the notch header. Coucou asks the Codex CLI (codex app-server) when the pill shows; nothing is installed. Codex must be signed in with ChatGPT.")
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Toggle("Show Codex plan in the notch", isOn: Binding(
+                    get: { state.showCodexPlanInNotch },
+                    set: { state.showCodexPlanInNotch = $0 }
+                ))
             }
             .padding(6)
         }
@@ -1079,6 +1252,229 @@ struct SettingsView: View {
             .padding(6)
         }
     }
+
+    // MARK: - Voice section
+
+    #if !APPSTORE
+    @State private var voicePermissionsGranted: Bool = false
+    @ObservedObject private var voiceEngine = VoiceEngine.shared
+    @AppStorage("voiceLanguage")       private var voiceLanguage: String = "en"
+    @AppStorage("voiceTTSEngine")      private var ttsEngine: String = "system"
+    @AppStorage("voiceElevenGender")   private var elevenGender: String = "female"
+    @AppStorage("voicePitchFemale")    private var pitchFemale: Double = VoiceSettings.defaultPitchFemale
+    @AppStorage("voicePitchMale")      private var pitchMale: Double = VoiceSettings.defaultPitchMale
+    @State private var webKeySaved: Bool = !(KeychainStore.shared.get("anthropic-api-key") ?? "").isEmpty
+    @State private var elevenKeyDraft: String = ""
+    @State private var elevenKeySaved: Bool = KeychainStore.shared.get(ElevenLabsTTS.keyName) != nil
+
+    private func speakVoiceSample() {
+        let en = voiceLanguage != "fr"
+        VoiceSpeaker.shared.speak(en ? "Hi, I'm Coucou. Say OK Coucou whenever you need me."
+                                     : "Salut, c'est Coucou. Dis OK Coucou quand tu as besoin de moi.",
+                                  locale: Locale(identifier: en ? "en-US" : "fr-FR"))
+    }
+
+    @ViewBuilder private var voiceSection: some View {
+        // Claude is Coucou's brain: no model, language or feature switches any more,
+        // only the wake word, the Anthropic key it needs, and Coucou's voice.
+        GroupBox(String(localized: "«\u{202F}OK Coucou\u{202F}» — voice wake word")) {
+            VStack(alignment: .leading, spacing: 10) {
+                Toggle(String(localized: "Enable voice command"), isOn: $voiceEngine.isEnabled)
+                    .disabled(!voicePermissionsGranted && !voiceEngine.isEnabled)
+
+                HStack(alignment: .top, spacing: 6) {
+                    Image(systemName: webKeySaved ? "checkmark.circle.fill" : "exclamationmark.circle")
+                        .foregroundColor(webKeySaved ? .green : .orange)
+                    Text(webKeySaved ? String(localized: "voice.setting-web-desc")
+                                     : String(localized: "voice.setting-web-nokey"))
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .onAppear { webKeySaved = !(KeychainStore.shared.get("anthropic-api-key") ?? "").isEmpty }
+
+                if voiceEngine.recognizerUnavailable {
+                    HStack(spacing: 6) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundColor(.orange)
+                        Text("No speech recognition model available on this device. Install one in System Settings \u{2192} Keyboard \u{2192} Dictation.")
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+
+                if let err = voiceEngine.audioError {
+                    HStack(spacing: 6) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundColor(.red)
+                        Text("\(String(localized: "Microphone unavailable")): \(err)")
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+
+                if !voicePermissionsGranted {
+                    Button(String(localized: "Request permissions")) {
+                        Task {
+                            let ok = await VoiceSettings.requestPermissions()
+                            voicePermissionsGranted = ok
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+            }
+            .padding(6)
+        }
+        .onAppear {
+            voicePermissionsGranted = VoiceSettings.micStatus == .granted
+                && VoiceSettings.speechStatus == .granted
+        }
+
+        GroupBox(String(localized: "voice.tts-engine")) {
+            VStack(alignment: .leading, spacing: 10) {
+                Picker(String(localized: "voice.tts-engine"), selection: $ttsEngine) {
+                    Text(String(localized: "voice.tts-system")).tag("system")
+                    Text(verbatim: "ElevenLabs").tag("elevenlabs")
+                }
+                .labelsHidden()   // the box is already titled "Voice"
+                .frame(maxWidth: 260)
+
+                if ttsEngine == "elevenlabs" {
+                    HStack(spacing: 6) {
+                        SecureField(elevenKeySaved ? String(localized: "voice.tts-key-saved")
+                                                   : String(localized: "voice.tts-key"),
+                                    text: $elevenKeyDraft)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(maxWidth: 220)
+                        Button(String(localized: "Save")) {
+                            let k = elevenKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+                            if k.isEmpty { KeychainStore.shared.remove(ElevenLabsTTS.keyName) }
+                            else { KeychainStore.shared.set(ElevenLabsTTS.keyName, value: k) }
+                            elevenKeyDraft = ""
+                            elevenKeySaved = !k.isEmpty
+                            ElevenLabsTTS.shared.reset()
+                        }
+                    }
+                }
+
+                Picker(String(localized: "voice.tts-gender"), selection: $elevenGender) {
+                    Text(String(localized: "voice.tts-female")).tag("female")
+                    Text(String(localized: "voice.tts-male")).tag("male")
+                }
+                .pickerStyle(.segmented)
+                .frame(maxWidth: 220)
+                .onChange(of: elevenGender) { _, _ in ElevenLabsTTS.shared.reset() }
+
+                if ttsEngine == "system" {
+                    HStack(spacing: 8) {
+                        Text(String(localized: "voice.tts-pitch"))
+                        Slider(value: elevenGender == "male" ? $pitchMale : $pitchFemale,
+                               in: 0.8...1.6, step: 0.05,
+                               onEditingChanged: { editing in
+                                   // Released: hear the new pitch right away.
+                                   if !editing { speakVoiceSample() }
+                               })
+                        .frame(maxWidth: 180)
+                    }
+                    let current = VoiceSpeaker.macVoiceName(for: Locale(identifier: voiceLanguage == "fr" ? "fr-FR" : "en-US"),
+                                                            gender: elevenGender)
+                    Text(String(format: String(localized: "voice.mac-voice-current %@"), current))
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                    Text(String(localized: "voice.mac-voices-help"))
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Button(String(localized: "voice.mac-voices-open")) {
+                        if let url = URL(string: "x-apple.systempreferences:com.apple.Accessibility-Settings.extension") {
+                            NSWorkspace.shared.open(url)
+                        }
+                    }
+                }
+
+                Button(String(localized: "voice.tts-test")) { speakVoiceSample() }
+            }
+            .padding(6)
+        }
+    }
+
+    #if !APPSTORE
+    private func localModelStatusLabel(_ status: LocalModelStatus) -> String {
+        switch status {
+        case .available:            return String(localized: "voice.model-available")
+        case .notMacOS26:           return String(localized: "voice.model-not-macos26")
+        case .appleIntelligenceOff: return String(localized: "voice.model-ai-off")
+        }
+    }
+    #endif
+
+    // MARK: - Transcript history debug view (in-memory, cleared on close)
+
+    private struct VoiceTranscriptHistoryView: View {
+        @ObservedObject private var history = VoiceTranscriptHistory.shared
+
+        var body: some View {
+            if !history.entries.isEmpty {
+                GroupBox(String(localized: "voice.history-title")) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        ScrollView {
+                            LazyVStack(alignment: .leading, spacing: 4) {
+                                ForEach(history.entries) { entry in
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(verbatim: entry.transcript)
+                                            .font(.system(size: 11, design: .monospaced))
+                                            .foregroundColor(.primary)
+                                        Text(verbatim: "→ \(entry.intent)  [\(entry.origin.rawValue)]")
+                                            .font(.system(size: 10, design: .monospaced))
+                                            .foregroundColor(.secondary)
+                                    }
+                                    .padding(.vertical, 2)
+                                    Divider()
+                                }
+                            }
+                            .padding(.horizontal, 4)
+                        }
+                        .frame(maxHeight: 200)
+
+                        HStack {
+                            Button(String(localized: "Copy")) {
+                                NSPasteboard.general.clearContents()
+                                NSPasteboard.general.setString(history.plainText, forType: .string)
+                            }
+                            Button(String(localized: "Clear")) {
+                                history.clear()
+                            }
+                            .foregroundColor(.red)
+                        }
+                        .padding(.top, 4)
+                    }
+                    .padding(6)
+                }
+            }
+        }
+    }
+
+    private var micStatusIcon:  String { VoiceSettings.micStatus    == .granted ? "checkmark.circle.fill" : "xmark.circle.fill" }
+    private var micStatusColor: Color  { VoiceSettings.micStatus    == .granted ? .green : .red }
+    private var micStatusLabel: String {
+        switch VoiceSettings.micStatus {
+        case .granted:      return String(localized: "Granted")
+        case .denied:       return String(localized: "Denied")
+        case .undetermined: return String(localized: "Not requested")
+        }
+    }
+    private var speechStatusIcon:  String { VoiceSettings.speechStatus == .granted ? "checkmark.circle.fill" : "xmark.circle.fill" }
+    private var speechStatusColor: Color  { VoiceSettings.speechStatus == .granted ? .green : .red }
+    private var speechStatusLabel: String {
+        switch VoiceSettings.speechStatus {
+        case .granted:      return String(localized: "Granted")
+        case .denied:       return String(localized: "Denied")
+        case .undetermined: return String(localized: "Not requested")
+        }
+    }
+    #endif
 
     // MARK: - Actions
 
@@ -1413,6 +1809,58 @@ struct SettingsView: View {
         }
     }
 
+    private func triggerHermesPluginPreview(install: Bool) {
+        do {
+            hermesPluginPendingInstall = install
+            pendingHermesPluginContent = try HookServer.shared.previewHermesPlugin(install: install)
+            showHermesPluginDiff = true
+            statusMessage = String(localized: "plugin.review-content")
+        } catch let e as NSError where e.domain == "CoucouNoop" {
+            statusMessage = e.localizedDescription
+        } catch {
+            statusMessage = "❌ \(error.localizedDescription)"
+        }
+    }
+
+    private func confirmHermesPluginOp() {
+        do {
+            if hermesPluginPendingInstall {
+                try HookServer.shared.writeHermesPlugin()
+            } else {
+                try HookServer.shared.removeHermesPlugin()
+            }
+            showHermesPluginDiff = false
+            pendingHermesPluginContent = ""
+            hermesPluginInstalled = hermesPluginPendingInstall
+            statusMessage = hermesPluginPendingInstall
+                ? String(localized: "status.hermes-plugin-installed")
+                : String(localized: "status.hermes-plugin-removed")
+        } catch {
+            statusMessage = "❌ \(error.localizedDescription)"
+        }
+    }
+
+    private func triggerHermesConfigPreview() {
+        do {
+            pendingHermesConfigContent = try HookServer.shared.previewHermesConfig(
+                enableApprovals: hermesApprovalsEnabled,
+                supportsTransport: hermesSupportsApprovals)
+            showHermesConfigDiff = true
+        } catch {
+            statusMessage = "❌ \(error.localizedDescription)"
+        }
+    }
+
+    private func confirmHermesConfigOp() {
+        do {
+            try HookServer.shared.writeHermesConfig()
+            showHermesConfigDiff = false
+            pendingHermesConfigContent = ""
+        } catch {
+            statusMessage = "❌ \(error.localizedDescription)"
+        }
+    }
+
     private func installStatusLine() {
         do {
             pendingStatusLineJSON = try HookServer.shared.previewStatusLine(install: true)
@@ -1578,6 +2026,7 @@ struct SettingsView: View {
             if def.id == "agent_muse"          && !HookServer.museHooksInstalled()       { return String(localized: "Hooks not installed") }
             if def.id == "agent_opencode"      && !HookServer.openCodePluginInstalled()  { return String(localized: "Plugin not installed") }
             if def.id == "agent_amp"           && !HookServer.ampPluginInstalled()       { return String(localized: "Plugin not installed") }
+            if def.id == SpotifyController.pillId && !SpotifyController.shared.isInstalled { return String(localized: "Not installed") }
             #endif
             if def.category == .ai {
                 if let provider = ChatProvider(pillID: def.id), provider.isLocal {
@@ -1592,9 +2041,31 @@ struct SettingsView: View {
             return nil
         }()
         HStack(spacing: 8) {
-            Circle()
-                .fill(Color(hex: def.color))
-                .frame(width: 10, height: 10)
+            // The dot is the row's colour control: it looks as it always did,
+            // and a click opens the palette.
+            Button {
+                colorPalettePill = def.id
+            } label: {
+                Circle()
+                    .fill(Color(hex: def.color))
+                    .frame(width: 10, height: 10)
+            }
+            .buttonStyle(.plain)
+            .help(String(localized: "Color"))
+            .accessibilityLabel(Text(def.name + " · " + String(localized: "Color")))
+            .popover(isPresented: Binding(
+                get: { colorPalettePill == def.id },
+                set: { open in if !open && colorPalettePill == def.id { colorPalettePill = nil } }
+            ), arrowEdge: .bottom) {
+                PillColorPalette(
+                    current: def.color,
+                    isCustom: state.pillColors[def.id] != nil,
+                    pick: { hex in
+                        state.setPillColor(def.id, hex)
+                        colorPalettePill = nil
+                    }
+                )
+            }
             Text(def.name)
                 .font(.system(size: 12))
                 .foregroundColor(atMax ? .secondary : .primary)
@@ -1617,6 +2088,48 @@ struct SettingsView: View {
                 .disabled(atMax)
             }
         }
+    }
+}
+
+// MARK: - Pill colour palette (Active pills, opened from a row's dot)
+
+private struct PillColorPalette: View {
+    /// The colour the pill is painted with now.
+    let current: String
+    /// The user picked it: "Default" is offered, to go back to the catalog's.
+    let isCustom: Bool
+    /// nil = back to the catalog's colour.
+    let pick: (String?) -> Void
+
+    var body: some View {
+        let now = PillColors.normalized(current)
+        HStack(spacing: 7) {
+            ForEach(PillColors.palette, id: \.self) { hex in
+                Button {
+                    pick(hex)
+                } label: {
+                    Circle()
+                        .fill(Color(hex: hex))
+                        .frame(width: 18, height: 18)
+                        .overlay(
+                            Circle()
+                                .stroke(Color.primary, lineWidth: 1.5)
+                                .padding(-3)
+                                .opacity(hex == now ? 1 : 0)
+                        )
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text(hex))
+            }
+            if isCustom {
+                Button(String(localized: "Default")) {
+                    pick(nil)
+                }
+                .controlSize(.small)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
     }
 }
 

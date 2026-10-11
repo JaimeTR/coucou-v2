@@ -32,6 +32,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         #endif
     }
 
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        openIsland()
+        return true
+    }
+
     // MARK: - Menu bar
 
     private func setupMenuBarItem() {
@@ -66,6 +71,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func openIsland() {
+        islandController?.fsm.openedExternally()
         islandController?.expand(to: .overview)
     }
 
@@ -106,10 +112,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// Centres the window horizontally and keeps its title bar clear of the island panel
-    /// (320 pt tall at the top of the notch screen), shrinking it to fit if needed.
+    /// (320 pt tall at the top of the island screen), shrinking it to fit if needed.
     private func placeBelowIsland(_ win: NSWindow) {
-        let screen = IslandWindowController.notchScreen() ?? NSScreen.main ?? win.screen
-        guard let screen else { win.center(); return }
+        let screen = IslandWindowController.islandScreen()
         let visible = screen.visibleFrame
         let islandBottom = screen.frame.maxY - 320 - 12   // island panel height + margin
         let top = min(visible.maxY, islandBottom)
@@ -184,6 +189,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         islandController?.showWindow(nil)
         islandController?.fsm.launch()
         HookServer.shared.start()
+        #if !APPSTORE
+        _ = VoiceEngine.shared  // registers system observers; starts mic only if the user enabled voice
+        #endif
         N8nPoller.shared.start()
         VercelPoller.shared.start()
         ResendPoller.shared.start()
@@ -208,6 +216,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         #if !APPSTORE
         _ = MusicController.shared
+        _ = SpotifyController.shared
         #endif
     }
 }

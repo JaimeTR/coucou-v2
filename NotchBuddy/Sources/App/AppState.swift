@@ -73,20 +73,44 @@ final class AppState: ObservableObject {
     @Published var mochiOutfitSelection: Outfit = .auto {
         didSet { Outfit.stored = mochiOutfitSelection }
     }
+    // A colour of the user's own for each pill's Mochi (pill id → "#RRGGBB") — persisted.
+    // Empty means the catalog's colours. PillDefinition.color reads the stored value, so
+    // what is built from the catalog follows on its own; the tasks already on the island
+    // hold a copy of their colour and are repainted here.
+    @Published var pillColors: [String: String] = [:] {
+        didSet {
+            PillColors.stored = pillColors
+            var repainted = tasks
+            var changed = false
+            for i in repainted.indices {
+                guard let def = PillCatalog.definition(for: repainted[i].id),
+                      repainted[i].color != def.color else { continue }
+                repainted[i].color = def.color
+                changed = true
+            }
+            if changed { tasks = repainted }
+        }
+    }
+    /// Picks a colour for a pill's Mochi; nil, or the pill's own catalog colour, goes back to the default.
+    func setPillColor(_ id: String, _ hex: String?) {
+        guard let def = PillCatalog.definition(for: id) else { return }
+        pillColors = PillColors.picking(hex, for: id, catalogColor: def.defaultColor, in: pillColors)
+    }
     // Transient: outfit preview while hovering in wardrobe (overrides resolvedOutfit in BotCanvasView)
     var wardrobePreviewOutfit: Outfit? = nil
-    // Per-day seasonal cache — avoids recomputing Easter and date math on every frame
-    private var _seasonalCache: (dayOfYear: Int, year: Int, outfit: Outfit)?
+    // Per-day seasonal cache — read on every Mochi frame: valid until the next midnight,
+    // so a frame costs one date comparison instead of calendar math.
+    private var _seasonalCache: (validUntil: Date, outfit: Outfit)?
     var resolvedOutfit: Outfit {
         if let preview = wardrobePreviewOutfit { return preview }
         guard mochiOutfitSelection == .auto else { return mochiOutfitSelection }
-        let cal = Calendar.current
         let now = Date()
-        let day  = cal.ordinality(of: .day, in: .year, for: now) ?? 0
-        let year = cal.component(.year, from: now)
-        if let c = _seasonalCache, c.dayOfYear == day && c.year == year { return c.outfit }
+        if let c = _seasonalCache, now < c.validUntil { return c.outfit }
+        let cal = Calendar.current
         let outfit = Outfit.seasonal(for: now, calendar: cal)
-        _seasonalCache = (dayOfYear: day, year: year, outfit: outfit)
+        let midnight = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: now))
+            ?? now.addingTimeInterval(3600)
+        _seasonalCache = (validUntil: midnight, outfit: outfit)
         return outfit
     }
 
@@ -238,11 +262,18 @@ final class AppState: ObservableObject {
 
     // Dropped file (set during upload flow)
     @Published var droppedFile: DroppedFile? = nil
+    /// A mail prepared by voice: fills the mail card; sent through Apple Mail on the
+    /// user's click. nil for the drop-a-file flow.
+    @Published var voiceMailDraft: VoiceMailDraft? = nil
 
     // Short note message (shown in NoteView)
     @Published var noteMessage: String? = nil
 
     // Auto-close delay — persisted
+    // Hovering the island opens it (folds shortly after the pointer leaves) — persisted, off by default
+    @Published var openOnHover: Bool = false {
+        didSet { UserDefaults.standard.set(openOnHover, forKey: "openOnHover") }
+    }
     @Published var autoCloseInterval: TimeInterval = 15 {
         didSet { UserDefaults.standard.set(autoCloseInterval, forKey: "autoCloseInterval") }
     }
@@ -266,6 +297,11 @@ final class AppState: ObservableObject {
     }
     var hotkeyCode: UInt16 = 45 {  // 'n'
         didSet { UserDefaults.standard.set(Int(hotkeyCode), forKey: "hotkeyCode") }
+    }
+
+    // Screen hosting the island (notch screen by default) — persisted
+    @Published var islandDisplay: IslandDisplayChoice = .notch {
+        didSet { UserDefaults.standard.set(islandDisplay.storageValue, forKey: "islandDisplay") }
     }
 
     // Vercel project filter — empty = watch all projects
@@ -343,7 +379,9 @@ final class AppState: ObservableObject {
     @Published var pendingApproval: ApprovalInfo? = nil
 
     // Pending AskUserQuestion from Claude Code hook
-    @Published var pendingQuestion: AskQuestion? = nil
+    @Published var pendingQuestion: AskQuestion? = nil {
+        didSet { QuestionLayout.height = pendingQuestion?.estimatedIslandHeight }
+    }
 
     // Per-pill flat list of FileDiffs, in order of reception.
     // Not @Published — steps[] changes already trigger redraws.
@@ -376,16 +414,27 @@ final class AppState: ObservableObject {
 
     private func resetSessionDiffTimer(for pillId: String) {
         sessionDiffTimers[pillId]?.cancel()
+        // The closure is MainActor-isolated (AppState is @MainActor): it must run on the main
+        // queue. Scheduled on a global queue, Swift 6's isolation check traps and the app quits.
         let work = DispatchWorkItem { [weak self] in
-            DispatchQueue.main.async { self?.clearSessionDiffs(for: pillId) }
+            self?.clearSessionDiffs(for: pillId)
         }
         sessionDiffTimers[pillId] = work
-        DispatchQueue.global().asyncAfter(deadline: .now() + 3600, execute: work)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3600, execute: work)
     }
 
     #if !APPSTORE
     @Published var musicPlaying: Bool = false
     @Published var musicAutomationDenied: Bool = false
+
+    // Voice command result (shown in VoiceResultView for ~2 s, then cleared by IWC)
+    @Published var voiceResult: VoiceActionResult? = nil
+    /// True from "OK Coucou" until Coucou has finished answering (island stays compact).
+    /// Drives Mochi's single attentive pose for the whole exchange.
+    @Published var voiceActive = false
+    /// Listening / thinking / speaking — drives per-frame Mochi animations.
+    /// Set by IslandWindowController; read by BotCanvasView each display frame.
+    @Published var voiceSubState: BotVoiceSubState = .none
     #endif
 
     // Claude plan gauge (from statusline hook)
@@ -410,6 +459,30 @@ final class AppState: ObservableObject {
     // Transient — reset when island closes or view changes
     @Published var showingPlanDetail: Bool = false
 
+    // Codex plan gauge (from `codex app-server`) — fetched when the pill shows
+    @Published var showCodexPlanInNotch: Bool = false {
+        didSet { UserDefaults.standard.set(showCodexPlanInNotch, forKey: "showCodexPlanInNotch") }
+    }
+    @Published var codexPlanUsage: CodexPlanUsage? = nil
+    // Which card showingPlanDetail opens
+    @Published var planDetailIsCodex: Bool = false
+
+    /// Rate-limited on the attempt, not only on success: without Codex installed or
+    /// signed in, every appearance of the pill used to spawn `codex app-server` again.
+    private static var lastCodexAttempt: Date = .distantPast
+    private static var codexFetchInFlight = false
+
+    func refreshCodexPlanUsage() {
+        if let u = codexPlanUsage, Date().timeIntervalSince(u.updatedAt) < 60 { return }
+        guard !Self.codexFetchInFlight, Date().timeIntervalSince(Self.lastCodexAttempt) > 60 else { return }
+        Self.codexFetchInFlight = true
+        Self.lastCodexAttempt = Date()
+        Task {
+            if let u = await CodexPlanGauge.fetch() { codexPlanUsage = u }
+            Self.codexFetchInFlight = false
+        }
+    }
+
     func refreshPlanRelayState() {
         planRelayInstalled = HookServer.statusLineInstalled()
     }
@@ -423,6 +496,7 @@ final class AppState: ObservableObject {
         if let v = ud.object(forKey: "soundEnabled") as? Bool   { soundEnabled = v }
         if let v = ud.object(forKey: "soundVolume")  as? Double { soundVolume  = v }
         mochiOutfitSelection = Outfit.stored
+        pillColors = PillColors.stored
         if let v = ud.string(forKey: "claudeModel"),
            !v.trimmingCharacters(in: .whitespaces).isEmpty { claudeModel = v }
         if let v = ud.string(forKey: "chatProvider"), let p = ChatProvider(rawValue: v) { chatProvider = p }
@@ -433,6 +507,7 @@ final class AppState: ObservableObject {
         if let v = ud.string(forKey: "ollamaServerURL"), !v.isEmpty { ollamaServerURL = v }
         if let v = ud.string(forKey: "lmstudioServerURL"), !v.isEmpty { lmstudioServerURL = v }
         // Migrate old 60s default → 15s
+        if let v = ud.object(forKey: "openOnHover") as? Bool { openOnHover = v }
         if let v = ud.object(forKey: "autoCloseInterval") as? Double {
             autoCloseInterval = (v == 60) ? 15 : v
         }
@@ -441,6 +516,7 @@ final class AppState: ObservableObject {
         if let v = ud.object(forKey: "hotkeyEnabled") as? Bool  { hotkeyEnabled = v }
         if let v = ud.object(forKey: "hotkeyFlags")   as? Int   { hotkeyFlags = UInt(v) }
         if let v = ud.object(forKey: "hotkeyCode")    as? Int   { hotkeyCode = UInt16(v) }
+        if let v = ud.string(forKey: "islandDisplay") { islandDisplay = IslandDisplayChoice(storageValue: v) }
         if let d = ud.data(forKey: "vercelProjectFilter"),
            let a = try? JSONDecoder().decode([String].self, from: d) { vercelProjectFilter = Set(a) }
         if let d = ud.data(forKey: "n8nWorkflowFilter"),
@@ -455,6 +531,7 @@ final class AppState: ObservableObject {
            let u = try? JSONDecoder().decode(PlanUsage.self, from: d) { claudePlanUsage = u }
         #if !APPSTORE
         if let v = ud.object(forKey: "showPlanInNotch") as? Bool { showPlanInNotch = v }
+        if let v = ud.object(forKey: "showCodexPlanInNotch") as? Bool { showCodexPlanInNotch = v }
         planRelayInstalled = HookServer.statusLineInstalled()
         #endif
 
@@ -594,6 +671,17 @@ final class AppState: ObservableObject {
     /// Toggle a catalog pill on/off.
     /// mainPillId: never toggleable (change via the Main picker first).
     /// Max 4 non-main pills active at once.
+    /// Switch the always-on workspace pill. Mirrors what the Settings Picker does.
+    func setMainPill(_ id: String) {
+        guard PillCatalog.available.contains(where: {
+            $0.id == id && $0.category == .workspace && !$0.comingSoon
+        }) else { return }
+        mainPillId = id
+        activeIntegrations.remove(id)
+        loadIntegrationTasks()
+        setFocus(id)
+    }
+
     func toggleIntegration(_ id: String) {
         guard id != mainPillId else { return }
         guard PillCatalog.available.contains(where: { $0.id == id }) else { return }
@@ -644,6 +732,12 @@ enum PromptContext {
     case file(name: String, fileURL: URL?)
 }
 
+struct VoiceMailDraft: Equatable {
+    var to: String
+    var subject: String
+    var body: String
+}
+
 struct DroppedFile {
     var url: URL
     var name: String
@@ -680,6 +774,16 @@ struct VercelDeployment: Identifiable {
         if diff < 3600  { return "\(Int(diff/60))m" }
         if diff < 86400 { return "\(Int(diff/3600))h" }
         return "\(Int(diff/86400))d"
+    }
+}
+
+// MARK: - Publish only on change
+
+extension AppState {
+    /// A @Published set notifies every view that observes AppState, even with the same
+    /// value: pollers use this so an unchanged answer redraws nothing.
+    func setIfChanged<T: Equatable>(_ keyPath: ReferenceWritableKeyPath<AppState, T>, _ value: T) {
+        if self[keyPath: keyPath] != value { self[keyPath: keyPath] = value }
     }
 }
 
