@@ -227,6 +227,10 @@ export interface Settings {
   updates: "auto" | "notify" | "off";
   /** Mochi dances while music plays. */
   musicDance: boolean;
+  /** The island opens when the pointer reaches it and folds when it leaves. */
+  openOnHover: boolean;
+  /** A colour of your own for a pill: id → #rrggbb. */
+  pillColors: Record<string, string>;
   /** What Mochi wears: "auto" follows the date. */
   mochiOutfit: string;
   /** Mochi peeks out from the screen's edges now and then. */
@@ -264,10 +268,12 @@ export interface Settings {
   /** Interface language; "auto" follows the system. */
   language: "auto" | "es" | "en";
   /** Who answers the chat: Claude, DEVMARK AI, Gemini or Groq. */
-  chatProvider: "anthropic" | "devmark" | "gemini" | "groq" | "local";
+  chatProvider: "anthropic" | "devmark" | "gemini" | "groq" | "openai" | "openrouter" | "local";
   /** Models asked of Gemini and Groq. */
   geminiModel: string;
   groqModel: string;
+  openaiModel: string;
+  openrouterModel: string;
   /** A model on your own computer (Ollama, LM Studio…): its address and model. */
   localUrl: string;
   localModel: string;
@@ -309,6 +315,8 @@ export const DEFAULT_SETTINGS: Settings = {
   syncDevice: "",
   updates: "auto",
   musicDance: true,
+  openOnHover: false,
+  pillColors: {},
   mochiOutfit: "auto",
   petEnabled: false,
   petFrequency: "normal",
@@ -332,6 +340,8 @@ export const DEFAULT_SETTINGS: Settings = {
   chatProvider: "anthropic",
   geminiModel: "gemini-3.8-flash",
   groqModel: "llama-3.3-70b-versatile",
+  openaiModel: "gpt-4o",
+  openrouterModel: "openrouter/auto",
   localUrl: "http://127.0.0.1:11434/v1",
   localModel: "llama3.2",
   devmarkModel: "llama3.2:1b",
@@ -515,7 +525,9 @@ class AppState {
       const shouldLoad =
         proto.id === "integration_claude" || this.settings.activeIntegrations.includes(proto.id);
       const idx = this.tasks.findIndex((t) => t.id === proto.id);
-      if (shouldLoad && idx < 0) this.tasks.push({ ...proto, steps: [] });
+      const color = this.settings.pillColors?.[proto.id] ?? proto.color;
+      if (idx >= 0) this.tasks[idx].color = color;
+      if (shouldLoad && idx < 0) this.tasks.push({ ...proto, color, steps: [] });
       if (!shouldLoad && idx >= 0) this.tasks.splice(idx, 1);
     }
     // Order: integration_claude first, then agent_* pills (visible in slice(0,4)),

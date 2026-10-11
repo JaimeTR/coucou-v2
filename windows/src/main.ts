@@ -20,6 +20,7 @@ async function main() {
   const root = document.getElementById("root");
   if (!root) return;
 
+  Sound.loadCustom = Bridge.customSound;
   void Sound.preload();
 
   const island = new Island(root);
@@ -106,6 +107,9 @@ async function main() {
 
   // The phone link (Settings → Sincronización): sessions up, Allow / Deny down.
   startRemote(island, boot?.computerName ?? "PC");
+
+  // Settings → Reload sounds.
+  await onEvent<null>("sounds-reload", () => void Sound.reload());
 
   // Global shortcuts (Ctrl+Alt+Y / N / C), pressed in any other window.
   await onEvent<string>("shortcut", (name) => {

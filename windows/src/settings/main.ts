@@ -328,7 +328,7 @@ function agentsSection(initial: AgentStatus[]): HTMLElement {
     const connected = status?.installed ?? false;
     const head = field("", h("span", { class: "with-dot" }, statusDot(connected), h("span", { text: connected ? "Conectado" : "Sin conectar" })), sw);
     head.querySelector(".field-label")?.replaceChildren(
-      h("span", { class: "service-name" }, h("i", { class: "dot", style: `background:${def.color}` }), h("span", { text: status?.name ?? NAMES[def.id] ?? def.id })),
+      h("span", { class: "service-name" }, colorDot(`agent_${def.id}`, def.color), h("span", { text: status?.name ?? NAMES[def.id] ?? def.id })),
     );
     box.append(head, h("div", { class: "group-note", text: def.what }));
     if (status && !status.detected && def.missing) box.append(h("div", { class: "group-note", text: def.missing }));
@@ -1214,15 +1214,37 @@ function rulesSection(initial: Rule[]): HTMLElement {
 
 // ── Chat provider ─────────────────────────────────────────────────────────────
 
+/** A pill's colour dot, which is also the picker for a colour of your own (double click: back to the original). */
+function colorDot(id: string, original: string): HTMLElement {
+  const current = settings.pillColors?.[id] ?? original;
+  const input = h("input", {
+    type: "color", value: current,
+    title: "Color del pill (doble clic para volver al original)",
+    style: "width:14px;height:14px;padding:0;border:0;border-radius:50%;background:none;cursor:pointer;vertical-align:middle;margin-right:6px",
+  }) as HTMLInputElement;
+  input.addEventListener("change", () => {
+    settings.pillColors = { ...(settings.pillColors ?? {}), [id]: input.value };
+    void save();
+  });
+  input.addEventListener("dblclick", () => {
+    const next = { ...(settings.pillColors ?? {}) };
+    delete next[id];
+    settings.pillColors = next;
+    input.value = original;
+    void save();
+  });
+  return input;
+}
+
 /** An AI that can answer the chat besides Claude. */
 interface ProviderDef {
-  id: "devmark" | "gemini" | "groq" | "local";
+  id: "devmark" | "gemini" | "groq" | "openai" | "openrouter" | "local";
   /** As it reads in the drop-down. */
   name: string;
   /** Credential Manager entry for its key. */
   keyName: string;
   keyPlaceholder: string;
-  modelSetting: "devmarkModel" | "geminiModel" | "groqModel" | "localModel";
+  modelSetting: "devmarkModel" | "geminiModel" | "groqModel" | "openaiModel" | "openrouterModel" | "localModel";
   /** Runs on your own computer: an address instead of a key (the key is optional). */
   local?: boolean;
   modelDefault: string;
@@ -1248,6 +1270,18 @@ const PROVIDERS: ProviderDef[] = [
     modelSetting: "groqModel", modelDefault: "llama-3.3-70b-versatile",
     intro: "Groq: respuestas muy rápidas con modelos abiertos (Llama y otros). Lee texto y código. Crea una clave en la consola de Groq; “Probar conexión” muestra los modelos disponibles.",
     getKeyUrl: "https://console.groq.com/keys",
+  },
+  {
+    id: "openai", name: "OpenAI", keyName: "openai-api-key", keyPlaceholder: "sk-…",
+    modelSetting: "openaiModel", modelDefault: "gpt-4o",
+    intro: "OpenAI (ChatGPT y compañía). Lee texto y código. Crea una clave en la plataforma de OpenAI; “Probar conexión” muestra los modelos que tu clave puede usar.",
+    getKeyUrl: "https://platform.openai.com/api-keys",
+  },
+  {
+    id: "openrouter", name: "OpenRouter", keyName: "openrouter-api-key", keyPlaceholder: "sk-or-…",
+    modelSetting: "openrouterModel", modelDefault: "openrouter/auto",
+    intro: "OpenRouter: una sola clave para cientos de modelos (Claude, GPT, Gemini, Llama…), algunos gratis. “openrouter/auto” elige uno por ti; “Probar conexión” lista los disponibles.",
+    getKeyUrl: "https://openrouter.ai/keys",
   },
   {
     id: "local", name: "Modelo local (Ollama, LM Studio)", keyName: "local-api-key", keyPlaceholder: "solo si tu servidor la pide",
@@ -1628,7 +1662,7 @@ function integrationsSection(present: Record<string, boolean>): HTMLElement {
       ...keyFields,
     ));
     const title = cards[cards.length - 1].querySelector(".field-label");
-    title?.replaceChildren(h("span", { class: "service-name" }, h("i", { class: "dot", style: `background:${def.color}` }), h("span", { text: def.name })));
+    title?.replaceChildren(h("span", { class: "service-name" }, colorDot(def.id, def.color), h("span", { text: def.name })));
   }
 
   updateNote();
@@ -1757,6 +1791,17 @@ function generalSection(): HTMLElement {
       volume,
     ),
     h("div", { class: "row" },
+      h("label", { text: "Tus propios sonidos" }),
+      h("button", { class: "btn secondary", text: "Abrir carpeta de sonidos", onclick: () => void Bridge.openSoundsFolder() }),
+      h("button", { class: "btn secondary", text: "Recargar sonidos", onclick: () => void Bridge.reloadSounds() }),
+      h("span", { class: "hint", text: "un archivo con el nombre de un sonido de Mochi (finish.wav, approval.mp3, greet.m4a…) lo reemplaza" }),
+    ),
+    h("div", { class: "row" },
+      h("label", { text: "Abrir al pasar el puntero" }),
+      toggle(settings.openOnHover, (v) => { settings.openOnHover = v; void save(); }),
+      h("span", { class: "hint", text: "la isla se abre al llegar el puntero y se pliega poco después de irse; un clic dentro la mantiene abierta" }),
+    ),
+    h("div", { class: "row" },
       h("label", { text: "Cierre automático" }),
       autoClose,
       h("span", { class: "hint", text: "segundos después de que sales de la isla" }),
@@ -1784,7 +1829,7 @@ function generalSection(): HTMLElement {
     h("div", { class: "row" },
       h("label", { text: "Atajos globales" }),
       toggle(settings.globalShortcuts, (v) => { settings.globalShortcuts = v; void save(); }),
-      h("span", { class: "hint", text: "Ctrl+Alt+Y permitir · Ctrl+Alt+N denegar (solo mientras hay una petición)" }),
+      h("span", { class: "hint", text: "Ctrl+Alt+Y permitir · Ctrl+Alt+N denegar (solo mientras hay una petición) · Ctrl+Alt+D saca a Mochi a la pantalla y lo trae de vuelta" }),
     ),
     shortcutRow("toggle", "Abrir Coucou con", "Ctrl+Alt+C", () => settings.toggleShortcut, (a) => (settings.toggleShortcut = a)),
   );
@@ -1960,7 +2005,7 @@ async function main() {
   const keys = [
     "stripe-api-key", "github-token", "vercel-token",
     "resend-api-key", "notion-api-key", "calcom-api-key",
-    "devmark-api-key", "gemini-api-key", "groq-api-key",
+    "devmark-api-key", "gemini-api-key", "groq-api-key", "openai-api-key", "openrouter-api-key",
   ];
   const present: Record<string, boolean> = {};
   for (const k of keys) present[k] = (await Bridge.secretPresent(k)) ?? false;

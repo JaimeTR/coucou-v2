@@ -35,6 +35,9 @@ import { refreshProjects } from "./integrations";
 const BOT_OVERHANG = 40;
 /** Same margin as the Rust hit test (src-tauri/src/island.rs). */
 const HIT_MARGIN = 14;
+/** Open on hover: how long the pointer stays before it opens, and how soon it folds after leaving. */
+const HOVER_OPEN_MS = 180;
+const HOVER_FOLD_S = 0.7;
 
 /** The three views the drop sequence owns; leaving them stops the engine. */
 const UPLOAD_VIEWS: ReadonlySet<IslandViewName> = new Set(["upload", "uploading", "choose"]);
@@ -87,6 +90,9 @@ export class Island {
   /** Last shape handed to Rust for the click-through test. */
   private pushedRect = { x: -1, y: -1, w: -1, h: -1 };
   private homeCollapseAt: number | null = null;
+  /** Opened by the pointer arriving (not by a click): the pointer leaving folds it. */
+  private hoverOpened = false;
+  private hoverTimer: number | null = null;
 
   // Bot hover → love (IslandWindowController.botHoverIn)
   private botHovering = false;
@@ -520,6 +526,7 @@ export class Island {
   }
 
   collapse() {
+    this.hoverOpened = false;
     State.isPinned = false;
     this.fsm.pinned = false;
     // Drive the state machine rather than the mode: setting the mode behind its
@@ -771,7 +778,20 @@ export class Island {
       }
     });
 
+    // A click inside an island that the pointer opened keeps it open: it is the person's now.
+    window.addEventListener("mousedown", () => {
+      this.hoverOpened = false;
+    });
+
     window.addEventListener("keydown", (e) => {
+      if (
+        e.ctrlKey && !e.altKey && !e.shiftKey && State.mode === "expanded" &&
+        !(e.target as Element | null)?.closest?.("input, textarea") && this.islandKey(e.key)
+      ) {
+        e.preventDefault();
+        State.lastActivity = performance.now();
+        return;
+      }
       // On the diff card Esc goes back to the ticker first, as on the Mac.
       if (e.key === "Escape" && State.mode === "expanded" && State.view === "diff") {
         this.setView(State.defaultView());
@@ -801,6 +821,48 @@ export class Island {
     });
   }
 
+  /**
+   * Keyboard in the open island: Ctrl+↓ / Ctrl+↑ move through the rows of a GitHub
+   * list, Ctrl+O opens the one that is marked, Ctrl+E opens the latest diff.
+   * Returns true when the key was one of these.
+   */
+  private islandKey(key: string): boolean {
+    const k = key.toLowerCase();
+    if (k === "e") {
+      const ids = [...State.diffs.keys()];
+      const latest = ids[ids.length - 1];
+      if (!latest) return true;
+      State.openDiffId = latest;
+      Sound.play("blip");
+      this.setView("diff");
+      return true;
+    }
+    if (k !== "arrowdown" && k !== "arrowup" && k !== "o") return false;
+    const rows = [...document.querySelectorAll<HTMLElement>(".int-row.gh-pr")];
+    if (rows.length === 0) return false;
+    let at = rows.findIndex((r) => r.classList.contains("kb"));
+    if (k === "o") {
+      rows[Math.max(0, at)].click();
+      return true;
+    }
+    at = k === "arrowdown" ? Math.min(rows.length - 1, at + 1) : Math.max(0, at - 1);
+    rows.forEach((r, i) => r.classList.toggle("kb", i === at));
+    rows[at].scrollIntoView({ block: "nearest" });
+    return true;
+  }
+
+  /** Open on hover: the pointer has to stay a moment, so passing by opens nothing. */
+  private hoverIntent() {
+    if (!State.settings.openOnHover || this.fsm.state !== "petit" || State.paused) return;
+    if (this.hoverTimer != null) window.clearTimeout(this.hoverTimer);
+    this.hoverTimer = window.setTimeout(() => {
+      this.hoverTimer = null;
+      if (!this.wasInIsland || this.fsm.state !== "petit") return;
+      this.hoverOpened = true;
+      this.fsm.click();
+    }, HOVER_OPEN_MS);
+  }
+
   /** Cursor in window-logical coordinates. */
   onCursor(x: number, y: number) {
     State.mouse = { x, y };
@@ -821,11 +883,20 @@ export class Island {
       if (this.fsm.state === "coucou") this.greeting.hover();
       this.fsm.mouseEntered();
       this.homeCollapseAt = null;
+      this.hoverIntent();
     }
     if (!inIsland && this.wasInIsland) {
+      // Opened by hovering, it folds shortly after the pointer leaves; otherwise as the setting says.
+      this.fsm.homeToPetitDelay = this.hoverOpened ? HOVER_FOLD_S : State.settings.autoCloseInterval;
       this.fsm.mouseLeft();
+      if (this.hoverTimer != null) {
+        window.clearTimeout(this.hoverTimer);
+        this.hoverTimer = null;
+      }
       if (this.fsm.state === "home" && !State.isPinned) {
-        this.homeCollapseAt = performance.now() + State.settings.autoCloseInterval * 1000;
+        // Opened by hovering, it folds shortly after the pointer leaves.
+        const seconds = this.hoverOpened ? HOVER_FOLD_S : State.settings.autoCloseInterval;
+        this.homeCollapseAt = performance.now() + seconds * 1000;
       }
     }
     this.wasInIsland = inIsland;

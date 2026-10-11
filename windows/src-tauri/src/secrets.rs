@@ -11,6 +11,8 @@ pub const KNOWN_KEYS: &[&str] = &[
     "devmark-api-key",
     "gemini-api-key",
     "groq-api-key",
+    "openai-api-key",
+    "openrouter-api-key",
     "elevenlabs-api-key",
     "vercel-token",
     "github-token",

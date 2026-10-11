@@ -83,6 +83,12 @@ pub struct Settings {
     /// Mochi dances while music plays (read from the system media controls).
     #[serde(default = "default_true")]
     pub music_dance: bool,
+    /// The island opens when the pointer reaches it and folds when it leaves (off by default).
+    #[serde(default)]
+    pub open_on_hover: bool,
+    /// A colour of your own for a pill: pill id → "#rrggbb".
+    #[serde(default)]
+    pub pill_colors: std::collections::BTreeMap<String, String>,
     /// What Mochi wears: "auto" (by the date), "none" or a piece (see mochi/outfits.ts).
     #[serde(default = "default_outfit")]
     pub mochi_outfit: String,
@@ -147,6 +153,10 @@ pub struct Settings {
     pub gemini_model: String,
     #[serde(default = "default_groq_model")]
     pub groq_model: String,
+    #[serde(default = "default_openai_model")]
+    pub openai_model: String,
+    #[serde(default = "default_openrouter_model")]
+    pub openrouter_model: String,
     /// A model on your own computer (Ollama, LM Studio…): its address and model.
     #[serde(default = "default_local_url")]
     pub local_url: String,
@@ -287,6 +297,16 @@ fn default_work_mode() -> String {
     "auto".into()
 }
 
+/// Pill colours kept: a short id and a `#rrggbb` colour, nothing else, and not many.
+pub fn sanitize_pill_colors(input: std::collections::BTreeMap<String, String>) -> std::collections::BTreeMap<String, String> {
+    let is_hex = |c: &str| c.len() == 7 && c.starts_with('#') && c[1..].chars().all(|d| d.is_ascii_hexdigit());
+    input
+        .into_iter()
+        .filter(|(id, colour)| !id.is_empty() && id.len() <= 48 && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-') && is_hex(colour))
+        .take(64)
+        .collect()
+}
+
 /// The file names the person listed as games: a bounded list of short names.
 pub fn sanitize_programs(input: Vec<String>) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
@@ -374,6 +394,14 @@ fn default_local_model() -> String {
     crate::compat::DEFAULT_LOCAL_MODEL.to_string()
 }
 
+fn default_openai_model() -> String {
+    crate::compat::DEFAULT_OPENAI_MODEL.to_string()
+}
+
+fn default_openrouter_model() -> String {
+    crate::compat::DEFAULT_OPENROUTER_MODEL.to_string()
+}
+
 fn default_groq_model() -> String {
     crate::compat::DEFAULT_GROQ_MODEL.to_string()
 }
@@ -420,6 +448,8 @@ impl Default for Settings {
             sync_device: String::new(),
             updates: default_updates(),
             music_dance: true,
+            open_on_hover: false,
+            pill_colors: Default::default(),
             mochi_outfit: default_outfit(),
             pet_enabled: false,
             pet_frequency: default_pet_frequency(),
@@ -443,6 +473,8 @@ impl Default for Settings {
             devmark_max_tokens: default_devmark_max_tokens(),
             gemini_model: default_gemini_model(),
             groq_model: default_groq_model(),
+            openai_model: default_openai_model(),
+            openrouter_model: default_openrouter_model(),
             local_url: default_local_url(),
             local_model: default_local_model(),
             plan_gauge: false,
@@ -489,6 +521,19 @@ fn migrate(settings: &mut Settings) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn pill_colours_keep_only_ids_and_hex_colours() {
+        let mut input = std::collections::BTreeMap::new();
+        input.insert("agent_codex".to_string(), "#10A37F".to_string());
+        input.insert("integration_github".to_string(), "red".to_string());
+        input.insert("bad id".to_string(), "#112233".to_string());
+        input.insert("x".to_string(), "#12345".to_string());
+        input.insert("y".to_string(), "url(javascript:alert(1))".to_string());
+        let out = sanitize_pill_colors(input);
+        assert_eq!(out.len(), 1);
+        assert_eq!(out["agent_codex"], "#10A37F");
+    }
 
     #[test]
     fn the_terminal_pill_becomes_the_vscode_pill_without_duplicates() {

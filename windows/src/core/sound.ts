@@ -12,11 +12,21 @@ export const SOUND_NAMES = [
 
 export type SoundName = (typeof SOUND_NAMES)[number];
 
+/** base64 → bytes (an ArrayBuffer, which is what decodeAudioData takes). */
+function fromBase64(text: string): ArrayBuffer {
+  const bin = atob(text);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes.buffer;
+}
+
 class SoundEngine {
   enabled = true;
   /** Over a game or a call: nothing plays, whatever the setting says. */
   muted = false;
   volume = 0.12;
+  /** Where a sound of your own comes from (the Tauri bridge); none in a plain browser. */
+  loadCustom: ((name: string) => Promise<string | null>) | null = null;
 
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
@@ -48,8 +58,49 @@ class SoundEngine {
           }
         }),
       );
+      await this.applyCustom();
     })();
     return this.loading;
+  }
+
+  /**
+   * Sounds of your own (a file named like one of Mochi's, in the sounds folder)
+   * take the place of the built-in ones. A file that cannot be decoded leaves the
+   * built-in sound where it is.
+   */
+  async applyCustom(): Promise<void> {
+    const ctx = this.ctx;
+    if (!ctx) return;
+    await Promise.all(
+      SOUND_NAMES.map(async (name) => {
+        try {
+          const text = (await this.loadCustom?.(name)) ?? null;
+          if (!text) return;
+          this.buffers.set(name, await ctx.decodeAudioData(fromBase64(text)));
+        } catch {
+          /* a broken file keeps the built-in sound */
+        }
+      }),
+    );
+  }
+
+  /** Settings → Reload sounds: built-in ones back first, then yours on top. */
+  async reload(): Promise<void> {
+    this.loading = null;
+    this.buffers.clear();
+    const ctx = this.ctx;
+    if (!ctx) return this.preload();
+    await Promise.all(
+      SOUND_NAMES.map(async (name) => {
+        try {
+          const res = await fetch(`/sounds/${name}.wav`);
+          if (res.ok) this.buffers.set(name, await ctx.decodeAudioData(await res.arrayBuffer()));
+        } catch {
+          /* ignored */
+        }
+      }),
+    );
+    await this.applyCustom();
   }
 
   /** WebView2 can hand us a suspended context; call after any user input. */

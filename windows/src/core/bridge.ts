@@ -90,6 +90,11 @@ export const Bridge = {
   openUrl: (url: string) => call<void>("open_url", { url }),
 
   /** "Open terminal" → opens the folder in VS Code when `code` is on PATH. */
+  // ── Your own sounds (src-tauri/src/sounds.rs) ─────────────────────────────
+  /** A replacement for one of Mochi's sounds, as base64; null when there is none. */
+  customSound: (name: string) => call<string | null>("custom_sound", { name }),
+  openSoundsFolder: () => call<void>("open_sounds_folder"),
+  reloadSounds: () => call<void>("reload_sounds"),
   // ── Spotify (src-tauri/src/spotify.rs) ──────────────────────────────────────
   spotifyRefresh: () => call<Omit<SpotifyState, "at">>("spotify_refresh"),
   /** True when Spotify took it. `value`: seconds, for a seek. */

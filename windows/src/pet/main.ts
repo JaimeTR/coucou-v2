@@ -370,6 +370,8 @@ async function main() {
   });
   await onEvent<Partial<Context>>("pet-context", (c) => onContext(c));
   await onEvent<null>("pet-visit-now", () => void visit(undefined, undefined, true));
+  // Ctrl+Alt+D: out to the edge, or back home if he is already out.
+  await onEvent<null>("pet-toggle", () => (visiting ? flee() : void visit(undefined, undefined, true)));
   await onEvent<{ x: number; y: number }>("pet-pointer", (p) => (pointer = p));
   window.setInterval(() => {
     const outfit = isOutfit(State.settings.mochiOutfit) ? State.settings.mochiOutfit : "auto";

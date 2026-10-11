@@ -54,6 +54,24 @@ pub const GROQ: Provider = Provider {
     keyless: false,
 };
 
+pub const OPENAI: Provider = Provider {
+    id: "openai",
+    name: "OpenAI",
+    base: "https://api.openai.com/v1",
+    key: "openai-api-key",
+    env: "OPENAI_API_KEY",
+    keyless: false,
+};
+
+pub const OPENROUTER: Provider = Provider {
+    id: "openrouter",
+    name: "OpenRouter",
+    base: "https://openrouter.ai/api/v1",
+    key: "openrouter-api-key",
+    env: "OPENROUTER_API_KEY",
+    keyless: false,
+};
+
 /// A model on your own computer. `base` is only the default: the address comes
 /// from Settings (`local_url`). An API key is optional, for servers that ask one.
 pub const LOCAL: Provider = Provider {
@@ -69,6 +87,8 @@ pub const LOCAL: Provider = Provider {
 /// provider offers, and "Test connection" lists what your key can use.
 pub const DEFAULT_GEMINI_MODEL: &str = "gemini-3.8-flash";
 pub const DEFAULT_GROQ_MODEL: &str = "llama-3.3-70b-versatile";
+pub const DEFAULT_OPENAI_MODEL: &str = "gpt-4o";
+pub const DEFAULT_OPENROUTER_MODEL: &str = "openrouter/auto";
 pub const DEFAULT_LOCAL_URL: &str = "http://127.0.0.1:11434/v1";
 pub const DEFAULT_LOCAL_MODEL: &str = "llama3.2";
 
@@ -76,9 +96,25 @@ pub fn provider(id: &str) -> Option<&'static Provider> {
     match id {
         "gemini" => Some(&GEMINI),
         "groq" => Some(&GROQ),
+        "openai" => Some(&OPENAI),
+        "openrouter" => Some(&OPENROUTER),
         "local" => Some(&LOCAL),
         _ => None,
     }
+}
+
+/// The request, with the output limit under the name the provider takes: OpenAI's
+/// newer models refuse `max_tokens` and want `max_completion_tokens`.
+fn request_body(p: &Provider, model: &str, messages: Vec<Value>) -> Value {
+    let mut body = build_body(model, MAX_TOKENS, messages);
+    if p.id == "openai" {
+        if let Some(map) = body.as_object_mut() {
+            if let Some(limit) = map.remove("max_tokens") {
+                map.insert("max_completion_tokens".into(), limit);
+            }
+        }
+    }
+    body
 }
 
 const TIMEOUT: Duration = Duration::from_secs(90);
@@ -307,13 +343,13 @@ pub async fn send(
     // instead of leaving the chat dead, use one the key can actually reach.
     let remembered = FALLBACK.lock().unwrap().get(&(p.id, model.to_string())).cloned();
     let used = remembered.unwrap_or_else(|| model.to_string());
-    let body = build_body(&used, MAX_TOKENS, messages.clone());
+    let body = request_body(p, &used, messages.clone());
     let result = match post(p, base, key, &body).await {
         Err((Some(404), _)) => match working_model(p, base, key, &used).await {
             Some(other) => {
                 crate::log::line(format!("{}: model {used} not found, using {other}", p.id));
                 FALLBACK.lock().unwrap().insert((p.id, model.to_string()), other.clone());
-                post(p, base, key, &build_body(&other, MAX_TOKENS, messages)).await
+                post(p, base, key, &request_body(p, &other, messages)).await
             }
             None => Err((Some(404), explain_error(p, 404, ""))),
         },
@@ -437,6 +473,31 @@ mod tests {
 
     fn turn(role: &str, text: &str) -> (String, String) {
         (role.into(), text.into())
+    }
+
+    #[test]
+    fn openai_and_openrouter_are_providers_with_keys_the_store_knows() {
+        assert_eq!(provider("openai").unwrap().base, "https://api.openai.com/v1");
+        assert_eq!(provider("openrouter").unwrap().base, "https://openrouter.ai/api/v1");
+        for p in [&OPENAI, &OPENROUTER] {
+            assert!(!p.keyless);
+            assert!(crate::secrets::KNOWN_KEYS.contains(&p.key), "{}", p.key);
+        }
+        assert_ne!(OPENAI.key, OPENROUTER.key);
+        assert_ne!(OPENAI.env, OPENROUTER.env);
+    }
+
+    #[test]
+    fn openai_gets_max_completion_tokens_and_the_others_keep_max_tokens() {
+        let msgs = vec![json!({ "role": "user", "content": "hi" })];
+        let openai = request_body(&OPENAI, "gpt-5", msgs.clone());
+        assert!(openai.get("max_tokens").is_none());
+        assert_eq!(openai["max_completion_tokens"], MAX_TOKENS);
+        for p in [&GROQ, &GEMINI, &OPENROUTER, &LOCAL] {
+            let body = request_body(p, "m", msgs.clone());
+            assert_eq!(body["max_tokens"], MAX_TOKENS, "{}", p.id);
+            assert!(body.get("max_completion_tokens").is_none());
+        }
     }
 
     #[test]

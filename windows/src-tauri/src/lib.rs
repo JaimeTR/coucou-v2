@@ -18,6 +18,7 @@ mod platform;
 mod rules;
 mod secrets;
 mod settings;
+mod sounds;
 mod spotify;
 mod sync;
 mod tray;
@@ -110,6 +111,11 @@ fn allow_shortcut() -> Shortcut {
 
 fn deny_shortcut() -> Shortcut {
     Shortcut::new(Some(Modifiers::CONTROL | Modifiers::ALT), Code::KeyN)
+}
+
+/// Ctrl+Alt+D sends Mochi out to the screen's edge, and brings him home.
+fn pet_shortcut() -> Shortcut {
+    Shortcut::new(Some(Modifiers::CONTROL | Modifiers::ALT), Code::KeyD)
 }
 
 /// "Ctrl+Alt+C", "F8", "Ctrl+Space": one or more modifiers and a key, or an F key
@@ -242,9 +248,11 @@ fn apply_shortcut_setting(app: &AppHandle, enabled: bool) {
     if enabled {
         register_shortcut(app, toggle_shortcut(app), "the open shortcut");
         register_shortcut(app, listen_shortcut(app), "the listen shortcut");
+        register_shortcut(app, pet_shortcut(), "Ctrl+Alt+D");
     } else {
         unregister_shortcut(app, toggle_shortcut(app));
         unregister_shortcut(app, listen_shortcut(app));
+        unregister_shortcut(app, pet_shortcut());
         unregister_shortcut(app, allow_shortcut());
         unregister_shortcut(app, deny_shortcut());
     }
@@ -309,6 +317,7 @@ pub(crate) fn apply_settings(app: &AppHandle, mut settings: Settings) {
     settings.pet_phrases = settings::sanitize_phrases(std::mem::take(&mut settings.pet_phrases));
     settings.pet_friend = settings.pet_friend.trim().chars().take(24).collect();
     settings.game_programs = settings::sanitize_programs(std::mem::take(&mut settings.game_programs));
+    settings.pill_colors = settings::sanitize_pill_colors(std::mem::take(&mut settings.pill_colors));
     if !["auto", "work", "game", "meeting", "video"].contains(&settings.work_mode.as_str()) {
         settings.work_mode = "auto".into();
     }
@@ -457,6 +466,27 @@ async fn now_playing() -> platform::NowPlaying {
     tauri::async_runtime::spawn_blocking(|| platform::now_playing().unwrap_or_default())
         .await
         .unwrap_or_default()
+}
+
+/// One of Mochi's sounds, replaced by a file of yours in the sounds folder: its
+/// bytes as base64, or nothing when there is none.
+#[tauri::command]
+fn custom_sound(name: String) -> Option<String> {
+    use base64::Engine;
+    let bytes = sounds::read(&sounds::folder(), &name)?;
+    Some(base64::engine::general_purpose::STANDARD.encode(bytes))
+}
+
+/// Settings → General → Open sounds folder.
+#[tauri::command]
+fn open_sounds_folder() {
+    platform::reveal_folder(&sounds::ensure_folder().to_string_lossy());
+}
+
+/// Settings → General → Reload sounds: the island looks in the folder again.
+#[tauri::command]
+fn reload_sounds(app: AppHandle) {
+    let _ = app.emit_to(island::WINDOW_LABEL, "sounds-reload", ());
 }
 
 #[tauri::command]
@@ -924,7 +954,7 @@ async fn chat_send(
     query: String,
     context: Option<ChatContext>,
 ) -> Result<ChatReply, String> {
-    let (provider, model, dm_model, dm_tokens, gemini_model, groq_model, local_url, local_model) = {
+    let (provider, model, dm_model, dm_tokens, gemini_model, groq_model, openai_model, openrouter_model, local_url, local_model) = {
         let s = shared.settings.lock().unwrap();
         (
             s.chat_provider.clone(),
@@ -933,6 +963,8 @@ async fn chat_send(
             s.devmark_max_tokens,
             s.gemini_model.clone(),
             s.groq_model.clone(),
+            s.openai_model.clone(),
+            s.openrouter_model.clone(),
             s.local_url.clone(),
             s.local_model.clone(),
         )
@@ -941,6 +973,10 @@ async fn chat_send(
         "devmark" => devmark::send(&devmark_chat, &dm_model, dm_tokens, query, context).await,
         "gemini" => compat::send(&compat_chat, &compat::GEMINI, compat::GEMINI.base, &gemini_model, query, context).await,
         "groq" => compat::send(&compat_chat, &compat::GROQ, compat::GROQ.base, &groq_model, query, context).await,
+        "openai" => compat::send(&compat_chat, &compat::OPENAI, compat::OPENAI.base, &openai_model, query, context).await,
+        "openrouter" => {
+            compat::send(&compat_chat, &compat::OPENROUTER, compat::OPENROUTER.base, &openrouter_model, query, context).await
+        }
         "local" => {
             let base = compat::local_base(&local_url)?;
             compat::send(&compat_chat, &compat::LOCAL, &base, &local_model, query, context).await
@@ -1112,6 +1148,10 @@ pub fn run() {
                     if event.state() != ShortcutState::Pressed {
                         return;
                     }
+                    if shortcut == &pet_shortcut() {
+                        let _ = app.emit_to(pet::LABEL, "pet-toggle", ());
+                        return;
+                    }
                     let name = if shortcut == &allow_shortcut() {
                         "allow"
                     } else if shortcut == &deny_shortcut() {
@@ -1150,6 +1190,9 @@ pub fn run() {
             undock_island,
             sync_status,
             now_playing,
+            custom_sound,
+            open_sounds_folder,
+            reload_sounds,
             spotify_refresh,
             spotify_control,
             spotify_open,
