@@ -162,6 +162,11 @@ pub fn reveal_folder(path: &str) {
     let _ = Command::new("xdg-open").arg(path).spawn();
 }
 
+/// There is no Claude desktop app on Linux.
+pub fn open_claude_desktop() -> bool {
+    false
+}
+
 /// Where VS Code remembers its windows and workspaces.
 pub fn vscode_storage_path() -> PathBuf {
     let base = std::env::var_os("XDG_CONFIG_HOME")
@@ -400,4 +405,13 @@ mod tests {
         assert_eq!(std::fs::metadata(&dir).unwrap().mode() & 0o777, 0o700);
         let _ = std::fs::remove_dir_all(&dir);
     }
+}
+
+/// No Spotify reader on this platform yet.
+pub fn spotify_state() -> crate::spotify::SpotifyState {
+    Default::default()
+}
+
+pub fn spotify_control(_action: crate::spotify::Action) -> bool {
+    false
 }

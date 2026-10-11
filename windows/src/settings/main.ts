@@ -863,9 +863,9 @@ function personalSection(detectedName: string): HTMLElement {
   const names: Record<string, string> = {
     integration_claude: "Claude Code", integration_github: "GitHub",
     integration_vercel: "Vercel", integration_resend: "Resend", integration_notion: "Notion",
-    integration_calcom: "Cal.com", integration_stripe: "Stripe", integration_system: "Modo",
+    integration_calcom: "Cal.com", integration_stripe: "Stripe", integration_system: "Modo", integration_spotify: "Spotify",
     agent_gemini: "Gemini CLI", agent_opencode: "OpenCode", agent_copilot: "Copilot CLI", agent_muse: "Muse Code",
-    agent_codex: "Codex", agent_cursor: "Cursor Agent", agent_amp: "Amp", agent_hermes: "Hermes Agent", agent_vscode: "VS Code",
+    agent_codex: "Codex", agent_cursor: "Cursor Agent", agent_amp: "Amp", agent_hermes: "Hermes Agent", "agent_claude-desktop": "Claude Desktop", agent_vscode: "VS Code",
   };
   for (const id of ["integration_claude", ...settings.activeIntegrations]) {
     if (names[id]) startPill.append(h("option", { value: id, text: names[id] }));
@@ -1551,6 +1551,7 @@ interface IntegrationDef {
 
 const INTEGRATIONS: IntegrationDef[] = [
   { id: "integration_system", name: "Modo", color: "#A78BFA", fields: [] },
+  { id: "integration_spotify", name: "Spotify", color: "#1DB954", fields: [] },
   { id: "integration_stripe", name: "Stripe", color: "#0570DE",
     fields: [{ key: "stripe-api-key", label: "Clave secreta", placeholder: "sk_live_…", secret: true }] },
   { id: "integration_github", name: "GitHub", color: "#F4505E",

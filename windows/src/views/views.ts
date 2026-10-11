@@ -417,7 +417,7 @@ function buildError(actions: ViewActions): ViewHost {
   const detail = h("div", { class: "detail" });
   const row = h("div", { class: "actions" },
     btn("Reintentar", "primary", () => actions.setView(State.defaultView())),
-    btn("Abrir terminal", "secondary", () => actions.openTerminal()),
+    btn(State.focusTask?.id === "agent_claude-desktop" ? "Abrir Claude" : "Abrir terminal", "secondary", () => actions.openTerminal()),
   );
   const el = h("div", { class: "view" }, card("red", stack(116, 16, who, title, detail, row)));
   return {
@@ -438,7 +438,7 @@ function buildFinished(actions: ViewActions): ViewHost {
   const who = h("div");
   const title = h("div", { class: "title" });
   const row = h("div", { class: "actions" },
-    btn("Abrir terminal", "primary", () => actions.openTerminal()),
+    btn(State.focusTask?.id === "agent_claude-desktop" ? "Abrir Claude" : "Abrir terminal", "primary", () => actions.openTerminal()),
     btn("Listo", "secondary", () => actions.collapse()),
   );
   const el = h("div", { class: "view" }, card("green", stack(116, 16, who, title, row)));

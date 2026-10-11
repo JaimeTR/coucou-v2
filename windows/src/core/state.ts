@@ -1,5 +1,6 @@
 // App state — mirror of AppState.swift (the parts the island needs).
 
+import type { SpotifyState } from "./spotify";
 import type { BotEmoteName, BotStateName, IslandMode, IslandViewName } from "./layout";
 import type { EyeShape } from "../mochi/engine";
 import type { FileDiff } from "../island/diff";
@@ -116,6 +117,8 @@ export const INTEGRATION_AGENTS: AgentTask[] = [
   task("integration_stripe", "Stripe", "#0570DE", "n8n"),
   // What the person is doing (Work, Game, Meeting, Video): shows it and switches it.
   task("integration_system", "Modo", "#A78BFA", "n8n"),
+  // What Spotify plays, with its controls. Nothing to connect: it is read from Windows.
+  task("integration_spotify", "Spotify", "#1DB954", "n8n"),
   // Other agents next to Claude Code. Their ids are the contract the relay's
   // `--agent <name>` produces (agent_<name>); the colours follow the Mac catalog.
   task("agent_gemini", "Gemini CLI", "#8AB4F8", "agent"),
@@ -126,6 +129,8 @@ export const INTEGRATION_AGENTS: AgentTask[] = [
   task("agent_cursor", "Cursor Agent", "#F54E00", "agent"),
   task("agent_amp", "Amp", "#F34E3F", "agent"),
   task("agent_hermes", "Hermes Agent", "#C084FC", "agent"),
+  // Claude Code sessions started from the Claude app: nothing to install, the relay tags them.
+  task("agent_claude-desktop", "Claude Desktop", "#D97757", "agent"),
   // VS Code has its own pill: its projects, and the long commands of its terminal.
   task("agent_vscode", "VS Code", "#2DA8F5", "agent"),
 ];
@@ -134,12 +139,12 @@ export const TOGGLEABLE_INTEGRATION_IDS = [
   "integration_resend", "integration_vercel", "integration_github",
   "integration_notion", "integration_calcom", "integration_stripe",
   "agent_gemini", "agent_opencode", "agent_copilot", "agent_muse", "agent_codex", "agent_cursor", "agent_amp", "agent_hermes",
-  "agent_vscode", "integration_system",
+  "agent_claude-desktop", "agent_vscode", "integration_system", "integration_spotify",
 ];
 
 /** The agents that have a pill of their own to switch on in Settings. */
 export const KNOWN_AGENT_IDS = [
-  "agent_gemini", "agent_opencode", "agent_copilot", "agent_muse", "agent_codex", "agent_cursor", "agent_amp", "agent_hermes", "agent_vscode",
+  "agent_gemini", "agent_opencode", "agent_copilot", "agent_muse", "agent_codex", "agent_cursor", "agent_amp", "agent_hermes", "agent_claude-desktop", "agent_vscode",
 ];
 
 /** A project folder, as listed on the Claude Code and VS Code cards. */
@@ -377,6 +382,8 @@ class AppState {
   searchResult: SearchResult | null = null;
   chatHistory: ChatMessage[] = [];
   pendingApproval: ApprovalInfo | null = null;
+  /** What Spotify plays, while its pill is on screen. */
+  spotify: SpotifyState | null = null;
   pendingQuestion: PendingQuestion | null = null;
 
   /** Plan usage from the statusLine relay; null until Claude Code reports it. */

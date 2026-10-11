@@ -25,6 +25,7 @@ import { h } from "../views/dom";
 import { IslandStateMachine } from "./fsm";
 import { endQuestion, Recap } from "./hooks";
 import { startMusic } from "./music";
+import { startSpotify } from "./spotify";
 import { isDock, placement, undockNudge } from "./dock";
 import { isOutfit, resolve, wear } from "../mochi/outfits";
 import { greetingLines } from "./greetingText";
@@ -113,6 +114,7 @@ export class Island {
       this.ensureRunning();
     });
     startMusic(this.engine, () => this.ensureRunning());
+    startSpotify();
     // The calendar moves on while the app stays open (New Year's Eve, Halloween…).
     window.setInterval(() => this.applySettings(), 3600_000);
   }
@@ -151,6 +153,11 @@ export class Island {
    */
   private openSessionTerminal() {
     const task = State.focusTask;
+    // A session from the Claude app has no terminal: the app is where it lives.
+    if (task?.id === "agent_claude-desktop") {
+      void Bridge.openClaudeDesktop();
+      return;
+    }
     const cwd = task?.sessionCwd ?? null;
     const pids = task?.sessionPids;
     if (!pids || pids.length === 0) {

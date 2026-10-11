@@ -7,6 +7,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import type { ProjectInfo, Settings } from "./state";
+import type { SpotifyAction, SpotifyState } from "./spotify";
 import type { Rule, RuleDraft } from "../island/rules";
 
 export const IS_TAURI =
@@ -89,6 +90,13 @@ export const Bridge = {
   openUrl: (url: string) => call<void>("open_url", { url }),
 
   /** "Open terminal" → opens the folder in VS Code when `code` is on PATH. */
+  // ── Spotify (src-tauri/src/spotify.rs) ──────────────────────────────────────
+  spotifyRefresh: () => call<Omit<SpotifyState, "at">>("spotify_refresh"),
+  /** True when Spotify took it. `value`: seconds, for a seek. */
+  spotifyControl: (action: SpotifyAction, value?: number) =>
+    call<boolean>("spotify_control", { action, value: value ?? null }),
+  spotifyOpen: () => call<boolean>("spotify_open"),
+  openClaudeDesktop: () => call<boolean>("open_claude_desktop"),
   openInVSCode: (path: string | null) => call<boolean>("open_in_vscode", { path }),
   openAgentApp: (agent: "opencode" | "gemini" | "antigravity" | "antigravity-ide") => call<boolean>("open_agent_app", { agent }),
   setUiLanguage: (lang: "es" | "en") => call<void>("set_ui_language", { lang }),

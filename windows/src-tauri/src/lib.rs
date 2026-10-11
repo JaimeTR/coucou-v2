@@ -18,6 +18,7 @@ mod platform;
 mod rules;
 mod secrets;
 mod settings;
+mod spotify;
 mod sync;
 mod tray;
 mod updater;
@@ -459,6 +460,25 @@ async fn now_playing() -> platform::NowPlaying {
 }
 
 #[tauri::command]
+async fn spotify_refresh() -> spotify::SpotifyState {
+    tauri::async_runtime::spawn_blocking(platform::spotify_state).await.unwrap_or_default()
+}
+
+/// `value`: seconds, for a seek.
+#[tauri::command]
+async fn spotify_control(action: String, value: Option<f64>) -> bool {
+    let Some(action) = spotify::Action::parse(&action, value) else { return false };
+    tauri::async_runtime::spawn_blocking(move || platform::spotify_control(action)).await.unwrap_or(false)
+}
+
+/// Brings Spotify forward or starts it: its own link opens the app wherever it is installed.
+#[tauri::command]
+fn spotify_open() -> bool {
+    platform::open_url("spotify:");
+    true
+}
+
+#[tauri::command]
 fn sync_status(app: AppHandle) -> sync::SyncStatus {
     sync::status(&app)
 }
@@ -544,6 +564,11 @@ fn open_url(url: String) {
         return;
     }
     platform::open_url(&url);
+}
+
+#[tauri::command]
+fn open_claude_desktop() -> bool {
+    platform::open_claude_desktop()
 }
 
 /// "Open terminal" opens the working folder in VS Code when `code` is on PATH,
@@ -1125,6 +1150,9 @@ pub fn run() {
             undock_island,
             sync_status,
             now_playing,
+            spotify_refresh,
+            spotify_control,
+            spotify_open,
             pet_show,
             pet_hide,
             pet_hit,
@@ -1145,6 +1173,7 @@ pub fn run() {
             reset_island_position,
             open_url,
             open_in_vscode,
+            open_claude_desktop,
             launch_agent,
             open_agent_app,
             open_file_in_vscode,

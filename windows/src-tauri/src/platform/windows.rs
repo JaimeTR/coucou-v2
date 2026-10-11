@@ -95,6 +95,12 @@ pub fn reveal_folder(path: &str) {
     let _ = Command::new("explorer").arg(path).spawn();
 }
 
+/// The Claude desktop app: the `claude:` link opens (or brings forward) wherever
+/// it is installed, the classic installer or the Store.
+pub fn open_claude_desktop() -> bool {
+    no_console(Command::new("rundll32.exe").args(["url.dll,FileProtocolHandler", "claude:"])).spawn().is_ok()
+}
+
 /// Our own `where`: walks %PATH% against %PATHEXT%, no shell involved.
 /// Rust quotes arguments correctly for `.cmd`/`.bat` targets since 1.77, so
 /// spawning `code.cmd` directly is safe.
@@ -466,6 +472,103 @@ fn media_session() -> Option<super::NowPlaying> {
     Some(super::NowPlaying { playing, title, artist, app })
 }
 
+/// The Spotify media session, if Spotify is open.
+fn spotify_session() -> Option<::windows::Media::Control::GlobalSystemMediaTransportControlsSession> {
+    use ::windows::Media::Control::GlobalSystemMediaTransportControlsSessionManager as Manager;
+    let manager = Manager::RequestAsync().ok()?.get().ok()?;
+    let sessions = manager.GetSessions().ok()?;
+    sessions.into_iter().find(|s| {
+        s.SourceAppUserModelId().map(|id| crate::spotify::is_spotify(&id.to_string())).unwrap_or(false)
+    })
+}
+
+/// A cover from the session's thumbnail, as bytes.
+fn spotify_cover(props: &::windows::Media::Control::GlobalSystemMediaTransportControlsSessionMediaProperties) -> Option<Vec<u8>> {
+    use ::windows::Storage::Streams::DataReader;
+    let stream = props.Thumbnail().ok()?.OpenReadAsync().ok()?.get().ok()?;
+    let size = u32::try_from(stream.Size().ok()?).ok()?;
+    if size == 0 || size > 3 * 1024 * 1024 {
+        return None;
+    }
+    let reader = DataReader::CreateDataReader(&stream).ok()?;
+    reader.LoadAsync(size).ok()?.get().ok()?;
+    let mut bytes = vec![0u8; size as usize];
+    reader.ReadBytes(&mut bytes).ok()?;
+    Some(bytes)
+}
+
+fn spotify_state_inner() -> crate::spotify::SpotifyState {
+    use ::windows::Media::Control::GlobalSystemMediaTransportControlsSessionPlaybackStatus as Status;
+    let Some(session) = spotify_session() else { return Default::default() };
+    let playing = session
+        .GetPlaybackInfo()
+        .and_then(|i| i.PlaybackStatus())
+        .map(|s| s == Status::Playing)
+        .unwrap_or(false);
+    let props = session.TryGetMediaPropertiesAsync().ok().and_then(|op| op.get().ok());
+    let text = |f: &dyn Fn(&::windows::Media::Control::GlobalSystemMediaTransportControlsSessionMediaProperties) -> ::windows::core::Result<::windows::core::HSTRING>| {
+        props.as_ref().and_then(|p| f(p).ok()).map(|t| t.to_string()).unwrap_or_default()
+    };
+    let (position, duration) = session
+        .GetTimelineProperties()
+        .ok()
+        .map(|t| {
+            // TimeSpan is in 100 ns ticks.
+            let secs = |ts: ::windows::Foundation::TimeSpan| (ts.Duration.max(0) as f64) / 10_000_000.0;
+            (t.Position().map(secs).unwrap_or(0.0), t.EndTime().map(secs).unwrap_or(0.0))
+        })
+        .unwrap_or((0.0, 0.0));
+    let artwork = props.as_ref().and_then(spotify_cover).and_then(|b| crate::spotify::artwork_data_url(&b));
+    crate::spotify::SpotifyState {
+        running: true,
+        playing,
+        title: text(&|p| p.Title()),
+        artist: text(&|p| p.Artist()),
+        album: text(&|p| p.AlbumTitle()),
+        position,
+        duration,
+        artwork,
+    }
+}
+
+fn spotify_control_inner(action: crate::spotify::Action) -> bool {
+    use crate::spotify::Action;
+    let Some(session) = spotify_session() else { return false };
+    let done = match action {
+        Action::PlayPause => session.TryTogglePlayPauseAsync().and_then(|op| op.get()),
+        Action::Next => session.TrySkipNextAsync().and_then(|op| op.get()),
+        Action::Previous => session.TrySkipPreviousAsync().and_then(|op| op.get()),
+        Action::Seek(secs) => session.TryChangePlaybackPositionAsync((secs * 10_000_000.0) as i64).and_then(|op| op.get()),
+    };
+    done.unwrap_or(false)
+}
+
+/// Runs `f` on a thread of its own with COM started: WinRT needs it, and the
+/// threads these commands arrive on have not started it.
+fn on_com_thread<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> Option<T> {
+    std::thread::spawn(move || {
+        use windows::Win32::System::Com::{CoInitializeEx, CoUninitialize, COINIT_MULTITHREADED};
+        let started = unsafe { CoInitializeEx(None, COINIT_MULTITHREADED) }.is_ok();
+        let out = f();
+        if started {
+            unsafe { CoUninitialize() };
+        }
+        out
+    })
+    .join()
+    .ok()
+}
+
+/// What Spotify is playing now. Blocks for a few milliseconds: call it from a worker thread.
+pub fn spotify_state() -> crate::spotify::SpotifyState {
+    on_com_thread(spotify_state_inner).unwrap_or_default()
+}
+
+/// True when Spotify took the command.
+pub fn spotify_control(action: crate::spotify::Action) -> bool {
+    on_com_thread(move || spotify_control_inner(action)).unwrap_or(false)
+}
+
 pub fn cursor_physical() -> Option<(f64, f64)> {
     let mut p = POINT::default();
     unsafe { GetCursorPos(&mut p).ok()? };
@@ -571,6 +674,16 @@ mod signals_tests {
         println!("{:?}", super::signals(&[]));
         println!("steam: {:?}", super::steam_game(&super::running_programs()));
         println!("programs: {}", super::running_programs().len());
+    }
+
+    /// Asks the real system what Spotify plays (nothing when it is closed).
+    /// `cargo test spotify_smoke -- --ignored --nocapture`
+    #[test]
+    #[ignore]
+    fn spotify_smoke() {
+        let mut s = super::spotify_state();
+        let cover = s.artwork.take().map(|a| a.len());
+        println!("{s:?} cover bytes: {cover:?}");
     }
 }
 

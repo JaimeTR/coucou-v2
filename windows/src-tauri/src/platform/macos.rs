@@ -87,6 +87,10 @@ pub fn open_url(url: &str) {
     let _ = Command::new("open").arg(url).spawn();
 }
 
+pub fn open_claude_desktop() -> bool {
+    Command::new("open").args(["-a", "Claude"]).spawn().is_ok()
+}
+
 /// Shows the folder in Finder.
 pub fn reveal_folder(path: &str) {
     let _ = Command::new("open").arg(path).spawn();
@@ -311,4 +315,13 @@ mod mode_tests {
         assert_eq!(fullscreen_owner("S|1512|982\nW|Safari|0|1200|800"), None);
         assert_eq!(fullscreen_owner(""), None);
     }
+}
+
+/// No Spotify reader on this platform yet.
+pub fn spotify_state() -> crate::spotify::SpotifyState {
+    Default::default()
+}
+
+pub fn spotify_control(_action: crate::spotify::Action) -> bool {
+    false
 }

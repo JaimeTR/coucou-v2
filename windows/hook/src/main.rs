@@ -246,6 +246,10 @@ fn normalize_copilot_muse(map: &mut serde_json::Map<String, serde_json::Value>) 
     }
 }
 
+fn claude_desktop_entrypoint(entrypoint: Option<&str>) -> bool {
+    entrypoint == Some("claude-desktop")
+}
+
 /// Copilot CLI is fail-closed on a permission request: no answer would deny the
 /// tool. Without a decision from the island it is told to ask in the terminal.
 fn copilot_fallback(agent: &str, event: &str) -> Option<&'static str> {
@@ -342,6 +346,11 @@ fn read_event() -> Option<Event> {
                 arg_event = arg;
             }
         }
+    }
+    // A Claude Code session started from the Claude desktop app says so in
+    // CLAUDE_CODE_ENTRYPOINT: it gets its own pill. Its permissions stay in the Claude app.
+    if agent.is_empty() && claude_desktop_entrypoint(std::env::var("CLAUDE_CODE_ENTRYPOINT").ok().as_deref()) {
+        agent = "claude-desktop".to_string();
     }
     // Which agent this hook was installed for. Absent means Claude Code,
     // so existing hook commands keep working unchanged.
@@ -690,6 +699,13 @@ mod tests {
         let mut m = serde_json::json!({ "hook_event_name": "post_tool_use" });
         normalize_agent("muse", m.as_object_mut().unwrap());
         assert_eq!(m["hook_event_name"], "PostToolUse");
+    }
+
+    #[test]
+    fn claude_desktop_sessions_are_recognised_by_their_entrypoint() {
+        assert!(claude_desktop_entrypoint(Some("claude-desktop")));
+        assert!(!claude_desktop_entrypoint(Some("cli")));
+        assert!(!claude_desktop_entrypoint(None));
     }
 
     #[test]

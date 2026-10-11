@@ -10,6 +10,8 @@ import { State, type AgentTask, type ProjectInfo } from "../core/state";
 import { Bridge } from "../core/bridge";
 import { miniUsage } from "./plan";
 import { MODE_CHOICES, MODE_COLORS, MODE_NAMES, modeLabel } from "../core/modes";
+import { clock, positionAt, type SpotifyAction } from "../core/spotify";
+import { refreshSpotify } from "../island/spotify";
 
 /** Same shape as the Swift `timeAgo` computed properties. */
 export function timeAgo(value: unknown): string {
@@ -733,6 +735,58 @@ export function hasIntegrationData(id: string): boolean {
   }
 }
 
+/** The Spotify pill: the track, its cover and the controls. */
+function spotifyCard(task: AgentTask): HTMLElement {
+  const s = State.spotify;
+  const card = h("div", { class: "int-card" }, header(task.color, "Spotify", s?.running ? (s.playing ? "Sonando" : "En pausa") : "Cerrado"));
+  if (!s || !s.running) {
+    card.append(
+      h("div", { class: "int-sub", text: "Spotify no está abierto." }),
+      h("div", { class: "int-actions" },
+        h("button", { class: "link-btn", style: `color:${task.color}d9`, text: "Abrir Spotify", onclick: () => void Bridge.spotifyOpen() }),
+      ),
+    );
+    return card;
+  }
+  const control = (text: string, title: string, action: SpotifyAction) =>
+    h("button", {
+      class: "link-btn",
+      style: `color:${task.color}d9;font-size:15px`,
+      text,
+      title,
+      onclick: () => void Bridge.spotifyControl(action).then(() => refreshSpotify()),
+    });
+  const pos = positionAt(s, Date.now());
+  card.append(
+    h("div", { style: "display:flex;gap:10px;align-items:center" },
+      s.artwork ? h("img", { src: s.artwork, alt: "", style: "width:52px;height:52px;border-radius:8px;object-fit:cover" }) : h("div", {}),
+      h("div", { style: "min-width:0" },
+        h("div", { class: "int-sub", style: "font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap", text: s.title || "Sin título" }),
+        h("div", { class: "int-sub", style: "overflow:hidden;text-overflow:ellipsis;white-space:nowrap", text: s.artist }),
+      ),
+    ),
+  );
+  if (s.duration > 0) {
+    card.append(
+      h("div", { class: "int-sub", style: "display:flex;gap:6px;align-items:center" },
+        h("span", { text: clock(pos) }),
+        h("div", { style: "flex:1;height:3px;border-radius:2px;background:#ffffff22;overflow:hidden" },
+          h("div", { style: `height:100%;width:${Math.min(100, (pos / s.duration) * 100).toFixed(1)}%;background:${task.color}` }),
+        ),
+        h("span", { text: clock(s.duration) }),
+      ),
+    );
+  }
+  card.append(
+    h("div", { class: "int-actions" },
+      control("⏮", "Anterior", "previous"),
+      control(s.playing ? "⏸" : "▶", s.playing ? "Pausa" : "Reproducir", "playPause"),
+      control("⏭", "Siguiente", "next"),
+    ),
+  );
+  return card;
+}
+
 /** The Mode pill: what the person is doing, and a button per mode to choose it by hand. */
 function modeCard(): HTMLElement {
   const color = MODE_COLORS[State.workMode];
@@ -758,11 +812,30 @@ function modeCard(): HTMLElement {
   );
 }
 
+/** Claude Code sessions started from the Claude app: shown here, answered in the Claude app. */
+function claudeDesktopCard(task: AgentTask, openSettings: () => void): HTMLElement {
+  const connected = State.integrations[task.id]?.configured ?? false;
+  const card = h("div", { class: "int-card" }, header(task.color, task.name, connected ? "Conectado" : "Sin conectar"));
+  card.append(
+    h("div", { class: "int-sub", text: connected
+      ? "Las sesiones de Claude Code que empiezas desde la app de Claude salen aquí. Los permisos se responden en la app de Claude."
+      : "Conecta los hooks de Claude Code para ver aquí las sesiones de la app de Claude." }),
+  );
+  const actions = h("div", { class: "int-actions" },
+    h("button", { class: "link-btn", style: `color:${task.color}d9`, text: "Abrir Claude", onclick: () => void Bridge.openClaudeDesktop() }),
+  );
+  if (!connected) actions.append(h("button", { class: "link-btn", text: "Conectar", onclick: openSettings }));
+  card.append(actions);
+  return card;
+}
+
 export function renderIntegrationCard(task: AgentTask, hooks: IntegrationCardHooks): HTMLElement {
   if (task.id === "integration_system") return modeCard();
+  if (task.id === "integration_spotify") return spotifyCard(task);
   // Claude Code and VS Code each have a card of their own, whatever their state.
   if (task.id === "integration_claude") return claudeCard(task, hooks.openSettings);
   if (task.id === "agent_vscode") return vscodeCard(task, hooks.openSettings);
+  if (task.id === "agent_claude-desktop") return claudeDesktopCard(task, hooks.openSettings);
   if (task.id.startsWith("custom_")) return customCard(task, hooks.openSettings);
   if (AGENT_LAUNCH[task.id]) return agentCard(task, hooks.openSettings);
   if (task.id === "integration_github" && hasIntegrationData(task.id)) {

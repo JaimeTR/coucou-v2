@@ -49,6 +49,9 @@ export async function refreshConfigured() {
     data: {}, error: null, loaded: false, configured: false,
   };
   State.integrations.integration_claude = { ...claude, configured: hooks };
+  // Claude Desktop sessions come through Claude Code's own hooks: nothing else to install.
+  const desktop = State.integrations["agent_claude-desktop"] ?? { data: {}, error: null, loaded: false, configured: false };
+  State.integrations["agent_claude-desktop"] = { ...desktop, configured: hooks };
 
   // The other agents are "configured" when Coucou's part is in their settings.
   for (const agent of (await Bridge.agentsStatus()) ?? []) {
