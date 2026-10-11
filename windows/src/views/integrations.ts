@@ -426,14 +426,25 @@ interface PrItem {
   copilotReviewed: boolean;
 }
 
+interface RepoCi {
+  name: string;
+  url: string;
+  branch: string;
+  ci: "success" | "failure" | "pending";
+}
+
 interface Pulse {
   mine: PrItem[];
   toReview: PrItem[];
   copilot: PrItem[];
   copilotReviewedMine: number;
+  /** The CI of my repositories' default branches. */
+  repos?: RepoCi[];
+  /** The last weeks of contributions as levels 0-4, a column per week. */
+  calendar?: { total: number; weeks: number[][] } | null;
 }
 
-type GithubSection = "review" | "mine" | "copilot";
+type GithubSection = "review" | "mine" | "copilot" | "branches" | "activity";
 
 /** Which list the detail view shows; set by the row that was clicked. */
 let githubSection: GithubSection = "review";
@@ -464,6 +475,15 @@ function worstCi(prs: PrItem[]): string {
 }
 
 const GITHUB_SECTIONS: Record<GithubSection, { title: string; color: (p: Pulse) => string; url: string }> = {
+  activity: { title: "Actividad", color: () => "#26a641", url: "https://github.com" },
+  branches: {
+    title: "CI de las ramas principales",
+    color: (p) => {
+      const repos = p.repos ?? [];
+      return repos.some((r) => r.ci === "failure") ? "#F4505E" : repos.some((r) => r.ci === "pending") ? "#F5A524" : repos.length ? "#22C55E" : "#4B5563";
+    },
+    url: "https://github.com",
+  },
   review: {
     title: "Revisiones pedidas",
     color: (p) => (p.toReview.length > 0 ? "#F5A524" : "#4B5563"),
@@ -478,7 +498,22 @@ const GITHUB_SECTIONS: Record<GithubSection, { title: string; color: (p: Pulse) 
 };
 
 function listOf(p: Pulse, section: GithubSection): PrItem[] {
+  if (section === "branches" || section === "activity") return [];
   return section === "review" ? p.toReview : section === "mine" ? p.mine : p.copilot;
+}
+
+/** The contribution calendar: a small grid, one column per week. */
+function contributionGrid(cal: NonNullable<Pulse["calendar"]>): HTMLElement {
+  const colors = ["#2a2d34", "#0e4429", "#006d32", "#26a641", "#39d353"];
+  const grid = h("div", { style: "display:flex;gap:2px;padding:2px 8px", title: `${cal.total} contribuciones en el último año` });
+  for (const week of cal.weeks) {
+    const col = h("div", { style: "display:flex;flex-direction:column;gap:2px" });
+    for (const level of week) {
+      col.append(h("i", { style: `width:7px;height:7px;border-radius:2px;background:${colors[level] ?? colors[0]}` }));
+    }
+    grid.append(col);
+  }
+  return grid;
 }
 
 function githubCard(onDetail: () => void): HTMLElement {
@@ -519,10 +554,28 @@ function githubCard(onDetail: () => void): HTMLElement {
 
   const copilotLabel =
     pulse.copilotReviewedMine > 0 ? `Copilot · revisó ${pulse.copilotReviewedMine} tuyos` : "Pull requests de Copilot";
+  // The CI of the default branches and the contribution grid: two small buttons
+  // in the header, so the three lists keep their room.
+  const chip = (section: GithubSection, label: string, tone: string) =>
+    h("button", {
+      class: "link-btn",
+      style: `color:${tone};margin-left:6px;padding:0 4px`,
+      title: GITHUB_SECTIONS[section].title,
+      text: label,
+      onclick: () => {
+        githubSection = section;
+        onDetail();
+      },
+    });
+  const extra = h("span", {});
+  if ((pulse.repos?.length ?? 0) > 0) extra.append(chip("branches", "CI ●", GITHUB_SECTIONS.branches.color(pulse)));
+  if (pulse.calendar && pulse.calendar.weeks.length > 0) extra.append(chip("activity", "▦", "#26a641"));
+  // With the buttons there is no room for "& Copilot": the Copilot row says it.
+  const shortKind = extra.childNodes.length > 0 ? `★ ${fmt(stars)}` : kind;
   return h(
     "div",
     { class: "int-card" },
-    header(GITHUB_RED, "GitHub", kind),
+    header(GITHUB_RED, "GitHub", shortKind, extra),
     h(
       "div",
       { class: "int-rows tight" },
@@ -541,6 +594,21 @@ function githubDetail(onBack: () => void): HTMLElement {
   const color = pulse ? section.color(pulse) : "#4B5563";
 
   const rows = h("div", { class: "int-rows tight" });
+  if (githubSection === "activity" && pulse?.calendar) {
+    rows.append(contributionGrid(pulse.calendar), h("div", { class: "int-sub", text: `${pulse.calendar.total} contribuciones en el último año` }));
+  }
+  if (githubSection === "branches") {
+    for (const r of (pulse?.repos ?? []).slice(0, 4)) {
+      const tone = r.ci === "success" ? "#22C55E" : r.ci === "failure" ? "#F4505E" : "#F5A524";
+      rows.append(
+        h("button", { class: "int-row gh-pr", title: `${r.name} · ${r.branch}`, onclick: () => void Bridge.openUrl(r.url) },
+          dot(tone, 5),
+          h("span", { class: "int-name", text: r.name.split("/").pop() ?? r.name }),
+          h("span", { class: "int-ago", text: r.branch }),
+        ),
+      );
+    }
+  }
   for (const p of prs.slice(0, 3)) {
     const repo = p.repo.split("/").pop() ?? p.repo;
     rows.append(
@@ -559,7 +627,8 @@ function githubDetail(onBack: () => void): HTMLElement {
       ),
     );
   }
-  if (prs.length === 0) rows.append(h("div", { class: "int-empty", text: "Nada por aquí" }));
+  const total = githubSection === "branches" ? (pulse?.repos?.length ?? 0) : githubSection === "activity" ? (pulse?.calendar?.total ?? 0) : prs.length;
+  if (total === 0) rows.append(h("div", { class: "int-empty", text: "Nada por aquí" }));
   else if (prs.length > 3) {
     rows.append(
       h("button", {
@@ -580,7 +649,7 @@ function githubDetail(onBack: () => void): HTMLElement {
       h("button", { class: "int-back", onclick: onBack }, svg(ICONS.chevronLeft, 10, { stroke: 2.4 })),
       dot(color, 6),
       h("b", { text: section.title }),
-      h("span", { class: "int-badge", style: `color:${color};background:${color}24`, text: String(prs.length) }),
+      h("span", { class: "int-badge", style: `color:${color};background:${color}24`, text: String(total) }),
     ),
     rows,
   );

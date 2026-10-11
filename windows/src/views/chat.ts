@@ -4,6 +4,7 @@
 import { h, svg, clear } from "./dom";
 import { ICONS } from "./icons";
 import { renderMarkdown } from "./markdown";
+import { CHAT_PROVIDERS, nextProvider, providerLabel } from "../core/providers";
 import { Bridge, type ChatContext } from "../core/bridge";
 import { Sound } from "../core/sound";
 import { speak, speakAuto, stopSpeaking, voiceAvailable } from "../core/voice";
@@ -78,11 +79,28 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
   const send = h("button", { class: "send-btn", title: "Enviar" }, svg(ICONS.arrowUp, 11));
   const mic = h("button", { class: "send-btn mic-btn", title: "Hablar" }, svg(ICONS.mic, 11));
   const bar = h("div", { class: "chat-bar" }, input, mic, send);
+  // Who answers: one click moves on to the next AI that has a key (Settings has the rest).
+  const who = h("button", { class: "link-btn", style: "font-size:10.5px;color:#8e939c;padding:0 2px;text-align:left", title: "Cambiar de IA" });
+  who.addEventListener("click", async () => {
+    if (sending) return;
+    const usable = new Set<typeof State.settings.chatProvider>();
+    for (const p of CHAT_PROVIDERS) {
+      if (p.key == null || (await Bridge.secretPresent(p.key))) usable.add(p.id);
+    }
+    const next = nextProvider(State.settings.chatProvider, usable);
+    if (next === State.settings.chatProvider) return;
+    // The same path as Settings: saving tells the island, which starts the conversation over.
+    State.settings = { ...State.settings, chatProvider: next };
+    await Bridge.saveSettings(State.settings);
+    State.chatHistory = [];
+    void Bridge.chatReset();
+    State.notify();
+  });
 
   const el = h(
     "div",
     { class: "view" },
-    h("div", { class: "card wash chat-card" }, h("div", { class: "chat-body" }, chipRow, log, bar)),
+    h("div", { class: "card wash chat-card" }, h("div", { class: "chat-body" }, chipRow, log, bar, who)),
   );
   (el.querySelector(".card") as HTMLElement).style.setProperty("--wash", "rgba(99,102,241,0.5)");
 
@@ -222,6 +240,7 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
         log.scrollTop = log.scrollHeight;
       }
 
+      who.textContent = providerLabel(State.settings);
       input.placeholder =
         status || (State.chatHistory.length === 0 ? "Pregúntame lo que quieras…" : "Continúa…");
       input.disabled = sending;

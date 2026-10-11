@@ -273,6 +273,20 @@ query {
   mine: search(query: "is:pr is:open author:@me sort:updated-desc", type: ISSUE, first: 10) { nodes { ...pr } }
   review: search(query: "is:pr is:open review-requested:@me sort:updated-desc", type: ISSUE, first: 10) { nodes { ...pr } }
   assigned: search(query: "is:pr is:open assignee:@me sort:updated-desc", type: ISSUE, first: 10) { nodes { ...pr } }
+  viewer {
+    repositories(first: 10, ownerAffiliations: OWNER, isFork: false, orderBy: {field: PUSHED_AT, direction: DESC}) {
+      nodes {
+        nameWithOwner url
+        defaultBranchRef { name target { ... on Commit { statusCheckRollup { state } } } }
+      }
+    }
+    contributionsCollection {
+      contributionCalendar {
+        totalContributions
+        weeks { contributionDays { contributionCount contributionLevel } }
+      }
+    }
+  }
 }
 fragment pr on PullRequest {
   number title url isDraft reviewDecision updatedAt
@@ -281,6 +295,65 @@ fragment pr on PullRequest {
   commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }
   reviews(last: 30) { nodes { state author { login __typename } } }
 }"#;
+
+/// My repositories and the CI of each one's default branch (those with no CI at
+/// all are left out: there is nothing to say about them).
+fn repos_of(response: &Value) -> Vec<Value> {
+    response
+        .pointer("/data/viewer/repositories/nodes")
+        .and_then(Value::as_array)
+        .map(|list| {
+            list.iter()
+                .filter_map(|n| {
+                    let name = n.get("nameWithOwner").and_then(Value::as_str)?;
+                    let url = n.get("url").and_then(Value::as_str)?;
+                    let state = n.pointer("/defaultBranchRef/target/statusCheckRollup/state").and_then(Value::as_str)?;
+                    let ci = match state {
+                        "SUCCESS" => "success",
+                        "FAILURE" | "ERROR" => "failure",
+                        "PENDING" | "EXPECTED" => "pending",
+                        _ => return None,
+                    };
+                    let branch = n.pointer("/defaultBranchRef/name").and_then(Value::as_str).unwrap_or("main");
+                    Some(json!({ "name": name, "url": url, "branch": branch, "ci": ci }))
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// The last weeks of the contribution calendar as levels 0-4, a column per week
+/// of up to seven days, plus the year's total. `None` when GitHub sent none.
+fn calendar_of(response: &Value) -> Option<Value> {
+    let calendar = response.pointer("/data/viewer/contributionsCollection/contributionCalendar")?;
+    let total = calendar.get("totalContributions").and_then(Value::as_i64)?;
+    let level = |raw: &str| match raw {
+        "FIRST_QUARTILE" => 1,
+        "SECOND_QUARTILE" => 2,
+        "THIRD_QUARTILE" => 3,
+        "FOURTH_QUARTILE" => 4,
+        _ => 0,
+    };
+    let weeks: Vec<Vec<u8>> = calendar
+        .get("weeks")?
+        .as_array()?
+        .iter()
+        .map(|w| {
+            w.get("contributionDays")
+                .and_then(Value::as_array)
+                .map(|days| {
+                    days.iter()
+                        .map(|d| level(d.get("contributionLevel").and_then(Value::as_str).unwrap_or("NONE")))
+                        .take(7)
+                        .collect()
+                })
+                .unwrap_or_default()
+        })
+        .collect();
+    // The card has room for about five months.
+    let keep = weeks.len().saturating_sub(22);
+    Some(json!({ "total": total, "weeks": &weeks[keep..] }))
+}
 
 fn is_copilot(login: &str) -> bool {
     login.to_lowercase().contains("copilot")
@@ -364,6 +437,8 @@ fn parse_pulse(response: &Value) -> Value {
         "toReview": to_review,
         "copilot": copilot,
         "copilotReviewedMine": reviewed_mine,
+        "repos": repos_of(response),
+        "calendar": calendar_of(response),
     })
 }
 
@@ -400,6 +475,17 @@ fn pulse_event(pulse: &Value) -> Option<IntegrationEvent> {
         let p = pulse["mine"].as_array()?.iter().find(|p| p.get("ci").and_then(Value::as_str) == Some("failure")).cloned();
         return Some(IntegrationEvent { success: false, label: "Falló el CI".into(), detail: title(&p) });
     }
+    // A default branch's CI: red is news, and so is green again after red.
+    let red_repos = urls_where(&pulse["repos"], |p| p.get("ci").and_then(Value::as_str) == Some("failure"));
+    let repo_changed = is_new("github_branch_ci", &red_repos);
+    if repo_changed && !red_repos.is_empty() {
+        let name = pulse["repos"]
+            .as_array()
+            .and_then(|l| l.iter().find(|p| p.get("ci").and_then(Value::as_str) == Some("failure")))
+            .and_then(|p| p.get("name").and_then(Value::as_str))
+            .map(str::to_string);
+        return Some(IntegrationEvent { success: false, label: "Falló el CI de la rama principal".into(), detail: name });
+    }
     if fresh_review {
         let p = first("toReview");
         return Some(IntegrationEvent { success: true, label: "Revisión pedida".into(), detail: title(&p) });
@@ -407,6 +493,9 @@ fn pulse_event(pulse: &Value) -> Option<IntegrationEvent> {
     if fresh_copilot_pr {
         let p = first("copilot");
         return Some(IntegrationEvent { success: true, label: "Copilot abrió un pull request".into(), detail: title(&p) });
+    }
+    if repo_changed && red_repos.is_empty() {
+        return Some(IntegrationEvent { success: true, label: "El CI de la rama principal vuelve a estar en verde".into(), detail: None });
     }
     if fresh_copilot_review {
         let p = pulse["mine"].as_array()?.iter().find(|p| p.get("copilotReviewed").and_then(Value::as_bool) == Some(true)).cloned();
@@ -812,6 +901,55 @@ mod github_tests {
         json!({ "data": {
             "mine": { "nodes": mine }, "review": { "nodes": review }, "assigned": { "nodes": assigned },
         } })
+    }
+
+    fn viewer_answer() -> Value {
+        json!({ "data": { "viewer": {
+            "repositories": { "nodes": [
+                { "nameWithOwner": "me/app", "url": "https://github.com/me/app",
+                  "defaultBranchRef": { "name": "main", "target": { "statusCheckRollup": { "state": "FAILURE" } } } },
+                { "nameWithOwner": "me/lib", "url": "https://github.com/me/lib",
+                  "defaultBranchRef": { "name": "trunk", "target": { "statusCheckRollup": { "state": "SUCCESS" } } } },
+                { "nameWithOwner": "me/no-ci", "url": "https://github.com/me/no-ci",
+                  "defaultBranchRef": { "name": "main", "target": { "statusCheckRollup": null } } },
+                { "nameWithOwner": "me/empty", "url": "https://github.com/me/empty", "defaultBranchRef": null },
+                "junk"
+            ] },
+            "contributionsCollection": { "contributionCalendar": {
+                "totalContributions": 123,
+                "weeks": [
+                    { "contributionDays": [ { "contributionCount": 0, "contributionLevel": "NONE" },
+                                            { "contributionCount": 3, "contributionLevel": "SECOND_QUARTILE" } ] },
+                    { "contributionDays": [ { "contributionCount": 9, "contributionLevel": "FOURTH_QUARTILE" } ] }
+                ]
+            } }
+        } } })
+    }
+
+    #[test]
+    fn default_branch_ci_is_listed_and_repos_without_ci_are_left_out() {
+        let repos = repos_of(&viewer_answer());
+        let names: Vec<&str> = repos.iter().map(|r| r["name"].as_str().unwrap()).collect();
+        assert_eq!(names, ["me/app", "me/lib"]);
+        assert_eq!(repos[0]["ci"], "failure");
+        assert_eq!(repos[1]["branch"], "trunk");
+        assert!(repos_of(&json!({})).is_empty());
+    }
+
+    #[test]
+    fn the_calendar_becomes_levels_by_week() {
+        let c = calendar_of(&viewer_answer()).unwrap();
+        assert_eq!(c["total"], 123);
+        assert_eq!(c["weeks"], json!([[0, 2], [4]]));
+        assert!(calendar_of(&json!({ "data": {} })).is_none());
+    }
+
+    #[test]
+    fn a_long_calendar_keeps_only_the_last_weeks() {
+        let weeks: Vec<Value> = (0..53).map(|_| json!({ "contributionDays": [ { "contributionLevel": "FIRST_QUARTILE" } ] })).collect();
+        let c = calendar_of(&json!({ "data": { "viewer": { "contributionsCollection": { "contributionCalendar": {
+            "totalContributions": 1, "weeks": weeks } } } } })).unwrap();
+        assert_eq!(c["weeks"].as_array().unwrap().len(), 22);
     }
 
     #[test]

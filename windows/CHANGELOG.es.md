@@ -4,6 +4,13 @@
 
 Coucou v2 es el fork de [JaimeTR](https://github.com/JaimeTR) de [Coucou, de Louis Raillé](https://github.com/Louis-CFM/coucou) (MIT). Las notas de la versión de macOS siguen en el [CHANGELOG.md](../CHANGELOG.md) de la raíz.
 
+## 1.2.0 — 11 de octubre de 2026
+
+El resto de lo que añadió el Coucou original, para las dos versiones: la app de Mac **es ahora** la 0.3.0 del original (mira el [CHANGELOG.md](../CHANGELOG.md) de la raíz: voz «OK Coucou», Spotify, Hermes, Claude Desktop, uso del plan de Codex, sesiones de terminal, abrir al pasar el puntero, tus propios sonidos, dictado, elección de pantalla…), y Windows recibe:
+- **Resumen semanal en imagen**: Guardar / Copiar imagen (1080 × 1920, con Mochi), con los nombres de proyecto opcionales.
+- **GitHub**: el CI de las ramas principales de tus repositorios (avisa cuando se pone rojo y cuando vuelve a verde) y la cuadrícula de contribuciones, como dos botones pequeños en la cabecera de la tarjeta.
+- **Cambiar de IA desde el chat**: haz clic en el nombre del modelo bajo el chat para pasar a la siguiente IA que tenga clave.
+
 ## 1.1.0 — 10 de octubre de 2026
 
 **Lo que el Coucou original añadió después de nuestro fork, traído a Windows y Linux** (los idiomas siguen siendo español e inglés; la voz de Mac y las sesiones de terminal de Mac no están aquí).
@@ -25,7 +32,7 @@ Isla
 Arreglos (encontrados al probarlo)
 - La isla se quedaba escondida para siempre: un id de Steam viejo (Steam cerrado) se leía como un juego, el estado «ocupado» de Windows (cualquier ventana a pantalla completa, como la app de Claude) se leía como un juego, y una cámara que una utilidad deja abierta todo el día (OBSBOT Center) se leía como una reunión. Ahora solo cuentan una pantalla completa D3D real, un juego que corre o el micrófono.
 
-No se trajo: los otros ocho idiomas, la voz de Mac («OK Coucou») y el correo por voz, las sesiones de terminal de Warp e iTerm, el portal de atajos de Wayland y Spotify en Linux (MPRIS), ni la imagen compartible del resumen semanal.
+No se trajo: los otros ocho idiomas, la voz de Mac («OK Coucou») y el correo por voz, las sesiones de terminal de Warp e iTerm, el portal de atajos de Wayland y Spotify en Linux (MPRIS). La imagen del resumen semanal llegó en la 1.2.0.
 
 ## 1.0.0 — 8 de octubre de 2026
 

@@ -29,7 +29,7 @@ Aprueba los permisos de Claude Code, mira trabajar tu sesión, suelta un archivo
 
 ## Novedades de la v2
 
-Coucou v2 convierte a Mochi en un pequeño asistente personal. Todo lo de abajo es nuevo respecto a la app original; la lista completa está en [CHANGELOG.es.md](CHANGELOG.es.md). **Versión actual: 1.1.0** (10 de octubre de 2026).
+Coucou v2 convierte a Mochi en un pequeño asistente personal. Todo lo de abajo es nuevo respecto a la app original; la lista completa está en [CHANGELOG.es.md](CHANGELOG.es.md). **Versión actual: 1.2.0** (11 de octubre de 2026).
 
 | | |
 |---|---|
@@ -52,6 +52,9 @@ Coucou v2 convierte a Mochi en un pequeño asistente personal. Todo lo de abajo 
 | **Atajos globales** | `Ctrl+Alt+Y` permitir · `Ctrl+Alt+N` denegar (solo mientras hay una petición) · `Ctrl+Alt+C` abrir o cerrar la isla; este último lo cambias tú (una tecla como `F8`, o dos como `Ctrl+Espacio`) en Ajustes → General → "Abrir Coucou con". |
 | **Notificaciones de Windows** | Un aviso cuando Claude pide permiso, pregunta algo o termina mientras la isla está cerrada. |
 | **Chat con Claude, DEVMARK AI, Gemini o Groq** | Elige quién responde en Ajustes → Proveedor de chat. DEVMARK AI es el modelo privado de la empresa (ver [abajo](#devmark-ai-proveedor-de-chat)); Gemini y Groq usan tu propia clave. Si el proveedor retira el modelo configurado, Coucou usa otro que tu clave pueda usar. |
+| **Resumen semanal en imagen** | La tarjeta «Tu semana» tiene **Guardar imagen** y **Copiar imagen**: una imagen de 1080 × 1920 con Mochi, tu tiempo, sesiones, archivos, líneas e insignias (agente principal, proyecto, día más activo, sesión más larga). Se pueden ocultar los nombres de proyecto. Se guarda en Imágenes\Coucou y todo es local. |
+| **GitHub: CI y actividad** | Junto a tus pull requests y revisiones, el CI de las ramas principales de tus repositorios (uno en rojo avisa, y también cuando vuelve a verde) y tu cuadrícula de contribuciones. |
+| **Cambiar de IA desde el chat** | Un clic en el nombre del modelo bajo el chat pasa a la siguiente IA que tenga clave. |
 | **Pill de Spotify** | La canción, su portada, el progreso y pausa/anterior/siguiente, leídos de los controles multimedia de Windows (sin clave ni cuenta). Solo funciona si lo activas (Ajustes → Integraciones) y no pregunta nada mientras la isla está escondida. |
 | **Más agentes** | **Codex** (con Permitir / Denegar en la isla y los límites de su plan), **Cursor Agent**, **Amp** y **Hermes Agent**, cada uno con su pill; las sesiones que empiezas en la **app de Claude** tienen su pill **Claude Desktop**. Copilot CLI y Muse Code también se permiten o deniegan desde la isla. |
 | **OpenAI y OpenRouter** | Dos proveedores de chat más (Ajustes → Proveedor de chat), con tu propia clave. |

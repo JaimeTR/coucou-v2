@@ -90,6 +90,8 @@ export const Bridge = {
   openUrl: (url: string) => call<void>("open_url", { url }),
 
   /** "Open terminal" → opens the folder in VS Code when `code` is on PATH. */
+  /** The weekly recap picture (a PNG data URL) saved to Pictures\Coucou; resolves to its path. */
+  saveRecapImage: (dataUrl: string) => callOrThrow<string>("save_recap_image", { dataUrl }),
   // ── Your own sounds (src-tauri/src/sounds.rs) ─────────────────────────────
   /** A replacement for one of Mochi's sounds, as base64; null when there is none. */
   customSound: (name: string) => call<string | null>("custom_sound", { name }),

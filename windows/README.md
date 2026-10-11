@@ -29,7 +29,7 @@ Approve Claude Code permissions, watch your session work, drop a file, chat with
 
 ## What's new in v2
 
-Coucou v2 turns Mochi into a small personal assistant. Everything below is new on top of the original app; the full list is in [CHANGELOG.md](CHANGELOG.md). **Current version: 1.1.0** (October 10, 2026).
+Coucou v2 turns Mochi into a small personal assistant. Everything below is new on top of the original app; the full list is in [CHANGELOG.md](CHANGELOG.md). **Current version: 1.2.0** (October 11, 2026).
 
 | | |
 |---|---|
@@ -52,6 +52,9 @@ Coucou v2 turns Mochi into a small personal assistant. Everything below is new o
 | **Global shortcuts** | `Ctrl+Alt+Y` allow · `Ctrl+Alt+N` deny (only while a request is up) · `Ctrl+Alt+C` open or close the island — that last one is yours to change (one key like `F8`, or two like `Ctrl+Space`) in Settings → General → "Abrir Coucou con". |
 | **Windows notifications** | A toast when Claude needs permission, asks something, or finishes while the island is closed. |
 | **Chat with Claude, DEVMARK AI, Gemini or Groq** | Pick who answers under Settings → Proveedor de chat. DEVMARK AI is the company's private model (see [below](#devmark-ai-chat-provider)); Gemini and Groq use your own key. If a provider retires the configured model, Coucou switches to one your key can use. |
+| **Weekly recap as an image** | The «Your week» card has **Save image** and **Copy image**: a 1080 × 1920 picture with Mochi, your time, sessions, files, lines and badges (top agent, project, busiest day, longest session). Project names can be left out. Saved in Pictures\Coucou, everything local. |
+| **GitHub: CI and activity** | Next to your pull requests and reviews, the CI of your repositories' default branches (a red one raises an alert, and so does it turning green again) and your contribution grid. |
+| **Switch AI from the chat** | One click on the model name under the chat box moves to the next AI that has a key. |
 | **Spotify pill** | The track, its cover, progress and play/pause/previous/next, read from Windows' own media controls (no key, no account). It is on only if you switch it on (Settings → Integrations), and asks nothing while the island is hidden. |
 | **More agents** | **Codex** (with Allow / Deny on the island and its plan limits), **Cursor Agent**, **Amp** and **Hermes Agent**, each with its own pill; sessions started from the **Claude app** get a **Claude Desktop** pill. Copilot CLI and Muse Code can now be allowed or denied from the island too. |
 | **OpenAI and OpenRouter** | Two more chat providers (Settings → Chat provider), with your own key. |

@@ -16,6 +16,7 @@ mod modes;
 mod pet;
 mod pipe;
 mod platform;
+mod recap_image;
 mod rules;
 mod secrets;
 mod settings;
@@ -495,6 +496,16 @@ fn reload_sounds(app: AppHandle) {
 #[tauri::command]
 async fn codex_plan_usage() -> Option<serde_json::Value> {
     tauri::async_runtime::spawn_blocking(codex_plan::read).await.ok().flatten()
+}
+
+/// Weekly recap → Pictures\Coucou: the PNG the page drew, and the folder shown. Returns the path.
+#[tauri::command]
+fn save_recap_image(data_url: String) -> Result<String, String> {
+    let path = recap_image::save(&data_url)?;
+    if let Some(dir) = path.parent() {
+        platform::reveal_folder(&dir.to_string_lossy());
+    }
+    Ok(path.to_string_lossy().to_string())
 }
 
 #[tauri::command]
@@ -1198,6 +1209,7 @@ pub fn run() {
             undock_island,
             sync_status,
             now_playing,
+            save_recap_image,
             custom_sound,
             open_sounds_folder,
             reload_sounds,

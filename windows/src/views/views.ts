@@ -13,6 +13,8 @@ import { buildChoose, buildUpload, buildUploading } from "./upload";
 import { renderIntegrationCard, type IntegrationCardHooks } from "./integrations";
 import { buildQuestion } from "./question";
 import { formatMinutes } from "../island/recap";
+import { renderShareImage, toPngBlob, toPngDataUrl } from "../island/recapShare";
+import { Bridge } from "../core/bridge";
 import { buildDiff } from "./diff";
 import { planColor, primaryPercent, renderPlanCard } from "./plan";
 
@@ -461,8 +463,39 @@ function buildRecap(actions: ViewActions): ViewHost {
   const head = h("div", { class: "recap-head" });
   const stats = h("div", { class: "recap-stats" });
   const extra = h("div", { class: "sub" });
-  const row = h("div", { class: "actions" }, btn("OK", "secondary", () => actions.collapse()));
-  const el = h("div", { class: "view" }, card("indigo", stack(116, 16, head, stats, extra, row)));
+  const note = h("div", { class: "sub" });
+  let hideProjects = false;
+  const saveImage = async () => {
+    if (!State.recap) return;
+    note.textContent = "";
+    try {
+      const path = await Bridge.saveRecapImage(toPngDataUrl(renderShareImage(State.recap, hideProjects)));
+      note.textContent = `Guardada: ${path}`;
+    } catch (err) {
+      note.textContent = String(err).replace(/^Error:\s*/, "");
+    }
+  };
+  const copyImage = async () => {
+    if (!State.recap) return;
+    note.textContent = "";
+    try {
+      const blob = await toPngBlob(renderShareImage(State.recap, hideProjects));
+      if (!blob) throw new Error("No se pudo dibujar la imagen.");
+      await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+      note.textContent = "Imagen copiada: pégala donde quieras.";
+    } catch (err) {
+      note.textContent = String(err).replace(/^Error:\s*/, "") || "No se pudo copiar la imagen.";
+    }
+  };
+  const noProject = h("input", { type: "checkbox" }) as HTMLInputElement;
+  noProject.addEventListener("change", () => (hideProjects = noProject.checked));
+  const row = h("div", { class: "actions" },
+    btn("Guardar imagen", "secondary", () => void saveImage()),
+    btn("Copiar imagen", "secondary", () => void copyImage()),
+    h("label", { class: "sub", style: "display:flex;gap:4px;align-items:center;cursor:default" }, noProject, h("span", { text: "Sin proyecto" })),
+    btn("OK", "secondary", () => actions.collapse()),
+  );
+  const el = h("div", { class: "view" }, card("indigo", stack(116, 16, head, stats, extra, note, row)));
   const stat = (value: string, label: string) =>
     h("div", { class: "recap-stat" }, h("b", { text: value }), h("span", { text: label }));
   return {
@@ -472,6 +505,8 @@ function buildRecap(actions: ViewActions): ViewHost {
       clear(head);
       clear(stats);
       extra.textContent = "";
+      note.textContent = "";
+      row.style.display = s ? "" : "none";
       if (!s) {
         head.append(h("span", { class: "title", text: "Semana tranquila: no hubo sesiones." }));
         return;

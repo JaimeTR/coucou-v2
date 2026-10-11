@@ -4,6 +4,13 @@
 
 Coucou v2 is [JaimeTR](https://github.com/JaimeTR)'s fork of [Coucou by Louis Raillé](https://github.com/Louis-CFM/coucou) (MIT). The macOS release notes stay in the root [CHANGELOG.md](../CHANGELOG.md).
 
+## 1.2.0 — October 11, 2026
+
+The rest of what the original Coucou added, for both versions: the Mac app now **is** the original's 0.3.0 (see the root [CHANGELOG.md](../CHANGELOG.md): « OK Coucou » voice, Spotify, Hermes, Claude Desktop, Codex plan usage, terminal sessions, open on hover, your own sounds, dictation, screen choice…), and Windows gets:
+- **Weekly recap as an image**: Save / Copy image (1080 × 1920, with Mochi), project names optional.
+- **GitHub**: the CI of your repositories' default branches (alerts when it turns red, and when it is green again) and the contribution grid, as two small buttons in the card's header.
+- **Switch AI from the chat**: click the model name under the chat box to go to the next AI that has a key.
+
 ## 1.1.0 — October 10, 2026
 
 **What the original Coucou added after our fork, brought to Windows and Linux** (languages stay English and Spanish; the Mac-only voice and terminal sessions are not here).
@@ -25,7 +32,7 @@ Island
 Fixes (found by running it)
 - The island stayed hidden for good: a stale Steam id (Steam closed) read as a game, Windows' "busy" state (any full-screen window, like the Claude app) read as a game, and a camera held open all day by a utility (OBSBOT Center) read as a meeting. Now only a real D3D full-screen, a game that is running, or the microphone count.
 
-Not brought over: the other eight languages, the Mac voice ("OK Coucou") and email by voice, terminal sessions in Warp and iTerm, the Wayland shortcuts portal and Linux's Spotify (MPRIS), and the shareable weekly recap image.
+Not brought over: the other eight languages, the Mac voice ("OK Coucou") and email by voice, terminal sessions in Warp and iTerm, the Wayland shortcuts portal and Linux's Spotify (MPRIS). The weekly recap image came in 1.2.0.
 
 ## 1.0.0 — October 8, 2026
 
