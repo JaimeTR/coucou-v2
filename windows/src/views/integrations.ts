@@ -806,10 +806,10 @@ export function hasIntegrationData(id: string): boolean {
   }
 }
 
-/** The Spotify pill: the track, its cover and the controls. */
+/** The Spotify pill: the track, its cover and the controls, all inside the card's room. */
 function spotifyCard(task: AgentTask): HTMLElement {
   const s = State.spotify;
-  const card = h("div", { class: "int-card" }, header(task.color, "Spotify", s?.running ? (s.playing ? "Sonando" : "En pausa") : "Cerrado"));
+  const card = h("div", { class: "int-card", style: "min-width:0;overflow:hidden" }, header(task.color, "Spotify", s?.running ? (s.playing ? "Sonando" : "En pausa") : "Cerrado"));
   if (!s || !s.running) {
     card.append(
       h("div", { class: "int-sub", text: "Spotify no está abierto." }),
@@ -819,40 +819,37 @@ function spotifyCard(task: AgentTask): HTMLElement {
     );
     return card;
   }
-  const control = (text: string, title: string, action: SpotifyAction) =>
+  const control = (icon: string, title: string, action: SpotifyAction) =>
     h("button", {
       class: "link-btn",
-      style: `color:${task.color}d9;font-size:15px`,
-      text,
+      style: `color:${task.color};padding:2px 4px;display:inline-flex;align-items:center`,
       title,
+      "aria-label": title,
       onclick: () => void Bridge.spotifyControl(action).then(() => refreshSpotify()),
-    });
+    }, svg(icon, 14));
   const pos = positionAt(s, Date.now());
   card.append(
-    h("div", { style: "display:flex;gap:10px;align-items:center" },
-      s.artwork ? h("img", { src: s.artwork, alt: "", style: "width:52px;height:52px;border-radius:8px;object-fit:cover" }) : h("div", {}),
-      h("div", { style: "min-width:0" },
-        h("div", { class: "int-sub", style: "font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap", text: s.title || "Sin título" }),
-        h("div", { class: "int-sub", style: "overflow:hidden;text-overflow:ellipsis;white-space:nowrap", text: s.artist }),
+    h("div", { style: "display:flex;gap:8px;align-items:center;min-width:0;margin-top:4px" },
+      s.artwork
+        ? h("img", { src: s.artwork, alt: "", style: "flex:0 0 34px;width:34px;height:34px;border-radius:6px;object-fit:cover" })
+        : h("div", { style: "flex:0 0 34px" }),
+      h("div", { style: "min-width:0;flex:1" },
+        h("div", { style: "font:600 12px var(--font);color:#e8e9ec;overflow:hidden;text-overflow:ellipsis;white-space:nowrap", text: s.title || "Sin título" }),
+        h("div", { class: "int-sub", text: s.artist }),
       ),
     ),
-  );
-  if (s.duration > 0) {
-    card.append(
-      h("div", { class: "int-sub", style: "display:flex;gap:6px;align-items:center" },
-        h("span", { text: clock(pos) }),
-        h("div", { style: "flex:1;height:3px;border-radius:2px;background:#ffffff22;overflow:hidden" },
-          h("div", { style: `height:100%;width:${Math.min(100, (pos / s.duration) * 100).toFixed(1)}%;background:${task.color}` }),
-        ),
-        h("span", { text: clock(s.duration) }),
-      ),
-    );
-  }
-  card.append(
-    h("div", { class: "int-actions" },
-      control("⏮", "Anterior", "previous"),
-      control(s.playing ? "⏸" : "▶", s.playing ? "Pausa" : "Reproducir", "playPause"),
-      control("⏭", "Siguiente", "next"),
+    h("div", { style: "display:flex;gap:2px;align-items:center;min-width:0;margin-top:4px" },
+      control(ICONS.skipBack, "Anterior", "previous"),
+      control(s.playing ? ICONS.pause : ICONS.play, s.playing ? "Pausa" : "Reproducir", "playPause"),
+      control(ICONS.skipForward, "Siguiente", "next"),
+      s.duration > 0
+        ? h("div", { class: "int-sub", style: "display:flex;gap:5px;align-items:center;flex:1;margin-left:4px" },
+            h("div", { style: "flex:1;height:3px;border-radius:2px;background:#ffffff22;overflow:hidden" },
+              h("div", { style: `height:100%;width:${Math.min(100, (pos / s.duration) * 100).toFixed(1)}%;background:${task.color}` }),
+            ),
+            h("span", { text: `${clock(pos)} / ${clock(s.duration)}` }),
+          )
+        : h("div", {}),
     ),
   );
   return card;

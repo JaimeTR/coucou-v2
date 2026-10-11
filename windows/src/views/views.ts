@@ -286,6 +286,12 @@ function buildOverview(actions: ViewActions): ViewHost {
           task.id, detailOpen, task.state, task.steps.join("|"),
           info?.loaded, info?.error, info?.configured,
           JSON.stringify(info?.data ?? {}),
+          // What the Spotify and Codex cards draw lives outside `integrations`: a new track,
+          // a second more of progress, or fresh limits must rebuild the card too.
+          task.id === "integration_spotify" && State.spotify
+            ? [State.spotify.running, State.spotify.playing, State.spotify.title, Math.floor(State.spotify.position), State.spotify.artwork?.length].join(",")
+            : "",
+          task.id === "agent_codex" ? State.codexPlan?.updatedAt : "",
         ].join("~");
         if (key !== cardKey) {
           cardKey = key;

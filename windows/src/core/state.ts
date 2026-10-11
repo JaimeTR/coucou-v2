@@ -601,6 +601,12 @@ class AppState {
    *  Inserted right after integration_claude so it appears in the visible slice(0,4). */
   upsertExternalAgent(id: string, name: string, color: string) {
     if (this.tasks.some((t) => t.id === id)) return;
+    // An agent Coucou knows has its own name and colour (a session of "claude-desktop" is "Claude Desktop").
+    const known = INTEGRATION_AGENTS.find((t) => t.id === id);
+    if (known) {
+      name = known.name;
+      color = this.settings.pillColors?.[id] ?? known.color;
+    }
     const at = this.tasks.findIndex((t) => t.id === "integration_claude") + 1;
     this.tasks.splice(at, 0, {
       id, name, color,

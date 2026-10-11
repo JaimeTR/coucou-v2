@@ -22,6 +22,11 @@ export const ICONS = {
   // chevron.right
   chevronRight: "M9 5.5 15.5 12 9 18.5",
   chevronLeft: "M15 5.5 8.5 12 15 18.5",
+  // play.fill, pause.fill, backward.end.fill, forward.end.fill
+  play: "M8 5.2v13.6L19 12 8 5.2z",
+  pause: "M7 5h3.6v14H7V5zm6.4 0H17v14h-3.6V5z",
+  skipBack: "M6 5h2v14H6V5zm13 .4v13.2L9.5 12 19 5.4z",
+  skipForward: "M16 5h2v14h-2V5zM5 5.4v13.2L14.5 12 5 5.4z",
   // checkmark
   check: "M5 12.5 9.5 17 19 7.5",
   // doc.on.doc (copy)
