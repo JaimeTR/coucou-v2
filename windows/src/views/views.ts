@@ -163,8 +163,9 @@ export function buildHeader(actions: ViewActions): ViewHost {
       gearBtn.append(svg(v === "settings" ? ICONS.gearFill : ICONS.gear, 14));
       clear(soundBtn);
       soundBtn.append(svg(State.settings.soundEnabled ? ICONS.speakerOn : ICONS.speakerOff, 14));
-      listenBtn.style.display = State.settings.wakeWord ? "" : "none";
+      listenBtn.style.display = State.settings.wakeWord || State.dictating ? "" : "none";
       listenBtn.classList.toggle("on", State.listening);
+      listenBtn.classList.toggle("rec", State.dictating != null);
       el.style.opacity = v === "confused" ? "0" : "1";
     },
   };

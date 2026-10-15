@@ -118,6 +118,9 @@ export const Bridge = {
     callOrThrow<string>("voice_transcribe", { audio, mime, lang }),
   /** "Probar": what one of your own apps would show right now. */
   customTest: (id: string) => callOrThrow<string>("custom_test", { id }),
+  /** Dictation: puts the words where the cursor is. False when they were only copied. */
+  dictationPaste: (text: string) => callOrThrow<boolean>("dictation_paste", { text }),
+  dictationSupported: () => call<boolean>("dictation_supported"),
   launchAgent: (agent: "claude" | "opencode" | "gemini" | "agy", path: string | null, resume: boolean) =>
     call<boolean>("launch_agent", { agent, path, resume }),
 

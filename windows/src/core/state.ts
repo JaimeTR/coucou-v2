@@ -206,6 +206,9 @@ export interface Settings {
   /** `{name}` is replaced by your name. */
   greetingTemplate: string;
   greetingLanguage: "auto" | "es" | "en";
+  /** Dictation anywhere: hold the key, speak, let go. */
+  dictation: boolean;
+  dictationKey: "rctrl" | "ralt" | "rshift";
   /** Mochi says the welcome aloud. */
   voiceGreeting: boolean;
   /** Master switch for Mochi's automatic phrases. */
@@ -304,6 +307,8 @@ export const DEFAULT_SETTINGS: Settings = {
   greetingTemplate: "Hola {name}",
   greetingLanguage: "auto",
   customPills: [],
+  dictation: false,
+  dictationKey: "rctrl",
   voiceGreeting: false,
   voiceEnabled: false,
   voiceEvents: false,
@@ -386,6 +391,8 @@ class AppState {
   recap: WeeklySummary | null = null;
   /** Said to Mochi by voice: the chat takes it when it opens. */
   pendingVoice: { query?: string; record?: boolean } | null = null;
+  /** Dictating right now: "listening", "understanding", or null. */
+  dictating: "listening" | "understanding" | null = null;
   /** Whether the microphone is listening for "Oye Mochi". */
   listening = false;
   /** The chat is using the microphone: the wake word waits. */

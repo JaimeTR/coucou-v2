@@ -12,6 +12,7 @@ import { Sound } from "./core/sound";
 import { State, type Settings } from "./core/state";
 import { applyLanguage, uiLanguage } from "./core/i18n";
 import { Island } from "./island/island";
+import { registerDictation } from "./island/dictation";
 import { Recap, registerHookHandlers } from "./island/hooks";
 import { registerIntegrationHandlers, refreshConfigured } from "./island/integrations";
 import type { Rule } from "./island/rules";
@@ -151,6 +152,7 @@ async function main() {
 
   registerHookHandlers(island);
   registerIntegrationHandlers(island);
+  registerDictation(island);
 
   island.launch();
 

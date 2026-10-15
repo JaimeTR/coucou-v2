@@ -4,6 +4,12 @@
 
 Coucou v2 es el fork de [JaimeTR](https://github.com/JaimeTR) de [Coucou, de Louis Raillé](https://github.com/Louis-CFM/coucou) (MIT). Las notas de la versión de macOS siguen en el [CHANGELOG.md](../CHANGELOG.md) de la raíz.
 
+## 1.3.0: 15 de octubre de 2026
+
+Lo que la original añadió en su Windows y Linux 0.5.0 y no teníamos, traído pieza a pieza.
+
+- **Dictado en cualquier sitio** (Ajustes → Voz → Dictado, Windows, desactivado por defecto): mantén el Ctrl derecho (o Alt derecho, o Mayús derecho), habla y suéltalo: las palabras se pegan donde escribes. Un gancho de teclado de bajo nivel que solo mira y nunca se come una tecla, la voz grabada por la isla, entendida por Whisper de Groq (tu clave de Groq; el idioma se reconoce solo) y pegada con el portapapeles fuera de su historial, que recupera lo que tenía. Un toque de menos de un tercio de segundo, Esc o cualquier otra tecla mientras la mantienes lo cancela. Un micrófono rojo en la cabecera de la isla indica que graba. El Flow de la original hace lo mismo con Parakeet sin conexión en la CPU; ese motor, el historial, el diccionario y el Notetaker aún no están aquí.
+
 ## 1.2.0 — 11 de octubre de 2026
 
 El resto de lo que añadió el Coucou original, para las dos versiones: la app de Mac **es ahora** la 0.3.0 del original (mira el [CHANGELOG.md](../CHANGELOG.md) de la raíz: voz «OK Coucou», Spotify, Hermes, Claude Desktop, uso del plan de Codex, sesiones de terminal, abrir al pasar el puntero, tus propios sonidos, dictado, elección de pantalla…), y Windows recibe:

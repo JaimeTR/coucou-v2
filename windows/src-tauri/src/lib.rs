@@ -5,6 +5,7 @@ mod claude;
 mod codex_plan;
 mod compat;
 mod custom;
+mod dictation;
 mod devmark;
 mod files;
 mod hooks;
@@ -324,6 +325,10 @@ pub(crate) fn apply_settings(app: &AppHandle, mut settings: Settings) {
         settings.work_mode = "auto".into();
     }
     let pills_changed = shared.settings.lock().unwrap().custom_pills != settings.custom_pills;
+    let dictation_changed = {
+        let current = shared.settings.lock().unwrap();
+        current.dictation != settings.dictation || current.dictation_key != settings.dictation_key
+    };
     let (screen_changed, autostart_changed, shortcuts_changed) = {
         let mut current = shared.settings.lock().unwrap();
         let screen_changed = current.screen != settings.screen || current.island_position != settings.island_position;
@@ -337,6 +342,9 @@ pub(crate) fn apply_settings(app: &AppHandle, mut settings: Settings) {
     }
     if pills_changed {
         custom::reload(&app);
+    }
+    if dictation_changed {
+        dictation::apply(&app, settings.dictation, &settings.dictation_key);
     }
     if let Err(err) = settings::save(&settings) {
         eprintln!("[coucou] could not save settings: {err}");
@@ -1056,6 +1064,24 @@ fn secret_clear(key: String) -> Result<(), String> {
 }
 
 
+/// Dictation: the words go where the cursor is. True when pasted, false when
+/// they could only be copied (the keystroke was refused).
+#[tauri::command]
+async fn dictation_paste(text: String) -> Result<bool, String> {
+    if text.trim().is_empty() {
+        return Ok(true);
+    }
+    tauri::async_runtime::spawn_blocking(move || dictation::paste(&text))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// Whether this system can dictate (Windows only for now).
+#[tauri::command]
+fn dictation_supported() -> bool {
+    dictation::SUPPORTED
+}
+
 /// "Probar" on one of your own apps: what it would show right now.
 #[tauri::command]
 async fn custom_test(app: AppHandle, id: String) -> Result<String, String> {
@@ -1274,6 +1300,8 @@ pub fn run() {
             set_ui_language,
             set_shortcut,
             custom_test,
+            dictation_paste,
+            dictation_supported,
             voice_speak,
             voice_list,
             voice_transcribe,
@@ -1309,6 +1337,7 @@ pub fn run() {
             pipe::start(handle.clone());
             integrations::start(handle.clone());
             custom::start(handle.clone());
+            dictation::apply(&handle, loaded.dictation, &loaded.dictation_key);
             sync::spawn(handle.clone());
             updater::spawn(handle.clone());
             Ok(())

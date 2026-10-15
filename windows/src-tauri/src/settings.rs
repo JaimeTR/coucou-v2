@@ -41,6 +41,12 @@ pub struct Settings {
     /// Apps of your own that get a pill: fed by a webhook or by polling a URL.
     #[serde(default)]
     pub custom_pills: Vec<CustomPill>,
+    /// Dictation anywhere: hold the key, speak, let go, the words are pasted.
+    #[serde(default)]
+    pub dictation: bool,
+    /// The key to hold: "rctrl", "ralt" or "rshift".
+    #[serde(default = "default_dictation_key")]
+    pub dictation_key: String,
     /// Mochi says the welcome aloud.
     #[serde(default)]
     pub voice_greeting: bool,
@@ -186,6 +192,10 @@ fn default_true() -> bool {
 
 fn default_greeting_template() -> String {
     "Hola {name}".into()
+}
+
+fn default_dictation_key() -> String {
+    "rctrl".into()
 }
 
 fn default_voice_engine() -> String {
@@ -436,6 +446,8 @@ impl Default for Settings {
             greeting_language: default_greeting_language(),
             language: default_greeting_language(),
             custom_pills: Vec::new(),
+            dictation: false,
+            dictation_key: default_dictation_key(),
             voice_greeting: false,
             voice_enabled: false,
             voice_events: false,

@@ -550,6 +550,39 @@ function customSection(): HTMLElement {
   );
 }
 
+// ── Dictation ─────────────────────────────────────────────────────────────────
+
+function dictationSection(): HTMLElement {
+  const note = h("div", { class: "hint" });
+  const key = h("select", {}) as HTMLSelectElement;
+  key.append(
+    h("option", { value: "rctrl", text: "Ctrl derecho" }),
+    h("option", { value: "ralt", text: "Alt derecho" }),
+    h("option", { value: "rshift", text: "Mayús derecho" }),
+  );
+  key.value = settings.dictationKey;
+  key.addEventListener("change", () => {
+    settings.dictationKey = key.value as Settings["dictationKey"];
+    void save();
+  });
+  const box = h("div", { style: "display:flex;flex-direction:column;gap:10px" },
+    h("div", { class: "row" },
+      h("label", { text: "Dictado en cualquier sitio" }),
+      toggle(settings.dictation, (v) => { settings.dictation = v; void save(); }),
+      h("span", { class: "hint", text: "mantén la tecla, habla y suéltala: las palabras se escriben donde estés" }),
+    ),
+    h("div", { class: "row" }, h("label", { text: "Tecla" }), key),
+    h("div", { class: "notice warn", text: "Lo que dictas se envía a Groq (Whisper) para entenderlo; no se guarda nada. Hace falta tu clave de Groq (Proveedor de chat → Groq). Habla un instante después de pulsar: el micrófono tarda una fracción de segundo en abrirse. Con Esc o pulsando otra tecla mientras la mantienes, se cancela." }),
+  );
+  void Bridge.dictationSupported().then((ok) => {
+    if (ok !== true) {
+      box.style.display = "none";
+      note.textContent = "El dictado en cualquier sitio todavía solo funciona en Windows.";
+    }
+  });
+  return h("section", {}, h("h2", {}, h("span", { text: "Dictado" })), note, box);
+}
+
 // ── Voice ─────────────────────────────────────────────────────────────────────
 
 function voiceSection(present: Record<string, boolean>): HTMLElement {
@@ -2021,7 +2054,7 @@ async function main() {
     { id: "start", label: "Inicio", icon: ICONS.house, sections: [setupSection(status, present, hasProviderKey, tools, detectedName, agents)] },
     { id: "personal", label: "Personalización", icon: ICONS.star, sections: [personalSection(detectedName)] },
     { id: "pet", label: "Mascota", icon: PET_ICON, sections: [petSection()] },
-    { id: "voice", label: "Voz", icon: ICONS.speakerOn, sections: [voiceSection(present)] },
+    { id: "voice", label: "Voz", icon: ICONS.speakerOn, sections: [voiceSection(present), dictationSection()] },
     { id: "claude", label: "Claude Code", icon: ICONS.doc, sections: [claudeSection(status), planSection(status), rulesSection((await Bridge.rulesList()) ?? [])] },
     { id: "agents", label: "Agentes", icon: ICONS.stack, sections: [agentsSection(agents)] },
     { id: "chat", label: "Chat e IA", icon: ICONS.bubble, sections: [providerSection(present), apiSection(hasKey)] },

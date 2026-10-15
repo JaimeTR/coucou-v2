@@ -187,15 +187,24 @@ pub async fn transcribe(audio: &[u8], mime: &str, lang: &str) -> Result<String, 
         m if m.contains("ogg") => ("ogg", "audio/ogg"),
         _ => ("webm", "audio/webm"),
     };
-    let lang = if lang == "en" { "en" } else { "es" };
+    // "auto" leaves the language out and lets Whisper recognise it (dictation).
+    let lang: Option<&str> = match lang {
+        "en" => Some("en"),
+        "auto" => None,
+        _ => Some("es"),
+    };
     let client = client()?;
     let mut last = String::new();
     // A retired model answers 404: fall back to the next one.
     for model in STT_MODELS {
         let boundary = format!("----coucou{:x}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(7));
+        let mut fields: Vec<(&str, &str)> = vec![("model", model), ("response_format", "json"), ("temperature", "0")];
+        if let Some(l) = lang {
+            fields.push(("language", l));
+        }
         let body = multipart(
             &boundary,
-            &[("model", model), ("language", lang), ("response_format", "json"), ("temperature", "0")],
+            &fields,
             &format!("voice.{extension}"),
             mime,
             audio,

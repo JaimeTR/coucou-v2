@@ -2012,3 +2012,8 @@ input[type="range"]::-webkit-slider-thumb {
 .listen-dot.on {
   color: #22c55e;
 }
+
+.listen-dot.rec {
+  color: #f4505e;
+  animation: mic-pulse 1.1s ease-in-out infinite;
+}
