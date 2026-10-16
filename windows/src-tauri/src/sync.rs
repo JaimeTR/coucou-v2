@@ -252,10 +252,54 @@ pub async fn take_decisions(app: &AppHandle) -> Result<Vec<Value>, String> {
         .filter_map(|plain| serde_json::from_slice::<Value>(&plain).ok())
         .filter(|d| {
             let fresh = d["at"].as_i64().map(|at| (now - at).abs() < DECISION_MAX_AGE_MS).unwrap_or(false);
-            let known = matches!(d["decision"].as_str(), Some("allow" | "deny"));
+            let known = matches!(d["decision"].as_str(), Some("allow" | "deny" | "answer"));
             fresh && known && d["requestId"].is_string()
         })
         .collect())
+}
+
+/// The other computers on the account: [{ id, at, state }] where `state` is what each
+/// published (its name, sessions, what waits, the music) and `at` is the server's
+/// clock in ms. This computer is left out.
+pub async fn devices(app: &AppHandle) -> Result<Vec<Value>, String> {
+    let Some((s, keys)) = current(app) else { return Ok(Vec::new()) };
+    let res = client()
+        .get(endpoint(&s.sync_url, &keys, "devices"))
+        .bearer_auth(&keys.token)
+        .send()
+        .await
+        .map_err(|e| format!("No se pudo llegar al servidor: {e}"))?;
+    if !res.status().is_success() {
+        return Err(http_error(res.status()));
+    }
+    let list: Vec<Value> = res.json().await.map_err(|e| e.to_string())?;
+    Ok(list
+        .iter()
+        .filter(|d| d["id"].as_str().map(|id| id != s.sync_device).unwrap_or(false))
+        .filter_map(|d| {
+            let plain = open(&keys, d["blob"].as_str()?)?;
+            let state: Value = serde_json::from_slice(&plain).ok()?;
+            Some(serde_json::json!({ "id": d["id"], "at": d["at"], "state": state }))
+        })
+        .collect())
+}
+
+/// Answers a permission or a question that is waiting on another computer: it takes
+/// the decision once, if the card is still up (the same path the phone uses).
+pub async fn decide(app: &AppHandle, device: &str, decision: Value) -> Result<(), String> {
+    let Some((s, keys)) = current(app) else { return Ok(()) };
+    let blob = seal(&keys, decision.to_string().as_bytes());
+    let res = client()
+        .post(endpoint(&s.sync_url, &keys, &format!("decisions/{device}")))
+        .bearer_auth(&keys.token)
+        .json(&serde_json::json!({ "blob": blob }))
+        .send()
+        .await
+        .map_err(|e| format!("No se pudo llegar al servidor: {e}"))?;
+    if !res.status().is_success() {
+        return Err(http_error(res.status()));
+    }
+    Ok(())
 }
 
 fn remember_rev(app: &AppHandle, rev: u64) {
@@ -280,47 +324,6 @@ pub fn spawn(app: AppHandle) {
             tokio::time::sleep(std::time::Duration::from_secs(120)).await;
         }
     });
-}
-
-/// One device of the account as the settings window lists it: a computer or a phone.
-fn describe_device(id: &str, at: i64, plain: &Value, this_device: &str) -> Value {
-    let phone = plain["kind"].as_str() == Some("phone");
-    serde_json::json!({
-        "id": id,
-        "kind": if phone { "phone" } else { "computer" },
-        "name": plain["name"].as_str().unwrap_or(id).chars().take(60).collect::<String>(),
-        "platform": plain["platform"].as_str().unwrap_or(""),
-        "tasks": plain["tasks"].as_array().map(|t| t.len()).unwrap_or(0),
-        "at": at,
-        "mine": id == this_device,
-    })
-}
-
-/// Every device on the account (computers and phones), newest first, for the
-/// sync section of the settings window. Names are read here, on the PC: the server
-/// only ever holds them encrypted.
-pub async fn devices(app: &AppHandle) -> Result<Vec<Value>, String> {
-    let Some((s, keys)) = current(app) else { return Ok(Vec::new()) };
-    let res = client()
-        .get(endpoint(&s.sync_url, &keys, "devices"))
-        .bearer_auth(&keys.token)
-        .send()
-        .await
-        .map_err(|e| format!("No se pudo llegar al servidor: {e}"))?;
-    if !res.status().is_success() {
-        return Err(http_error(res.status()));
-    }
-    let list: Vec<Value> = res.json().await.map_err(|e| e.to_string())?;
-    let mut out: Vec<Value> = list
-        .iter()
-        .filter_map(|d| {
-            let plain = d["blob"].as_str().and_then(|b| open(&keys, b))?;
-            let plain: Value = serde_json::from_slice(&plain).ok()?;
-            Some(describe_device(d["id"].as_str()?, d["at"].as_i64().unwrap_or(0), &plain, &s.sync_device))
-        })
-        .collect();
-    out.sort_by_key(|d| std::cmp::Reverse(d["at"].as_i64().unwrap_or(0)));
-    Ok(out)
 }
 
 /// Takes a device off the account's list (a phone you no longer use). It cannot
@@ -472,23 +475,6 @@ mod tests {
         assert!(derive("not a code").is_none());
         assert!(derive(&CODE[..60]).is_none());
         assert!(derive(&new_code()).is_some());
-    }
-
-    #[test]
-    fn phones_and_computers_are_told_apart_in_the_device_list() {
-        let phone = serde_json::json!({ "kind": "phone", "name": "iPhone de Jaime", "platform": "ios" });
-        let d = describe_device("phone-1a2b", 5, &phone, "pc-9");
-        assert_eq!(d["kind"], "phone");
-        assert_eq!(d["name"], "iPhone de Jaime");
-        assert_eq!(d["platform"], "ios");
-        assert_eq!(d["mine"], false);
-
-        let pc = serde_json::json!({ "name": "JAIME-PC", "tasks": [{}, {}], "approval": null });
-        let d = describe_device("pc-9", 7, &pc, "pc-9");
-        assert_eq!(d["kind"], "computer");
-        assert_eq!(d["tasks"], 2);
-        assert_eq!(d["mine"], true);
-        assert_eq!(d["at"], 7);
     }
 
     #[test]

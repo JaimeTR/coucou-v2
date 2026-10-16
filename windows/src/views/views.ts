@@ -15,6 +15,7 @@ import { buildQuestion } from "./question";
 import { formatMinutes } from "../island/recap";
 import { renderShareImage, toPngBlob, toPngDataUrl } from "../island/recapShare";
 import { Bridge } from "../core/bridge";
+import { t } from "../core/i18n";
 import { buildDiff } from "./diff";
 import { planColor, primaryPercent, renderPlanCard } from "./plan";
 
@@ -391,7 +392,8 @@ function buildApproval(actions: ViewActions): ViewHost {
     el,
     sync() {
       clear(who);
-      who.append(agentWho(State.focusTask, "pide permiso"));
+      const remote = State.pendingApproval?.remote;
+      who.append(remote ? agentWho(null, t("pide permiso en {0}").replace("{0}", remote.name)) : agentWho(State.focusTask, "pide permiso"));
       // The whole point of approving here rather than in the terminal: this line
       // is the command, the file path or the URL being authorised, not just the
       // name of the tool asking.

@@ -296,4 +296,11 @@ export const EN: ReadonlyArray<readonly [string, string]> = [
   ["La mascota te anima solo con la voz mientras juegas; sin ventana ni sonidos.", "The pet cheers you on by voice only while you play; no window, no sounds."],
   ["Otros juegos", "Other games"],
   ["Programas que cuentan como juego, separados por comas. Coucou ya conoce los comunes y los de Steam.", "Programs that count as games, separated by commas. Coucou already knows the common ones and Steam's."],
+  ["Equipos conectados", "Connected computers"],
+  ["Este equipo", "This computer"],
+  ["en línea", "online"],
+  ["espera tu respuesta", "waiting for your answer"],
+  ["pide permiso en {0}", "asks permission on {0}"],
+  ["Aún no hay otros equipos. En el otro: Ajustes → Sincronización → Unir con tu código.", "No other computers yet. On the other one: Settings → Sync → Join with your code."],
+  ["Lo que pide permiso o hace una pregunta en cualquiera de tus equipos aparece en la isla de los demás: puedes permitir o responder desde aquí. Si uno escucha música, el Mochi de los otros baila.", "What asks permission or a question on any of your computers shows on the others' island: you can allow or answer from here. If one plays music, the others' Mochi dances."],
 ];

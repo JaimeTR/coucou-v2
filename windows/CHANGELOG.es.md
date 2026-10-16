@@ -4,7 +4,7 @@
 
 Coucou v2 es el fork de [JaimeTR](https://github.com/JaimeTR) de [Coucou, de Louis Raillé](https://github.com/Louis-CFM/coucou) (MIT). Las notas de la versión de macOS siguen en el [CHANGELOG.md](../CHANGELOG.md) de la raíz.
 
-## 1.4.0: 16 de octubre de 2026
+## 1.5.0: 16 de octubre de 2026
 
 Quién está conectado, de un vistazo, y una app de teléfono que vale la pena abrir.
 
@@ -12,6 +12,14 @@ Quién está conectado, de un vistazo, y una app de teléfono que vale la pena a
 - **App del teléfono** (`mobile/`, Expo SDK 57): se abre en tus PCs; toca uno para ver su página: qué hace cada agente, el comando completo que espera permiso con Permitir / Denegar, y «Abrir Claude» para seguir en la app de Claude. La pestaña PCs muestra una insignia con los permisos que esperan; Hoy muestra primero tus PCs y, mientras no configures nada, los siguientes pasos en vez de una página vacía. Un diseño renovado y común a todas las pantallas, con vibración al tocar.
 - **El teléfono se anuncia** a la cuenta (cifrado, como todo lo demás), así los PCs pueden listarlo. Los avisos en el teléfono necesitan el proyecto enlazado con EAS (`npx eas-cli init`, hecho en este repo).
 - Las tareas que van al teléfono ahora dicen de dónde vienen (Claude Code u otro agente).
+
+## 1.4.0 — 16 de octubre de 2026
+
+**Tus equipos, al compás**
+- **Equipos conectados** (Ajustes → Sincronización): este equipo y los demás de la cuenta, con en línea / visto hace, modo de trabajo, la música que suenan y cuántos agentes trabajan.
+- **Responder desde cualquier equipo**: un permiso o una pregunta que espera en uno de tus equipos aparece en la isla de los demás, y puedes Permitir / Denegar o responder ahí (la misma tarjeta, con el nombre del equipo). Se va sola cuando se responde en cualquiera, o si ese equipo se apaga.
+- **La música te sigue**: si otro de tus equipos pone música, Mochi baila aquí también.
+- Cada equipo avisa que está encendido cada 30 s; en silencio en los modos Juego, Reunión y Vídeo (no sale ninguna tarjeta sobre un juego o una llamada).
 
 ## 1.3.1: 16 de octubre de 2026
 

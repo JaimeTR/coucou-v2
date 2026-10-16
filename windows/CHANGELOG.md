@@ -4,7 +4,7 @@
 
 Coucou v2 is [JaimeTR](https://github.com/JaimeTR)'s fork of [Coucou by Louis Raillé](https://github.com/Louis-CFM/coucou) (MIT). The macOS release notes stay in the root [CHANGELOG.md](../CHANGELOG.md).
 
-## 1.4.0 — October 16, 2026
+## 1.5.0 — October 16, 2026
 
 Who is connected, at a glance, and a phone app worth opening.
 
@@ -12,6 +12,14 @@ Who is connected, at a glance, and a phone app worth opening.
 - **Phone app** (`mobile/`, Expo SDK 57): opens on your PCs; tap one for its page — what each agent is doing, the full command waiting for permission with Allow / Deny, and « Abrir Claude » to carry on in the Claude app. The PCs tab shows a badge with the permissions waiting; Today shows your PCs first and, until you set things up, the next steps instead of an empty page. A redesigned look shared by every screen, with haptics.
 - **The phone announces itself** to the account (encrypted, like everything else), so the PCs can list it. Alerts on the phone need the project linked with EAS (`npx eas-cli init`, done for this repo).
 - Tasks sent to the phone now say where they come from (Claude Code or another agent).
+
+## 1.4.0 — October 16, 2026
+
+**Your computers, in step**
+- **Connected computers** (Settings → Sync): this computer and the others on the account, with online / last seen, work mode, the music they play and how many agents are working.
+- **Answer from any computer**: a permission or a question that waits on one of your computers shows on the others' island, and you can Allow / Deny or answer there (the same card, labelled with the computer's name). It goes away by itself once it is answered anywhere, or if that computer goes off.
+- **Music follows you**: if another of your computers plays music, Mochi dances here too.
+- Each computer says it is on every 30 s; silent in Game, Meeting and Video modes (no card is raised over a game or a call).
 
 ## 1.3.1 — October 16, 2026
 

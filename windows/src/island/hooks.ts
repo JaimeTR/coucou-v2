@@ -548,6 +548,9 @@ function handleHook(island: Island, payload: HookPayload) {
       // One card, one request. A second one must never quietly replace the first
       // — that would leave a human staring at request B while request A waits for
       // a decision nobody can give. Hand it straight back to the terminal.
+      // (A card raised for a request on another of your computers gives way to this one.)
+      if (State.pendingApproval?.remote) State.pendingApproval = null;
+      if (State.pendingQuestion?.remote) State.pendingQuestion = null;
       if (
         (State.pendingApproval && State.pendingApproval.requestId !== requestId) ||
         State.pendingQuestion
@@ -624,6 +627,8 @@ function handleQuestion(
   const questions = parseQuestions(payload.tool_input);
   // Other agents get no card, as for approvals; unparsable questions and a card
   // already up go straight back to the terminal.
+  if (State.pendingApproval?.remote) State.pendingApproval = null;
+  if (State.pendingQuestion?.remote) State.pendingQuestion = null;
   if (isExternalAgent || !questions || !requestId || State.pendingQuestion || State.pendingApproval) {
     if (requestId) void Bridge.approvalDecline(requestId);
     return;

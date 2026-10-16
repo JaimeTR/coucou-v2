@@ -5,6 +5,7 @@
 
 import { Bridge } from "../core/bridge";
 import { State } from "../core/state";
+import { remotePlaying } from "./remote";
 import type { BotEngine } from "../mochi/engine";
 
 const EVERY_MS = 4000;
@@ -19,7 +20,8 @@ export function startMusic(engine: BotEngine, wake: () => void) {
   let playing = false;
 
   const apply = () => {
-    const dance = shouldDance(playing, State.settings.musicDance, State.mode, State.paused);
+    // Music on this computer, or on another of yours: Mochi dances to both.
+    const dance = shouldDance(playing || remotePlaying(), State.settings.musicDance, State.mode, State.paused);
     if (engine.isDancing !== dance) {
       engine.isDancing = dance;
       wake(); // the frame loop sleeps when nothing moves

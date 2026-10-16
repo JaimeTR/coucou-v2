@@ -6,7 +6,7 @@ import type { ModeInfo } from "./modes";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
-import type { ProjectInfo, Settings } from "./state";
+import type { ProjectInfo, RemoteDevice, Settings } from "./state";
 import type { SpotifyAction, SpotifyState } from "./spotify";
 import type { Rule, RuleDraft } from "../island/rules";
 
@@ -36,7 +36,7 @@ export interface BootInfo {
   computerName: string;
 }
 
-/** A computer or phone linked to the sync account. */
+/** A computer or phone linked to the sync account, as the Devices page shows it. */
 export interface SyncDevice {
   id: string;
   kind: "computer" | "phone";
@@ -178,14 +178,19 @@ export const Bridge = {
   syncNow: () => callOrThrow<boolean>("sync_now"),
   /** This PC's sessions and waiting approval, for the phone (encrypted in Rust). */
   syncPublish: (state: unknown) => call<void>("sync_publish", { state }),
-  /** Every computer and phone on the account, newest first. */
-  syncDevices: () => callOrThrow<SyncDevice[]>("sync_devices"),
   /** Takes a device (an old phone) off the account's list. */
   syncForgetDevice: (id: string) => callOrThrow<void>("sync_forget_device", { id }),
   /** Pings the phones on the account (generic text: the PC's name and what waits). */
   syncNotify: (kind: "approval" | "question", body: string) => call<void>("sync_notify", { kind, body }),
+  /** The other computers on the account, with what each published. */
+  syncDevices: () => call<RemoteDevice[]>("sync_devices"),
+  /** Answers a permission or question waiting on another computer: it takes it once. */
+  syncDecide: (device: string, decision: unknown) => call<void>("sync_decide", { device, decision }),
   /** Allow / Deny taps from the phone: [{ requestId, decision, at }]. */
-  syncTakeDecisions: () => call<{ requestId: string; decision: "allow" | "deny"; at: number }[]>("sync_take_decisions"),
+  syncTakeDecisions: () =>
+    call<{ requestId: string; decision: "allow" | "deny" | "answer"; at: number; answers?: Record<string, string | string[]> }[]>(
+      "sync_take_decisions",
+    ),
 
   // ── Other agents (Gemini CLI, OpenCode, your terminal) ────────────────────
   agentsStatus: () => call<AgentStatus[]>("agents_status"),
