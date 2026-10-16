@@ -2,12 +2,23 @@ import { Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 
-import { useEffect } from "react";
-import { Platform } from "react-native";
+import { useEffect, type ComponentProps } from "react";
+import { Platform, type ColorValue } from "react-native";
 
 import { AppProvider, useApp } from "../app-context";
+import { haptic } from "../components/ui";
 import { openPcsOnTap, showNoticesInForeground } from "../push";
 import { colors } from "../theme";
+
+// Your computers are what this app is for: it opens there.
+export const unstable_settings = { initialRouteName: "computers" };
+
+type IconName = ComponentProps<typeof Ionicons>["name"];
+
+const icon = (on: IconName, off: IconName) =>
+  function TabIcon({ color, size, focused }: { color: ColorValue; size: number; focused: boolean }) {
+    return <Ionicons name={focused ? on : off} color={color} size={size} />;
+  };
 
 function Navigation() {
   const { t } = useApp();
@@ -20,37 +31,22 @@ function Navigation() {
     <>
       <StatusBar style="light" />
       <Tabs
+        screenListeners={{ tabPress: () => haptic.tap() }}
         screenOptions={{
           headerStyle: { backgroundColor: colors.bg },
           headerTintColor: colors.ink,
+          headerTitleStyle: { fontWeight: "700", fontSize: 17 },
           headerShadowVisible: false,
           tabBarStyle: { backgroundColor: colors.bg, borderTopColor: colors.line },
           tabBarActiveTintColor: colors.ink,
           tabBarInactiveTintColor: colors.dim,
+          tabBarLabelStyle: { fontSize: 11, fontWeight: "600" },
           sceneStyle: { backgroundColor: colors.bg },
         }}
       >
-        <Tabs.Screen
-          name="index"
-          options={{
-            title: t("Hoy"),
-            tabBarIcon: ({ color, size }) => <Ionicons name="sparkles" color={color} size={size} />,
-          }}
-        />
-        <Tabs.Screen
-          name="computers"
-          options={{
-            title: t("PCs"),
-            tabBarIcon: ({ color, size }) => <Ionicons name="desktop-outline" color={color} size={size} />,
-          }}
-        />
-        <Tabs.Screen
-          name="settings"
-          options={{
-            title: t("Ajustes"),
-            tabBarIcon: ({ color, size }) => <Ionicons name="settings-sharp" color={color} size={size} />,
-          }}
-        />
+        <Tabs.Screen name="computers" options={{ title: t("PCs"), tabBarIcon: icon("desktop", "desktop-outline") }} />
+        <Tabs.Screen name="index" options={{ title: t("Hoy"), tabBarIcon: icon("sparkles", "sparkles-outline") }} />
+        <Tabs.Screen name="settings" options={{ title: t("Ajustes"), tabBarIcon: icon("settings", "settings-outline") }} />
       </Tabs>
     </>
   );

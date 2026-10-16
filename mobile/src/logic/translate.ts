@@ -108,6 +108,26 @@ const PAIRS: ReadonlyArray<readonly [string, string]> = [
   ["ahora", "now"],
   ["ayer", "yesterday"],
   ["hace {0}", "{0} ago"],
+  // PCs redesign
+  ["Mira qué hacen tus agentes y permite o deniega sus comandos desde aquí. Todo va cifrado: tu servidor no puede leerlo.", "See what your agents are doing and allow or deny their commands from here. Everything is encrypted: your server cannot read it."],
+  ["En Coucou de tu PC: Ajustes → Sincronización → Mostrar código.", "In Coucou on your PC: Settings → Sync → Show code."],
+  ["Escribir el código a mano", "Type the code by hand"],
+  ["En línea", "Online"],
+  ["Visto hace", "Seen"],
+  ["1 PC te necesita", "1 PC needs you"],
+  ["PCs te necesitan", "PCs need you"],
+  ["1 agente trabajando", "1 agent working"],
+  ["agentes trabajando", "agents working"],
+  ["Todo tranquilo", "All quiet"],
+  ["Sin conexión con tu servidor", "Cannot reach your server"],
+  ["En vivo", "Live"],
+  ["actualizado", "updated"],
+  ["Ningún PC todavía", "No PCs yet"],
+  ["Avisos", "Alerts"],
+  ["Dejarás de ver tus PCs hasta que vuelvas a enlazarlo con el QR.", "You will stop seeing your PCs until you link it again with the QR."],
+  ["Desconectar", "Disconnect"],
+  ["Nada que mostrar aún", "Nothing to show yet"],
+  ["Ir a Ajustes", "Go to Settings"],
 ];
 
 interface Pattern {

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { useApp } from "../app-context";
+import { Button as UiButton } from "../components/ui";
 import { CUSTOM_LIMIT, readOnce, type CustomApp } from "../logic/custom";
 import type { Language } from "../logic/translate";
 import { appTokenKey, clearSecret, getSecret, GITHUB_TOKEN, setSecret } from "../store";
@@ -11,11 +12,7 @@ const random = (n: number, alphabet: string) =>
   Array.from({ length: n }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join("");
 
 function Button({ label, onPress, danger, primary }: { label: string; onPress: () => void; danger?: boolean; primary?: boolean }) {
-  return (
-    <Pressable onPress={onPress} style={[styles.button, primary && styles.primary, danger && styles.danger]}>
-      <Text style={[styles.buttonText, primary && { color: colors.bg }, danger && { color: colors.red }]}>{label}</Text>
-    </Pressable>
-  );
+  return <UiButton label={label} onPress={onPress} variant={primary ? "primary" : danger ? "danger" : "secondary"} />;
 }
 
 function Field({ label, value, onChange, placeholder, secure, keyboard }: {
@@ -234,12 +231,12 @@ export default function Settings() {
 }
 
 const styles = StyleSheet.create({
-  page: { padding: 16, gap: 14, paddingBottom: 40 },
-  card: { backgroundColor: colors.card, borderRadius: 18, padding: 16, gap: 10, borderWidth: 1, borderColor: colors.line },
-  title: { color: colors.ink, fontSize: 16, fontWeight: "600" },
+  page: { padding: 16, gap: 16, paddingBottom: 48 },
+  card: { backgroundColor: colors.card, borderRadius: 20, padding: 16, gap: 12, borderWidth: 1, borderColor: colors.line },
+  title: { color: colors.ink, fontSize: 17, fontWeight: "600" },
   hint: { color: colors.dim, fontSize: 13, lineHeight: 18 },
   label: { color: colors.ink2, fontSize: 12 },
-  input: { backgroundColor: colors.bg, color: colors.ink, borderRadius: 10, borderWidth: 1, borderColor: colors.line, paddingHorizontal: 12, paddingVertical: 9, fontSize: 14 },
+  input: { backgroundColor: colors.bg, color: colors.ink, borderRadius: 10, borderWidth: 1, borderColor: colors.line, paddingHorizontal: 12, paddingVertical: 12, fontSize: 15 },
   buttons: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   button: { paddingHorizontal: 14, paddingVertical: 9, borderRadius: 10, borderWidth: 1, borderColor: colors.line, backgroundColor: "rgba(255,255,255,0.06)" },
   primary: { backgroundColor: colors.ink, borderColor: colors.ink },
