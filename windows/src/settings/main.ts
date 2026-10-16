@@ -1924,6 +1924,61 @@ function shortcutRow(
 
 // ── Sync between your computers ───────────────────────────────────────────────
 
+const DEVICES_EVERY_MS = 20_000;
+const ONLINE_MS = 90_000;
+
+/** "ahora", "5 min", "2 h", "3 d" since a device last reported. */
+function sinceLabel(at: number): string {
+  const s = Math.max(0, Math.round((Date.now() - at) / 1000));
+  if (s < 60) return "ahora";
+  if (s < 3600) return `${Math.round(s / 60)} min`;
+  if (s < 86_400) return `${Math.round(s / 3600)} h`;
+  return `${Math.round(s / 86_400)} d`;
+}
+
+/** The computers and phones linked to this account, refreshed while the section is on screen. */
+function devicesBlock(): HTMLElement {
+  const list = h("div", { style: "display:flex;flex-direction:column;gap:6px" });
+  const load = async () => {
+    try {
+      const devices = await Bridge.syncDevices();
+      clear(list);
+      if (devices.length === 0) {
+        list.append(h("div", { class: "hint", text: "Ningún dispositivo ha reportado todavía." }));
+        return;
+      }
+      for (const d of devices) {
+        const online = Date.now() - d.at < ONLINE_MS;
+        const what = d.kind === "phone"
+          ? (d.platform === "ios" ? "iPhone" : d.platform === "android" ? "Android" : "Teléfono")
+          : (d.mine ? "Este equipo" : "PC");
+        const detail = d.kind === "computer" && d.tasks > 0 ? ` · ${d.tasks} ${d.tasks === 1 ? "agente trabajando" : "agentes trabajando"}` : "";
+        list.append(h("div", { class: "row" },
+          statusDot(online),
+          h("span", { text: `${d.kind === "phone" ? "📱" : "🖥"} ${d.name}` }),
+          h("span", { class: "hint", text: `${what}${detail} · ${online ? "en línea" : `visto hace ${sinceLabel(d.at)}`}` }),
+        ));
+      }
+    } catch (e) {
+      clear(list);
+      list.append(h("div", { class: "hint", text: String(e).replace(/^Error:\s*/, "") }));
+    }
+  };
+  void load();
+  const timer = window.setInterval(() => {
+    // The section is rebuilt on every change: stop when this copy is gone.
+    if (!list.isConnected) return window.clearInterval(timer);
+    void load();
+  }, DEVICES_EVERY_MS);
+  return h("div", { style: "display:flex;flex-direction:column;gap:6px;margin-top:6px" },
+    h("div", { class: "row" },
+      h("strong", { text: "Dispositivos conectados" }),
+      h("button", { text: "Actualizar", onclick: () => void load() }),
+    ),
+    list,
+  );
+}
+
 function syncSection(): HTMLElement {
   const body = h("div", { style: "display:flex;flex-direction:column;gap:10px" });
   const feedback = h("div");
@@ -1968,6 +2023,7 @@ function syncSection(): HTMLElement {
           } }),
         ),
         codeBox,
+        devicesBlock(),
       );
       return;
     }

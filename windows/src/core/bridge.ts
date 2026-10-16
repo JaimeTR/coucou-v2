@@ -36,6 +36,21 @@ export interface BootInfo {
   computerName: string;
 }
 
+/** A computer or phone linked to the sync account. */
+export interface SyncDevice {
+  id: string;
+  kind: "computer" | "phone";
+  name: string;
+  /** Phones only: "ios" or "android". */
+  platform: string;
+  /** Computers only: agents working now. */
+  tasks: number;
+  /** When it last reported (ms). */
+  at: number;
+  /** This very computer. */
+  mine: boolean;
+}
+
 export interface AgentStatus {
   /** "gemini", "opencode" or "terminal". */
   id: string;
@@ -163,6 +178,8 @@ export const Bridge = {
   syncNow: () => callOrThrow<boolean>("sync_now"),
   /** This PC's sessions and waiting approval, for the phone (encrypted in Rust). */
   syncPublish: (state: unknown) => call<void>("sync_publish", { state }),
+  /** Every computer and phone on the account, newest first. */
+  syncDevices: () => callOrThrow<SyncDevice[]>("sync_devices"),
   /** Pings the phones on the account (generic text: the PC's name and what waits). */
   syncNotify: (kind: "approval" | "question", body: string) => call<void>("sync_notify", { kind, body }),
   /** Allow / Deny taps from the phone: [{ requestId, decision, at }]. */

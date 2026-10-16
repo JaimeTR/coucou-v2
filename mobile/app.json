@@ -16,7 +16,13 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0B0C0E"
-      }
+      },
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -57,7 +63,12 @@
       ]
     ],
     "extra": {
-      "author": "JaimeTR"
-    }
+      "author": "JaimeTR",
+      "router": {},
+      "eas": {
+        "projectId": "51d7908f-5a0d-4f19-baab-085bc56f5565"
+      }
+    },
+    "owner": "jaimetrdev"
   }
 }

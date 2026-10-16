@@ -7,6 +7,7 @@ import { Platform, type ColorValue } from "react-native";
 
 import { AppProvider, useApp } from "../app-context";
 import { haptic } from "../components/ui";
+import { PcsProvider, usePcs } from "../pcs";
 import { openPcsOnTap, showNoticesInForeground } from "../push";
 import { colors } from "../theme";
 
@@ -22,6 +23,8 @@ const icon = (on: IconName, off: IconName) =>
 
 function Navigation() {
   const { t } = useApp();
+  const { computers } = usePcs();
+  const waiting = computers.filter((c) => c.approval).length;
   useEffect(() => {
     if (Platform.OS === "web") return;
     showNoticesInForeground();
@@ -44,7 +47,16 @@ function Navigation() {
           sceneStyle: { backgroundColor: colors.bg },
         }}
       >
-        <Tabs.Screen name="computers" options={{ title: t("PCs"), tabBarIcon: icon("desktop", "desktop-outline") }} />
+        <Tabs.Screen
+          name="computers"
+          options={{
+            title: t("PCs"),
+            headerShown: false,
+            tabBarBadge: waiting > 0 ? waiting : undefined,
+            tabBarBadgeStyle: { backgroundColor: colors.amber, color: colors.bg },
+            tabBarIcon: icon("desktop", "desktop-outline"),
+          }}
+        />
         <Tabs.Screen name="index" options={{ title: t("Hoy"), tabBarIcon: icon("sparkles", "sparkles-outline") }} />
         <Tabs.Screen name="settings" options={{ title: t("Ajustes"), tabBarIcon: icon("settings", "settings-outline") }} />
       </Tabs>
@@ -55,7 +67,9 @@ function Navigation() {
 export default function Layout() {
   return (
     <AppProvider>
-      <Navigation />
+      <PcsProvider>
+        <Navigation />
+      </PcsProvider>
     </AppProvider>
   );
 }

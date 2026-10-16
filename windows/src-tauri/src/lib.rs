@@ -567,6 +567,12 @@ async fn sync_notify(app: AppHandle, kind: String, body: String) -> Result<(), S
     sync::notify(&app, &kind, &body).await
 }
 
+/// Every computer and phone on the account, for the sync section of Settings.
+#[tauri::command]
+async fn sync_devices(app: AppHandle) -> Result<Vec<serde_json::Value>, String> {
+    sync::devices(&app).await
+}
+
 #[tauri::command]
 async fn sync_take_decisions(app: AppHandle) -> Result<Vec<serde_json::Value>, String> {
     sync::take_decisions(&app).await
@@ -1258,6 +1264,7 @@ pub fn run() {
             sync_code,
             sync_now,
             sync_publish,
+            sync_devices,
             sync_take_decisions,
             sync_notify,
             reset_island_position,

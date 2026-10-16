@@ -282,6 +282,47 @@ pub fn spawn(app: AppHandle) {
     });
 }
 
+/// One device of the account as the settings window lists it: a computer or a phone.
+fn describe_device(id: &str, at: i64, plain: &Value, this_device: &str) -> Value {
+    let phone = plain["kind"].as_str() == Some("phone");
+    serde_json::json!({
+        "id": id,
+        "kind": if phone { "phone" } else { "computer" },
+        "name": plain["name"].as_str().unwrap_or(id).chars().take(60).collect::<String>(),
+        "platform": plain["platform"].as_str().unwrap_or(""),
+        "tasks": plain["tasks"].as_array().map(|t| t.len()).unwrap_or(0),
+        "at": at,
+        "mine": id == this_device,
+    })
+}
+
+/// Every device on the account (computers and phones), newest first, for the
+/// sync section of the settings window. Names are read here, on the PC: the server
+/// only ever holds them encrypted.
+pub async fn devices(app: &AppHandle) -> Result<Vec<Value>, String> {
+    let Some((s, keys)) = current(app) else { return Ok(Vec::new()) };
+    let res = client()
+        .get(endpoint(&s.sync_url, &keys, "devices"))
+        .bearer_auth(&keys.token)
+        .send()
+        .await
+        .map_err(|e| format!("No se pudo llegar al servidor: {e}"))?;
+    if !res.status().is_success() {
+        return Err(http_error(res.status()));
+    }
+    let list: Vec<Value> = res.json().await.map_err(|e| e.to_string())?;
+    let mut out: Vec<Value> = list
+        .iter()
+        .filter_map(|d| {
+            let plain = d["blob"].as_str().and_then(|b| open(&keys, b))?;
+            let plain: Value = serde_json::from_slice(&plain).ok()?;
+            Some(describe_device(d["id"].as_str()?, d["at"].as_i64().unwrap_or(0), &plain, &s.sync_device))
+        })
+        .collect();
+    out.sort_by_key(|d| std::cmp::Reverse(d["at"].as_i64().unwrap_or(0)));
+    Ok(out)
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SyncStatus {
@@ -405,6 +446,23 @@ mod tests {
         assert!(derive("not a code").is_none());
         assert!(derive(&CODE[..60]).is_none());
         assert!(derive(&new_code()).is_some());
+    }
+
+    #[test]
+    fn phones_and_computers_are_told_apart_in_the_device_list() {
+        let phone = serde_json::json!({ "kind": "phone", "name": "iPhone de Jaime", "platform": "ios" });
+        let d = describe_device("phone-1a2b", 5, &phone, "pc-9");
+        assert_eq!(d["kind"], "phone");
+        assert_eq!(d["name"], "iPhone de Jaime");
+        assert_eq!(d["platform"], "ios");
+        assert_eq!(d["mine"], false);
+
+        let pc = serde_json::json!({ "name": "JAIME-PC", "tasks": [{}, {}], "approval": null });
+        let d = describe_device("pc-9", 7, &pc, "pc-9");
+        assert_eq!(d["kind"], "computer");
+        assert_eq!(d["tasks"], 2);
+        assert_eq!(d["mine"], true);
+        assert_eq!(d["at"], 7);
     }
 
     #[test]

@@ -8,6 +8,8 @@ export interface RemoteTask {
   state: string;
   step: string;
   project: string;
+  /** "claudeCode" or "agent": the phone offers to open Claude only for the first. */
+  source: string;
 }
 
 export interface RemoteState {
@@ -47,6 +49,7 @@ export function remoteState(
         state: t.state,
         step: (t.steps[t.stepIndex] ?? "").slice(0, 120),
         project: (t.sessionCwd ?? "").split(/[\\/]/).filter(Boolean).pop() ?? "",
+        source: t.source,
       })),
     approval: approval
       ? { requestId: approval.requestId, tool: approval.tool, command: approval.command.slice(0, 600) }
