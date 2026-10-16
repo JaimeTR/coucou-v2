@@ -180,6 +180,8 @@ export const Bridge = {
   syncPublish: (state: unknown) => call<void>("sync_publish", { state }),
   /** Every computer and phone on the account, newest first. */
   syncDevices: () => callOrThrow<SyncDevice[]>("sync_devices"),
+  /** Takes a device (an old phone) off the account's list. */
+  syncForgetDevice: (id: string) => callOrThrow<void>("sync_forget_device", { id }),
   /** Pings the phones on the account (generic text: the PC's name and what waits). */
   syncNotify: (kind: "approval" | "question", body: string) => call<void>("sync_notify", { kind, body }),
   /** Allow / Deny taps from the phone: [{ requestId, decision, at }]. */

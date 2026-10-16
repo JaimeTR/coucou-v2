@@ -573,6 +573,12 @@ async fn sync_devices(app: AppHandle) -> Result<Vec<serde_json::Value>, String> 
     sync::devices(&app).await
 }
 
+/// Removes a device (usually an old phone) from the account's list.
+#[tauri::command]
+async fn sync_forget_device(app: AppHandle, id: String) -> Result<(), String> {
+    sync::forget_device(&app, &id).await
+}
+
 #[tauri::command]
 async fn sync_take_decisions(app: AppHandle) -> Result<Vec<serde_json::Value>, String> {
     sync::take_decisions(&app).await
@@ -1265,6 +1271,7 @@ pub fn run() {
             sync_now,
             sync_publish,
             sync_devices,
+            sync_forget_device,
             sync_take_decisions,
             sync_notify,
             reset_island_position,

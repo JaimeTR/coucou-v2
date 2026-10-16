@@ -4,6 +4,15 @@
 
 Coucou v2 es el fork de [JaimeTR](https://github.com/JaimeTR) de [Coucou, de Louis Raillé](https://github.com/Louis-CFM/coucou) (MIT). Las notas de la versión de macOS siguen en el [CHANGELOG.md](../CHANGELOG.md) de la raíz.
 
+## 1.4.0: 16 de octubre de 2026
+
+Quién está conectado, de un vistazo, y una app de teléfono que vale la pena abrir.
+
+- **Dispositivos** (categoría nueva en Ajustes): todos los equipos y teléfonos de tu cuenta de sincronización como tarjetas: nombre, Equipo / iPhone / Android, en línea o «visto hace», agentes trabajando; se actualiza sola. «Quitar» saca de la lista un teléfono viejo y «Mostrar QR» enlaza uno nuevo desde la misma página. Ajustes → Sincronización lleva hasta ahí. Esto es Windows y Linux; la app nativa de macOS tiene su propio enlace con el teléfono y todavía no usa este servidor.
+- **App del teléfono** (`mobile/`, Expo SDK 57): se abre en tus PCs; toca uno para ver su página: qué hace cada agente, el comando completo que espera permiso con Permitir / Denegar, y «Abrir Claude» para seguir en la app de Claude. La pestaña PCs muestra una insignia con los permisos que esperan; Hoy muestra primero tus PCs y, mientras no configures nada, los siguientes pasos en vez de una página vacía. Un diseño renovado y común a todas las pantallas, con vibración al tocar.
+- **El teléfono se anuncia** a la cuenta (cifrado, como todo lo demás), así los PCs pueden listarlo. Los avisos en el teléfono necesitan el proyecto enlazado con EAS (`npx eas-cli init`, hecho en este repo).
+- Las tareas que van al teléfono ahora dicen de dónde vienen (Claude Code u otro agente).
+
 ## 1.3.1: 16 de octubre de 2026
 
 - **Sincronización: la dirección del servidor perdona** (Ajustes → Sincronización, y la pestaña PCs de la app del teléfono). «coucou-sync.tu-cuenta.workers.dev» sin `https://` ya funciona, una barra final o unas comillas pegadas se quitan, y el `http://…workers.dev` de Cloudflare pasa a https; cualquier otro servidor http sin cifrar se sigue rechazando (vería tu cuenta sin cifrar), y un campo vacío dice qué escribir y dónde desplegar el servidor (`sync/README.md`). Antes, todo lo que no empezaba por `https://` solo decía «La dirección del servidor debe empezar por https://».

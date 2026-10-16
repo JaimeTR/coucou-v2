@@ -4,6 +4,15 @@
 
 Coucou v2 is [JaimeTR](https://github.com/JaimeTR)'s fork of [Coucou by Louis Raillé](https://github.com/Louis-CFM/coucou) (MIT). The macOS release notes stay in the root [CHANGELOG.md](../CHANGELOG.md).
 
+## 1.4.0 — October 16, 2026
+
+Who is connected, at a glance, and a phone app worth opening.
+
+- **Devices** (new category in Settings): every computer and phone on your sync account as a card — name, Computer / iPhone / Android, online or "last seen", agents working — refreshed by itself. "Remove" takes an old phone off the list, "Show QR" links a new phone from the same page. Settings → Sincronización points to it. This is Windows and Linux; the native macOS app has its own phone link and does not use this server yet.
+- **Phone app** (`mobile/`, Expo SDK 57): opens on your PCs; tap one for its page — what each agent is doing, the full command waiting for permission with Allow / Deny, and « Abrir Claude » to carry on in the Claude app. The PCs tab shows a badge with the permissions waiting; Today shows your PCs first and, until you set things up, the next steps instead of an empty page. A redesigned look shared by every screen, with haptics.
+- **The phone announces itself** to the account (encrypted, like everything else), so the PCs can list it. Alerts on the phone need the project linked with EAS (`npx eas-cli init`, done for this repo).
+- Tasks sent to the phone now say where they come from (Claude Code or another agent).
+
 ## 1.3.1 — October 16, 2026
 
 - **Sync: the server address is forgiving** (Settings → Sincronización, and the phone app's PCs tab). "coucou-sync.you.workers.dev" without `https://` now works, a pasted trailing slash or quotes are dropped, and Cloudflare's `http://…workers.dev` is upgraded to https; any other plain http server is still refused (it would see your account unencrypted), and an empty field says what to type and where to deploy the server (`sync/README.md`). Before, anything not starting with `https://` only said "La dirección del servidor debe empezar por https://".

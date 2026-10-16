@@ -323,6 +323,32 @@ pub async fn devices(app: &AppHandle) -> Result<Vec<Value>, String> {
     Ok(out)
 }
 
+/// Takes a device off the account's list (a phone you no longer use). It cannot
+/// remove this very computer: that is "Desconectar este equipo".
+pub async fn forget_device(app: &AppHandle, id: &str) -> Result<(), String> {
+    let Some((s, keys)) = current(app) else { return Ok(()) };
+    if id == s.sync_device {
+        return Err("Este equipo no se puede quitar desde aquí.".into());
+    }
+    let res = client()
+        .delete(endpoint(&s.sync_url, &keys, &format!("devices/{}", urlencode(id))))
+        .bearer_auth(&keys.token)
+        .send()
+        .await
+        .map_err(|e| format!("No se pudo llegar al servidor: {e}"))?;
+    if !res.status().is_success() {
+        return Err(http_error(res.status()));
+    }
+    Ok(())
+}
+
+/// Enough percent-encoding for a device id (letters, digits, `-` and `_` pass).
+fn urlencode(id: &str) -> String {
+    id.bytes()
+        .map(|b| if b.is_ascii_alphanumeric() || b == b'-' || b == b'_' { (b as char).to_string() } else { format!("%{b:02X}") })
+        .collect()
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SyncStatus {
@@ -463,6 +489,12 @@ mod tests {
         assert_eq!(d["tasks"], 2);
         assert_eq!(d["mine"], true);
         assert_eq!(d["at"], 7);
+    }
+
+    #[test]
+    fn a_device_id_is_safe_in_a_url() {
+        assert_eq!(urlencode("phone-1a2b_C3"), "phone-1a2b_C3");
+        assert_eq!(urlencode("a/b c"), "a%2Fb%20c");
     }
 
     #[test]
