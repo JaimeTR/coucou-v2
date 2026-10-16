@@ -25,6 +25,7 @@ import { h } from "../views/dom";
 import { IslandStateMachine } from "./fsm";
 import { endQuestion, Recap } from "./hooks";
 import { startMusic } from "./music";
+import { markHandled } from "./remote";
 import { startSpotify } from "./spotify";
 import { refreshCodexPlan } from "./integrations";
 import { isDock, placement, undockNudge } from "./dock";
@@ -126,19 +127,48 @@ export class Island {
     window.setInterval(() => this.applySettings(), 3600_000);
   }
 
+  /** Claude's answer to a question: from the card here, or from the phone or another computer. */
+  answerQuestion(answers: Record<string, string | string[]> | null) {
+    const q = State.pendingQuestion;
+    void Bridge.log(`question ${answers ? "answered" : "left to the terminal"} req=${q?.requestId ?? "none"}`);
+    if (!q) return;
+    Sound.play(answers ? "approve" : "blip");
+    if (q.remote) {
+      // Waiting on another of your computers: "terminal" there just dismisses the card here.
+      markHandled(q.requestId);
+      if (answers) void Bridge.syncDecide(q.remote.device, { requestId: q.requestId, decision: "answer", answers, at: Date.now() });
+    } else {
+      if (answers) Recap.question(`integration_claude:${q.sessionId}`);
+      endQuestion();
+      void Bridge.questionAnswer(q.requestId, answers);
+    }
+    State.pendingQuestion = null;
+    State.isPinned = false;
+    this.fsm.pinned = false;
+    State.updateTask("integration_claude", "working");
+    State.setPillBadge("integration_claude", null);
+    this.setView(State.defaultView());
+  }
+
   /** The Allow / Deny buttons, and Ctrl+Alt+Y / N from anywhere. */
   decideApproval(d: "allow" | "deny" | "always") {
     const req = State.pendingApproval;
     void Bridge.log(`decide ${d} req=${req?.requestId ?? "none"}`);
     if (!req) return;
     const pill = req.agentId ?? "integration_claude";
-    Recap.decision(pill, d);
     Sound.play(d === "deny" ? "blip" : "approve");
-    if (d === "always" && req.rule) {
-      // The person just clicked "Always": that click is what creates the rule.
-      Bridge.rulesAdd(req.rule).catch((err) => void Bridge.log(`could not save the rule: ${String(err)}`));
+    if (req.remote) {
+      // It waits on another of your computers: the answer goes there, through the server.
+      markHandled(req.requestId);
+      void Bridge.syncDecide(req.remote.device, { requestId: req.requestId, decision: d === "deny" ? "deny" : "allow", at: Date.now() });
+    } else {
+      Recap.decision(pill, d);
+      if (d === "always" && req.rule) {
+        // The person just clicked "Always": that click is what creates the rule.
+        Bridge.rulesAdd(req.rule).catch((err) => void Bridge.log(`could not save the rule: ${String(err)}`));
+      }
+      void Bridge.approvalDecision(req.requestId, d === "deny" ? "deny" : "allow");
     }
-    void Bridge.approvalDecision(req.requestId, d === "deny" ? "deny" : "allow");
     void Bridge.setDecisionShortcuts(false);
     State.pendingApproval = null;
     State.isPinned = false;
@@ -214,21 +244,7 @@ export class Island {
         if (url) void Bridge.openUrl(url);
       },
       decide: (d) => this.decideApproval(d),
-      answerQuestion: (answers) => {
-        const q = State.pendingQuestion;
-        void Bridge.log(`question ${answers ? "answered" : "left to the terminal"} req=${q?.requestId ?? "none"}`);
-        if (!q) return;
-        if (answers) Recap.question(`integration_claude:${q.sessionId}`);
-        endQuestion();
-        Sound.play(answers ? "approve" : "blip");
-        void Bridge.questionAnswer(q.requestId, answers);
-        State.pendingQuestion = null;
-        State.isPinned = false;
-        this.fsm.pinned = false;
-        State.updateTask("integration_claude", "working");
-        State.setPillBadge("integration_claude", null);
-        this.setView(State.defaultView());
-      },
+      answerQuestion: (answers) => this.answerQuestion(answers),
       openDiff: (id) => {
         State.openDiffId = id;
         Sound.play("blip");

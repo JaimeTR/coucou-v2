@@ -4,6 +4,14 @@
 
 Coucou v2 es el fork de [JaimeTR](https://github.com/JaimeTR) de [Coucou, de Louis Raillé](https://github.com/Louis-CFM/coucou) (MIT). Las notas de la versión de macOS siguen en el [CHANGELOG.md](../CHANGELOG.md) de la raíz.
 
+## 1.4.0 — 16 de octubre de 2026
+
+**Tus equipos, al compás**
+- **Equipos conectados** (Ajustes → Sincronización): este equipo y los demás de la cuenta, con en línea / visto hace, modo de trabajo, la música que suenan y cuántos agentes trabajan.
+- **Responder desde cualquier equipo**: un permiso o una pregunta que espera en uno de tus equipos aparece en la isla de los demás, y puedes Permitir / Denegar o responder ahí (la misma tarjeta, con el nombre del equipo). Se va sola cuando se responde en cualquiera, o si ese equipo se apaga.
+- **La música te sigue**: si otro de tus equipos pone música, Mochi baila aquí también.
+- Cada equipo avisa que está encendido cada 30 s; en silencio en los modos Juego, Reunión y Vídeo (no sale ninguna tarjeta sobre un juego o una llamada).
+
 ## 1.3.1: 16 de octubre de 2026
 
 - **Sincronización: la dirección del servidor perdona** (Ajustes → Sincronización, y la pestaña PCs de la app del teléfono). «coucou-sync.tu-cuenta.workers.dev» sin `https://` ya funciona, una barra final o unas comillas pegadas se quitan, y el `http://…workers.dev` de Cloudflare pasa a https; cualquier otro servidor http sin cifrar se sigue rechazando (vería tu cuenta sin cifrar), y un campo vacío dice qué escribir y dónde desplegar el servidor (`sync/README.md`). Antes, todo lo que no empezaba por `https://` solo decía «La dirección del servidor debe empezar por https://».

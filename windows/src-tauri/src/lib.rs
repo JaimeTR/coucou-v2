@@ -573,6 +573,16 @@ async fn sync_take_decisions(app: AppHandle) -> Result<Vec<serde_json::Value>, S
 }
 
 #[tauri::command]
+async fn sync_devices(app: AppHandle) -> Result<Vec<serde_json::Value>, String> {
+    sync::devices(&app).await
+}
+
+#[tauri::command]
+async fn sync_decide(app: AppHandle, device: String, decision: serde_json::Value) -> Result<(), String> {
+    sync::decide(&app, &device, decision).await
+}
+
+#[tauri::command]
 async fn sync_now(app: AppHandle) -> Result<bool, String> {
     sync::pull(&app).await
 }
@@ -1259,6 +1269,8 @@ pub fn run() {
             sync_now,
             sync_publish,
             sync_take_decisions,
+            sync_devices,
+            sync_decide,
             sync_notify,
             reset_island_position,
             open_url,

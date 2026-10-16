@@ -46,6 +46,29 @@ export interface ApprovalInfo {
   rule?: RuleDraft | null;
   /** The pill the request belongs to; absent means Claude Code. */
   agentId?: string;
+  /** Set when the request is waiting on another of your computers (see island/remote.ts). */
+  remote?: RemoteOrigin;
+}
+
+/** Another computer on the account, and its name as the person sees it. */
+export interface RemoteOrigin {
+  device: string;
+  name: string;
+}
+
+/** What another computer published, as the island and Settings show it. */
+export interface RemoteDevice {
+  id: string;
+  /** The server's clock (ms) when it last published. */
+  at: number;
+  state: {
+    name?: string;
+    music?: { title: string; artist: string } | null;
+    mode?: string;
+    tasks?: { name: string; state: string; step: string; project: string }[];
+    approval?: { requestId: string; tool: string; command: string } | null;
+    question?: { requestId: string; questions: AskQuestion[] } | null;
+  };
 }
 
 /** One question from Claude (AskUserQuestion): 2–4 options, optionally several. */
@@ -60,6 +83,8 @@ export interface PendingQuestion {
   requestId: string;
   sessionId: string;
   questions: AskQuestion[];
+  /** Set when the question is waiting on another of your computers. */
+  remote?: RemoteOrigin;
 }
 
 /** One rolling window of the Claude plan (`five_hour` or `seven_day`). */
@@ -387,6 +412,8 @@ class AppState {
   workMode: WorkMode = "work";
   modeAuto = true;
   modeGame: string | null = null;
+  /** The other computers on the account, refreshed while sync is on (island/remote.ts). */
+  devices: RemoteDevice[] = [];
   /** Last week's numbers, worked out when the recap card is opened. */
   recap: WeeklySummary | null = null;
   /** Said to Mochi by voice: the chat takes it when it opens. */

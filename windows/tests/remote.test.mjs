@@ -27,3 +27,33 @@ test("a waiting approval goes up without its rule, the command cut", () => {
   assert.deepEqual(Object.keys(s.approval), ["requestId", "tool", "command"]);
   assert.equal(s.approval.command.length, 600);
 });
+
+import { waitingElsewhere, ONLINE_MS } from "../.test-build/island/remoteState.js";
+
+const dev = (id, at, state) => ({ id, at, state });
+const NOW = 1_000_000;
+
+test("what waits on another computer that is on is offered; offline and answered ones are not", () => {
+  const ask = { requestId: "r1", tool: "Bash", command: "ls" };
+  const on = dev("laptop-1", NOW - 5_000, { name: "LAPTOP", approval: ask });
+  assert.equal(waitingElsewhere([on], new Set(), NOW).kind, "approval");
+  assert.equal(waitingElsewhere([on], new Set(), NOW).name, "LAPTOP");
+  assert.equal(waitingElsewhere([dev("old", NOW - ONLINE_MS - 1, { approval: ask })], new Set(), NOW), null, "off");
+  assert.equal(waitingElsewhere([on], new Set(["r1"]), NOW), null, "already answered here");
+  const q = { requestId: "q1", questions: [] };
+  assert.equal(waitingElsewhere([dev("b", NOW, { question: q })], new Set(), NOW).kind, "question");
+});
+
+test("the question and the music go up small", () => {
+  const long = "x".repeat(900);
+  const s = remoteState("PC", [], null, {
+    question: { requestId: "q", questions: [{ question: long, header: long, multiSelect: false, options: Array.from({ length: 9 }, () => ({ label: long, description: long })) }] },
+    music: { title: long, artist: "a" },
+    mode: "game",
+  });
+  assert.equal(s.question.questions[0].options.length, 6);
+  assert.equal(s.question.questions[0].question.length, 300);
+  assert.equal(s.music.title.length, 100);
+  assert.equal(s.mode, "game");
+  assert.equal(remoteState("PC", [], null).question, null);
+});

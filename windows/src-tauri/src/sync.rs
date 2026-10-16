@@ -252,10 +252,54 @@ pub async fn take_decisions(app: &AppHandle) -> Result<Vec<Value>, String> {
         .filter_map(|plain| serde_json::from_slice::<Value>(&plain).ok())
         .filter(|d| {
             let fresh = d["at"].as_i64().map(|at| (now - at).abs() < DECISION_MAX_AGE_MS).unwrap_or(false);
-            let known = matches!(d["decision"].as_str(), Some("allow" | "deny"));
+            let known = matches!(d["decision"].as_str(), Some("allow" | "deny" | "answer"));
             fresh && known && d["requestId"].is_string()
         })
         .collect())
+}
+
+/// The other computers on the account: [{ id, at, state }] where `state` is what each
+/// published (its name, sessions, what waits, the music) and `at` is the server's
+/// clock in ms. This computer is left out.
+pub async fn devices(app: &AppHandle) -> Result<Vec<Value>, String> {
+    let Some((s, keys)) = current(app) else { return Ok(Vec::new()) };
+    let res = client()
+        .get(endpoint(&s.sync_url, &keys, "devices"))
+        .bearer_auth(&keys.token)
+        .send()
+        .await
+        .map_err(|e| format!("No se pudo llegar al servidor: {e}"))?;
+    if !res.status().is_success() {
+        return Err(http_error(res.status()));
+    }
+    let list: Vec<Value> = res.json().await.map_err(|e| e.to_string())?;
+    Ok(list
+        .iter()
+        .filter(|d| d["id"].as_str().map(|id| id != s.sync_device).unwrap_or(false))
+        .filter_map(|d| {
+            let plain = open(&keys, d["blob"].as_str()?)?;
+            let state: Value = serde_json::from_slice(&plain).ok()?;
+            Some(serde_json::json!({ "id": d["id"], "at": d["at"], "state": state }))
+        })
+        .collect())
+}
+
+/// Answers a permission or a question that is waiting on another computer: it takes
+/// the decision once, if the card is still up (the same path the phone uses).
+pub async fn decide(app: &AppHandle, device: &str, decision: Value) -> Result<(), String> {
+    let Some((s, keys)) = current(app) else { return Ok(()) };
+    let blob = seal(&keys, decision.to_string().as_bytes());
+    let res = client()
+        .post(endpoint(&s.sync_url, &keys, &format!("decisions/{device}")))
+        .bearer_auth(&keys.token)
+        .json(&serde_json::json!({ "blob": blob }))
+        .send()
+        .await
+        .map_err(|e| format!("No se pudo llegar al servidor: {e}"))?;
+    if !res.status().is_success() {
+        return Err(http_error(res.status()));
+    }
+    Ok(())
 }
 
 fn remember_rev(app: &AppHandle, rev: u64) {

@@ -4,6 +4,14 @@
 
 Coucou v2 is [JaimeTR](https://github.com/JaimeTR)'s fork of [Coucou by Louis Raillé](https://github.com/Louis-CFM/coucou) (MIT). The macOS release notes stay in the root [CHANGELOG.md](../CHANGELOG.md).
 
+## 1.4.0 — October 16, 2026
+
+**Your computers, in step**
+- **Connected computers** (Settings → Sync): this computer and the others on the account, with online / last seen, work mode, the music they play and how many agents are working.
+- **Answer from any computer**: a permission or a question that waits on one of your computers shows on the others' island, and you can Allow / Deny or answer there (the same card, labelled with the computer's name). It goes away by itself once it is answered anywhere, or if that computer goes off.
+- **Music follows you**: if another of your computers plays music, Mochi dances here too.
+- Each computer says it is on every 30 s; silent in Game, Meeting and Video modes (no card is raised over a game or a call).
+
 ## 1.3.1 — October 16, 2026
 
 - **Sync: the server address is forgiving** (Settings → Sincronización, and the phone app's PCs tab). "coucou-sync.you.workers.dev" without `https://` now works, a pasted trailing slash or quotes are dropped, and Cloudflare's `http://…workers.dev` is upgraded to https; any other plain http server is still refused (it would see your account unencrypted), and an empty field says what to type and where to deploy the server (`sync/README.md`). Before, anything not starting with `https://` only said "La dirección del servidor debe empezar por https://".

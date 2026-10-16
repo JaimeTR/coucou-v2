@@ -1932,6 +1932,42 @@ function syncSection(): HTMLElement {
     feedback.append(h("div", { class: `notice ${ok ? "ok" : "err"}`, text }));
   };
   const err = (e: unknown) => String(e).replace(/^Error:\s*/, "");
+  let devicesTimer: number | null = null;
+
+  /** "Equipos conectados": this computer and the others on the account, with their state. */
+  const devicesList = (me: string): HTMLElement => {
+    const box = h("div", { class: "devices" });
+    const row = (online: boolean, name: string, detail: string) =>
+      h("div", { class: "row" }, statusDot(online), h("b", { text: name }), h("span", { class: "hint", text: detail }));
+    const load = async () => {
+      if (!box.isConnected) {
+        if (devicesTimer != null) window.clearInterval(devicesTimer);
+        devicesTimer = null;
+        return;
+      }
+      const others = (await Bridge.syncDevices()) ?? [];
+      clear(box);
+      box.append(row(true, me, "Este equipo"));
+      for (const d of others) {
+        const age = Math.max(0, Date.now() - d.at);
+        const online = age < 90_000;
+        const bits = [
+          online ? "en línea" : `visto hace ${age < 3_600_000 ? Math.max(1, Math.round(age / 60_000)) + " min" : age < 86_400_000 ? Math.round(age / 3_600_000) + " h" : Math.round(age / 86_400_000) + " d"}`,
+        ];
+        if (online && d.state.mode && d.state.mode !== "work") bits.push(MODE_NAMES[d.state.mode as keyof typeof MODE_NAMES] ?? d.state.mode);
+        if (online && d.state.music) bits.push(`♪ ${d.state.music.title}${d.state.music.artist ? " — " + d.state.music.artist : ""}`);
+        const working = (d.state.tasks ?? []).filter((x) => x.state === "working" || x.state === "thinking").length;
+        if (online && working) bits.push(`${working} trabajando`);
+        if (online && (d.state.approval || d.state.question)) bits.push("espera tu respuesta");
+        box.append(row(online, d.state.name || d.id, bits.join(" · ")));
+      }
+      if (!others.length) box.append(h("div", { class: "hint", text: "Aún no hay otros equipos. En el otro: Ajustes → Sincronización → Unir con tu código." }));
+    };
+    queueMicrotask(() => void load());
+    if (devicesTimer != null) window.clearInterval(devicesTimer);
+    devicesTimer = window.setInterval(() => void load(), 5000);
+    return box;
+  };
 
   const render = async () => {
     clear(body);
@@ -1940,6 +1976,9 @@ function syncSection(): HTMLElement {
       const codeBox = h("div", { class: "hint" });
       body.append(
         h("div", { class: "row" }, statusDot(true), h("span", { text: `Conectado a ${st.url} como ${st.device}` })),
+        h("div", { class: "group-title", text: "Equipos conectados" }),
+        devicesList(st.device),
+        h("div", { class: "hint", text: "Lo que pide permiso o hace una pregunta en cualquiera de tus equipos aparece en la isla de los demás: puedes permitir o responder desde aquí. Si uno escucha música, el Mochi de los otros baila." }),
         h("div", { class: "row" },
           h("button", { text: "Sincronizar ahora", onclick: async () => {
             try { say(true, (await Bridge.syncNow()) ? "Ajustes recibidos de otro equipo." : "Ya estaba al día."); }

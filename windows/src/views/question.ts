@@ -134,7 +134,7 @@ export function buildQuestion(actions: Pick<ViewActions, "answerQuestion">): Vie
     clear(who);
     who.append(
       dot(State.focusTask?.color ?? "#F5F6F8", 8),
-      h("span", { class: "n", text: State.focusTask?.name ?? "Claude Code" }),
+      h("span", { class: "n", text: pending.remote ? pending.remote.name : State.focusTask?.name ?? "Claude Code" }),
       h("span", { text: q.header ? `pregunta · ${q.header}` : "hace una pregunta" }),
     );
     counter.textContent = pending.questions.length > 1 ? `${index + 1}/${pending.questions.length}` : "";
