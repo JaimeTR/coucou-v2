@@ -12,6 +12,26 @@ import { sha256 } from "@noble/hashes/sha256";
 export const isServerUrl = (u: string) => /^(https:\/\/|http:\/\/(127\.0\.0\.1|localhost)[:/])/.test(u.trim());
 
 /**
+ * What a person types for the server, as a clean address: a host without a scheme
+ * gets https://, a trailing slash or quotes go, and Cloudflare's http://…workers.dev
+ * becomes https. Returns "" when it cannot be an address; http elsewhere is left
+ * as typed so isServerUrl refuses it.
+ */
+export function normalizeServer(input: string): string {
+  const text = input.trim().replace(/^["'<`]+|["'>`]+$/g, "").trim();
+  if (!text || /\s/.test(text)) return "";
+  const m = /^([a-z][a-z0-9+.-]*):\/\/(.*)$/i.exec(text);
+  const scheme = m ? m[1].toLowerCase() : "";
+  const rest = (m ? m[2] : text).replace(/\/+$/, "");
+  const host = rest.split(/[/:]/)[0].toLowerCase();
+  if (!host) return "";
+  const local = host === "localhost" || host === "127.0.0.1";
+  if (!scheme) return `${local ? "http" : "https"}://${rest}`;
+  if (scheme === "http" && host.endsWith(".workers.dev")) return `https://${rest}`;
+  return `${scheme}://${rest}`;
+}
+
+/**
  * What the PC's QR holds: coucou://pair?server=<address>&code=<code>. Anything
  * else (a web page, a wrong code, a server that is not https) is refused, so a
  * QR from somewhere else cannot point the phone at a stranger's server.

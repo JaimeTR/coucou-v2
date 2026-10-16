@@ -42,6 +42,7 @@ const PAIRS: ReadonlyArray<readonly [string, string]> = [
   ["El servidor respondió {0}.", "The server answered {0}."],
   ["El código debe tener 64 caracteres (0-9, a-f), con o sin guiones.", "The code must be 64 characters (0-9, a-f), with or without dashes."],
   ["La dirección del servidor debe empezar por https://", "The server address must start with https://"],
+  ["Escribe la dirección de tu servidor: la que imprime wrangler deploy, como https://coucou-sync.<tu-cuenta>.workers.dev.", "Type your server's address: the one `wrangler deploy` prints, like https://coucou-sync.<your-account>.workers.dev."],
   ["Hola {0}", "Hello {0}"],
   ["Hola", "Hello"],
   ["Buenos días", "Good morning"],

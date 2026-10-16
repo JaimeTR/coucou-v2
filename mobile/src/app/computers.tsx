@@ -10,7 +10,7 @@ import { useCallback, useEffect, useState } from "react";
 import { AppState, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { useApp } from "../app-context";
-import { deriveKeys, fetchComputers, fetchSharedSettings, isServerUrl, parsePairing, registerPush, sendDecision, type Computer } from "../logic/link";
+import { deriveKeys, fetchComputers, fetchSharedSettings, isServerUrl, normalizeServer, parsePairing, registerPush, sendDecision, type Computer } from "../logic/link";
 import { getPushToken } from "../push";
 import { clearSecret, getSecret, setSecret, SYNC_CODE } from "../store";
 import { colors } from "../theme";
@@ -35,10 +35,14 @@ function Pair({ onPaired }: { onPaired: () => void }) {
   const [scanning, setScanning] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
 
-  const connect = async (serverText = server, codeText = code) => {
+  const connect = async (typed = server, codeText = code) => {
     const keys = deriveKeys(codeText);
     if (!keys) return setError(t("El código debe tener 64 caracteres (0-9, a-f), con o sin guiones."));
+    // A host without "https://", a trailing slash: fixed for you.
+    const serverText = normalizeServer(typed);
+    if (!serverText) return setError(t("Escribe la dirección de tu servidor: la que imprime wrangler deploy, como https://coucou-sync.<tu-cuenta>.workers.dev."));
     if (!isServerUrl(serverText)) return setError(t("La dirección del servidor debe empezar por https://"));
+    if (serverText !== typed.trim()) setServer(serverText);
     setBusy(true);
     setError("");
     try {

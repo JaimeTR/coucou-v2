@@ -4,6 +4,10 @@
 
 Coucou v2 is [JaimeTR](https://github.com/JaimeTR)'s fork of [Coucou by Louis Raillé](https://github.com/Louis-CFM/coucou) (MIT). The macOS release notes stay in the root [CHANGELOG.md](../CHANGELOG.md).
 
+## 1.3.1 — October 16, 2026
+
+- **Sync: the server address is forgiving** (Settings → Sincronización, and the phone app's PCs tab). "coucou-sync.you.workers.dev" without `https://` now works, a pasted trailing slash or quotes are dropped, and Cloudflare's `http://…workers.dev` is upgraded to https; any other plain http server is still refused (it would see your account unencrypted), and an empty field says what to type and where to deploy the server (`sync/README.md`). Before, anything not starting with `https://` only said "La dirección del servidor debe empezar por https://".
+
 ## 1.3.0 — October 15, 2026
 
 What the original Coucou added in its Windows and Linux 0.5.0 and we did not have, brought over one piece at a time.

@@ -1,7 +1,7 @@
 // The phone link: same keys and same blobs as the desktop (windows/src-tauri/src/sync.rs).
 import test from "node:test";
 import assert from "node:assert/strict";
-import { deriveKeys, seal, open, fetchComputers, sendDecision } from "../.test-build/link.js";
+import { deriveKeys, seal, open, fetchComputers, sendDecision, normalizeServer, isServerUrl } from "../.test-build/link.js";
 
 const CODE = "00112233-44556677-8899aabb-ccddeeff-00112233-44556677-8899aabb-ccddeeff";
 
@@ -73,4 +73,15 @@ test("push: only a real Expo token is registered, to this phone's own route, and
   await assert.rejects(() => registerPush(fetcher, "https://s.example", k, "p", "nope"), /no válido/);
   const refused = async () => ({ ok: false, status: 403, json: async () => ({}) });
   await assert.rejects(() => registerPush(refused, "https://s.example", k, "p", "ExponentPushToken[abcdefgh12345678]"), /no corresponde/);
+});
+
+test("the server address is tidied up the way a person types it", () => {
+  assert.equal(normalizeServer("coucou-sync.jaime.workers.dev"), "https://coucou-sync.jaime.workers.dev");
+  assert.equal(normalizeServer(" https://coucou-sync.jaime.workers.dev/ "), "https://coucou-sync.jaime.workers.dev");
+  assert.equal(normalizeServer("http://coucou-sync.me.workers.dev"), "https://coucou-sync.me.workers.dev");
+  assert.equal(normalizeServer("127.0.0.1:8787"), "http://127.0.0.1:8787");
+  assert.equal(normalizeServer("http://example.com"), "http://example.com", "left as typed, so isServerUrl refuses it");
+  assert.equal(isServerUrl(normalizeServer("http://example.com")), false);
+  assert.equal(normalizeServer(""), "");
+  assert.equal(normalizeServer("a b"), "");
 });

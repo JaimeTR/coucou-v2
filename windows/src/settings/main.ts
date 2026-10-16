@@ -1977,6 +1977,7 @@ function syncSection(): HTMLElement {
     code.style.width = "100%";
     body.append(
       h("div", { class: "row" }, h("label", { text: "Servidor" }), url),
+      h("div", { class: "hint", text: "La dirección que imprime «wrangler deploy» (https://coucou-sync.<tu-cuenta>.workers.dev). Puedes escribirla sin «https://». Si aún no has desplegado tu servidor, sigue sync/README.md: son unos 5 minutos y el plan gratis de Cloudflare basta." }),
       h("div", { class: "row" },
         h("button", { text: "Crear cuenta en este equipo", onclick: async () => {
           try {

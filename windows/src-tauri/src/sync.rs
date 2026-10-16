@@ -299,13 +299,44 @@ pub fn status(app: &AppHandle) -> SyncStatus {
     }
 }
 
+/// What a person types for the server, as a clean address — or why it cannot be one.
+/// "coucou-sync.me.workers.dev" gets its `https://`, a pasted trailing slash or
+/// quotes go, and Cloudflare's `http://…workers.dev` becomes https (it always
+/// answers on https). Anything else that is not https is refused: the server
+/// would see the account id and token in the clear.
+pub fn clean_server(input: &str) -> Result<String, String> {
+    let text = input.trim().trim_matches(|c| matches!(c, '"' | '\'' | '<' | '>' | '`')).trim();
+    if text.is_empty() {
+        return Err("Escribe la dirección de tu servidor: la que imprime `wrangler deploy`, como https://coucou-sync.<tu-cuenta>.workers.dev. Si aún no lo has desplegado, sigue sync/README.md.".into());
+    }
+    if text.contains(char::is_whitespace) {
+        return Err("La dirección del servidor no puede llevar espacios.".into());
+    }
+    let (scheme, rest) = match text.split_once("://") {
+        Some((s, r)) => (s.to_ascii_lowercase(), r),
+        None => (String::new(), text),
+    };
+    let rest = rest.trim_end_matches('/');
+    let host = rest.split(['/', ':']).next().unwrap_or("").to_ascii_lowercase();
+    if host.is_empty() {
+        return Err("La dirección del servidor no es válida.".into());
+    }
+    let local = host == "localhost" || host == "127.0.0.1";
+    let scheme = match scheme.as_str() {
+        "" if local => "http",
+        "" => "https",
+        "https" => "https",
+        "http" if local => "http",
+        "http" if host.ends_with(".workers.dev") => "https",
+        _ => return Err("La dirección del servidor debe empezar por https:// (un servidor sin https no se acepta: vería tu cuenta sin cifrar).".into()),
+    };
+    Ok(format!("{scheme}://{rest}"))
+}
+
 /// Turns sync on with `code` (a new account when `code` is None). Joining an
 /// existing account takes its settings; creating one sends ours.
 pub async fn connect(app: &AppHandle, url: String, code: Option<String>) -> Result<String, String> {
-    let url = url.trim().trim_end_matches('/').to_string();
-    if !(url.starts_with("https://") || url.starts_with("http://127.0.0.1") || url.starts_with("http://localhost")) {
-        return Err("La dirección del servidor debe empezar por https://".into());
-    }
+    let url = clean_server(&url)?;
     let creating = code.is_none();
     let code = code.unwrap_or_else(new_code);
     if derive(&code).is_none() {
@@ -432,5 +463,38 @@ mod tests {
         assert_eq!(next.user_name, "Jaime");
         assert_eq!(next.screen, "cursor");
         assert!(next.autostart);
+    }
+}
+
+#[cfg(test)]
+mod server_address_tests {
+    use super::clean_server;
+
+    #[test]
+    fn a_host_without_a_scheme_gets_https() {
+        assert_eq!(clean_server("coucou-sync.jaime.workers.dev").unwrap(), "https://coucou-sync.jaime.workers.dev");
+        assert_eq!(clean_server("  https://coucou-sync.jaime.workers.dev/  ").unwrap(), "https://coucou-sync.jaime.workers.dev");
+        assert_eq!(clean_server("\"https://a.example.com/\"").unwrap(), "https://a.example.com");
+    }
+
+    #[test]
+    fn workers_dev_over_http_is_upgraded_but_other_http_is_refused() {
+        assert_eq!(clean_server("http://coucou-sync.me.workers.dev").unwrap(), "https://coucou-sync.me.workers.dev");
+        assert!(clean_server("http://example.com").is_err());
+        assert!(clean_server("ftp://example.com").is_err());
+    }
+
+    #[test]
+    fn a_server_on_this_machine_may_use_http() {
+        assert_eq!(clean_server("127.0.0.1:8787").unwrap(), "http://127.0.0.1:8787");
+        assert_eq!(clean_server("http://localhost:8787/").unwrap(), "http://localhost:8787");
+    }
+
+    #[test]
+    fn nothing_and_nonsense_are_explained() {
+        assert!(clean_server("").unwrap_err().contains("wrangler deploy"));
+        assert!(clean_server("   ").is_err());
+        assert!(clean_server("https://").is_err());
+        assert!(clean_server("a b").is_err());
     }
 }
