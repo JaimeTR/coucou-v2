@@ -6,6 +6,7 @@ import { startPetContext } from "./island/petContext";
 import { mayPlaySound, type ModeInfo } from "./core/modes";
 import { stopSpeaking } from "./core/voice";
 import { isoWeekKey, weeklySummary } from "./island/recap";
+import { WHATS_NEW, soFar, soFarLine } from "./core/whatsNew";
 import "./style.css";
 import { Bridge, IS_TAURI, onEvent } from "./core/bridge";
 import { Sound } from "./core/sound";
@@ -70,7 +71,21 @@ async function main() {
     }
   });
 
-  await onEvent<null>("screen-changed", () => void Bridge.reposition());
+  await onEvent<null>("screen-changed", () => {
+    void Bridge.reposition();
+    island.ensureRunning();
+  });
+  // A query only matches the ratio it was made for: once it changes, watch the
+  // new one. One frame redraws Mochi at the new ratio, even while the loop is idle.
+  const watchRatio = () => {
+    window
+      .matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`)
+      .addEventListener?.("change", () => {
+        watchRatio();
+        island.ensureRunning();
+      }, { once: true });
+  };
+  watchRatio();
 
   // Monday from 8 a.m., once a week: last week's recap, unless something waits for an answer.
   const recapCheck = () => {
@@ -163,6 +178,20 @@ async function main() {
     // For checking by hand in the browser preview: coucouDev.recap(), coucouDev.dance(true).
     (window as unknown as { coucouDev: object }).coucouDev = {
       recap: () => showRecap(island),
+      // coucouDev.update("1.7.0"): the blue arrow and the update card; coucouDev.whatsNew(): the card after an update.
+      update: (version: string) => {
+        State.settings.updates = "notify";
+        State.updateVersion = version;
+        island.alert("update");
+      },
+      whatsNew: () => {
+        State.whatsNew = {
+          version: "1.6.0",
+          notes: WHATS_NEW["1.6.0"] ?? [],
+          soFar: soFarLine(soFar(Recap.data)) ?? "12 sesiones · 3 h 5 min · 1.240 líneas · 18 aprobaciones desde la isla",
+        };
+        island.alert("whatsnew");
+      },
       dance: (on: boolean) => {
         (island as unknown as { engine: { isDancing: boolean } }).engine.isDancing = on;
         island.ensureRunning();

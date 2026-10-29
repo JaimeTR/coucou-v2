@@ -1754,7 +1754,7 @@ function updatesRow(): HTMLElement {
   });
   return h("div", { class: "field-group" },
     h("div", { class: "row" }, h("label", { text: "Actualizaciones" }), mode, look),
-    h("div", { class: "hint", text: "Automáticas: Coucou se actualiza solo cuando no hay ninguna sesión trabajando ni un permiso esperando. Las versiones vienen firmadas desde GitHub." }),
+    h("div", { class: "hint", text: "Automáticas: Coucou se actualiza solo cuando no hay ninguna sesión trabajando ni un permiso esperando. Solo avisar: Mochi lleva una flecha azul y, al abrir la isla, «Actualizar ahora» o «Más tarde» (un día). Las versiones vienen firmadas desde GitHub." }),
     note,
   );
 }

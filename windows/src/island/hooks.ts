@@ -120,10 +120,23 @@ const TOOL_LABELS: Record<string, string> = {
   MultiEdit: "Modifica",
   NotebookEdit: "Notebook",
   PowerShell: "Ejecuta",
+  ask_question: "Necesita tu respuesta",
 };
 
+/** Antigravity (and Gemini-based agents) ask through a tool, sometimes namespaced ("default_api:ask_question"). */
+function isAskTool(tool: string): boolean {
+  return tool === "ask_question" || tool.endsWith(":ask_question");
+}
+
+/** The first question an ask_question tool carries, if it has usable text. */
+function firstQuestion(input: Record<string, unknown>): string | null {
+  const first = Array.isArray(input.questions) ? input.questions[0] : null;
+  const q = first && typeof first === "object" ? (first as Record<string, unknown>).question : null;
+  return typeof q === "string" && q.trim() ? q.trim() : null;
+}
+
 function stepLabel(tool: string, input: Record<string, unknown>): string {
-  const label = TOOL_LABELS[tool] ?? tool;
+  const label = TOOL_LABELS[isAskTool(tool) ? "ask_question" : tool] ?? tool;
   const str = (k: string) => (typeof input[k] === "string" ? (input[k] as string) : null);
   const cmd = str("command");
   if (cmd) return `${label} · ${cmd.slice(0, 40)}`;
@@ -133,6 +146,8 @@ function stepLabel(tool: string, input: Record<string, unknown>): string {
   if (file) return `${label} · ${lastPathComponent(file)}`;
   const query = str("query");
   if (query) return `${label} · ${query.slice(0, 40)}`;
+  const question = isAskTool(tool) ? firstQuestion(input) : null;
+  if (question) return `${label} · ${question.slice(0, 40)}`;
   return label;
 }
 
@@ -411,6 +426,15 @@ function handleHook(island: Island, payload: HookPayload) {
       }
       ensurePill();
       Recap.tool(session, tool);
+      if (isAskTool(tool)) {
+        // Antigravity asks you something: its pill says so, with a sound, and the
+        // island shows up (from the original's #709). The answer stays in Antigravity.
+        State.updateTask(agentId, "question");
+        State.appendStep(agentId, stepLabel(tool, payload.tool_input ?? {}));
+        Sound.play("question");
+        surface("overview", true);
+        break;
+      }
       State.updateTask(agentId, "working");
       State.appendStep(agentId, stepLabel(tool, payload.tool_input ?? {}));
       surface("overview", false);

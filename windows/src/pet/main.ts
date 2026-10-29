@@ -61,6 +61,8 @@ export function frame(dt: number) {
   rise += (riseTarget - rise) * (1 - Math.exp(-dt * 7));
   if (Math.abs(riseTarget - rise) < 0.002) rise = riseTarget;
 
+  // Dragged onto a monitor of another scale, the bitmap follows the ratio.
+  if (canvas.width !== Math.round(WINDOW.w * Math.min(2, window.devicePixelRatio || 1))) sizeCanvas();
   const dpr = canvas.width / WINDOW.w;
   const o = squareOrigin(edge);
   const off = slideOffset(edge, rise);

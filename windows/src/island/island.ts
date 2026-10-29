@@ -33,6 +33,10 @@ import { isOutfit, resolve, wear } from "../mochi/outfits";
 import { greetingLines } from "./greetingText";
 import { panelHasRows, panelRows } from "./greetingPanel";
 import { refreshProjects } from "./integrations";
+import { updateIsWaiting, updateLater, updateNow } from "./updates";
+
+/** The arrow Mochi wears while a new version waits. */
+const UPDATE_BLUE = [0.23, 0.51, 0.96] as const;
 
 const BOT_OVERHANG = 40;
 /** Same margin as the Rust hit test (src-tauri/src/island.rs). */
@@ -86,6 +90,8 @@ export class Island {
   private lastFrame = 0;
   private dirty = true;
   private canvasPx = 0;
+  /** The pixel ratio Mochi's bitmap was sized for: it changes with the monitor. */
+  private canvasDpr = 0;
 
   // Rust starts the window at full size so the launch greeting has room.
   private collapsed = false;
@@ -278,6 +284,11 @@ export class Island {
       },
       openSettingsWindow: () => void Bridge.openSettingsWindow(),
       blip: () => Sound.play("blip"),
+      updateNow: () => updateNow(),
+      updateLater: () => {
+        updateLater();
+        this.collapse();
+      },
     };
 
     this.wakeStrip = h("div", { id: "wake-strip" });
@@ -353,7 +364,8 @@ export class Island {
           if (!this.wasInIsland) this.fsm.mouseLeft();
           break;
         case "home":
-          this.expand(State.defaultView());
+          // A new version waits: opening the island shows it first (approvals and questions alert on their own).
+          this.expand(updateIsWaiting() && !State.pendingApproval && !State.pendingQuestion ? "update" : State.defaultView());
           if (!this.wasInIsland) this.fsm.mouseLeft();
           break;
         case "coucou": {
@@ -1072,6 +1084,10 @@ export class Island {
       const gctx = this.greetingCanvas.getContext("2d");
       if (gctx) {
         const dpr = Math.min(2, window.devicePixelRatio || 1);
+        if (this.greetingCanvas.width !== Math.round(EXPANDED_W * dpr)) {
+          this.greetingCanvas.width = Math.round(EXPANDED_W * dpr);
+          this.greetingCanvas.height = Math.round(150 * dpr);
+        }
         gctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         this.greeting.draw(gctx);
       }
@@ -1144,8 +1160,11 @@ export class Island {
     const w = Math.max(1, Math.round(size));
     const hCss = w + BOT_OVERHANG;
     const dpr = Math.min(2, window.devicePixelRatio || 1);
-    if (this.canvasPx !== w) {
+    // Drawn at the current ratio, so a bitmap sized for another monitor's would
+    // show Mochi too big and cut, or too small (from the original's #892).
+    if (this.canvasPx !== w || this.canvasDpr !== dpr) {
       this.canvasPx = w;
+      this.canvasDpr = dpr;
       this.botCanvas.width = Math.round(w * dpr);
       this.botCanvas.height = Math.round(hCss * dpr);
       this.botCanvas.style.width = `${w}px`;
@@ -1251,6 +1270,7 @@ export class Island {
 
     syncMiniBotStates(State.tasks);
     this.engine.setState(State.effectiveState);
+    this.engine.setUpdateHint(updateIsWaiting() ? UPDATE_BLUE : null);
   }
 
   /**

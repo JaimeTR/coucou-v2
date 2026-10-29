@@ -4,6 +4,19 @@
 
 Coucou v2 es el fork de [JaimeTR](https://github.com/JaimeTR) de [Coucou, de Louis Raillé](https://github.com/Louis-CFM/coucou) (MIT). Las notas de la versión de macOS siguen en el [CHANGELOG.md](../CHANGELOG.md) de la raíz.
 
+## 1.6.0: 29 de octubre de 2026
+
+Lo que el Coucou original añadió en sus versiones 0.5.1 a 0.5.3 de Windows y Linux, traído aquí.
+
+- **GitLab y Gitea** (Ajustes → Integraciones): dos pills como la de GitHub: revisiones que te piden, tus merge / pull requests abiertos, el CI de las ramas principales de tus proyectos (uno en rojo avisa, y también cuando vuelve a verde) y tu cuadrícula de actividad. Para gitlab.com o tu propia instancia (su dirección va junto al token); el token solo se envía a esa dirección, nunca siguiendo una redirección, y ambos quedan en el almacén de credenciales del sistema. Del #831 del original.
+- **Mochi lleva una flecha azul cuando hay una versión nueva** (con Actualizaciones → «Solo avisar»): al abrir la isla aparece primero **Actualizar ahora**, y **Más tarde** la esconde un día; los permisos y las preguntas siempre van antes. «Automáticas» sigue instalándose sola en un momento tranquilo.
+- **Novedades, tras actualizar**: la isla muestra una vez lo que trae la versión nueva y *Tu Coucou hasta ahora* (sesiones, tiempo, líneas y aprobaciones desde la isla, contadas con el resumen semanal de este equipo, nunca enviadas), con un enlace a todas las versiones.
+- **Reloj opcional** en el centro de la isla compacta, donde un Mac tiene el notch: Ajustes → General → Mostrar el reloj en la isla (#788).
+- **Preguntas de Antigravity**: cuando un agente pregunta con la herramienta `ask_question` de Antigravity, su pill pasa a pregunta con un sonido y la isla aparece (#709).
+- **Mochi entero en otro monitor**: mover la isla o la mascota a una pantalla con otra escala ya no lo corta ni lo emborrona; los mini Mochis también (#892).
+
+Aún no traído: WhatsApp (la pasarela GOWA), el icono de la bandeja en azul y el «Invita un café a Mochi» del original (es la página de Louis Raillé).
+
 ## 1.5.0: 16 de octubre de 2026
 
 Quién está conectado, de un vistazo, y una app de teléfono que vale la pena abrir.

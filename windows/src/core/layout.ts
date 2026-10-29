@@ -23,6 +23,8 @@ export type IslandViewName =
   | "note"
   | "settings"
   | "recap"
+  | "update"
+  | "whatsnew"
   | "greeting";
 
 export type BotStateName =
@@ -92,6 +94,9 @@ export const VIEW_LAYOUTS: Record<IslandViewName, ViewLayout> = {
   settings: { height: 160, botX: 54, botY: null, botDiameter: 46, agentMode: "none" },
   // Like the Mac: the finished card's geometry.
   recap: { height: 160, botX: 62, botY: null, botDiameter: 58, agentMode: "none" },
+  update: { height: 160, botX: 62, botY: null, botDiameter: 58, agentMode: "none" },
+  // Up to three lines of news, what you did so far and the buttons.
+  whatsnew: { height: 214, botX: 56, botY: null, botDiameter: 50, agentMode: "none" },
   greeting: { height: 150, botX: 320, botY: 90, botDiameter: 0, agentMode: "none" },
 };
 

@@ -4,6 +4,19 @@
 
 Coucou v2 is [JaimeTR](https://github.com/JaimeTR)'s fork of [Coucou by Louis Raillé](https://github.com/Louis-CFM/coucou) (MIT). The macOS release notes stay in the root [CHANGELOG.md](../CHANGELOG.md).
 
+## 1.6.0 — October 29, 2026
+
+What the original Coucou added in its Windows and Linux 0.5.1 to 0.5.3, brought over.
+
+- **GitLab and Gitea** (Settings → Integrations): two pills drawn like GitHub's — reviews asked of you, your open merge / pull requests, the CI of your projects' default branches (a red one alerts, and so does it turning green again) and your activity grid. For gitlab.com or your own instance (its address goes next to the token); the token is only sent to that address, never followed through a redirect, and both stay in the system's credential store. From the original's #831.
+- **Mochi wears a blue arrow when a new version waits** (with Updates → "Only tell me"): opening the island shows **Update now** first, **Later** hides it for a day; approvals and questions always come first. "Automatic" still installs by itself at a quiet moment.
+- **What's new, after an update**: the island shows once what the new version brings and *Your Coucou so far* (sessions, time, lines and approvals from the island, counted from the recap on this computer, never sent), with a link to every release.
+- **Optional clock** in the middle of the compact island, where a Mac has its notch: Settings → General → Show the clock in the island (#788).
+- **Antigravity questions**: when an agent asks through Antigravity's `ask_question` tool, its pill turns to a question with a sound and the island shows up (#709).
+- **Mochi stays whole on another monitor**: moving the island or the pet to a screen with another scale no longer cuts him off or blurs him; the mini Mochis follow too (#892).
+
+Not brought over yet: WhatsApp (the GOWA gateway), the tray icon turning blue, and the original's "Buy Mochi a coffee" (it is Louis Raillé's own page).
+
 ## 1.5.0 — October 16, 2026
 
 Who is connected, at a glance, and a phone app worth opening.

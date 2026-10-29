@@ -43,6 +43,9 @@ export interface ViewActions {
   setAutoClose(seconds: number): void;
   openSettingsWindow(): void;
   blip(): void;
+  /** The update card: install the waiting version now, or hide it for a day. */
+  updateNow(): void;
+  updateLater(): void;
 }
 
 export interface ViewHost {
@@ -567,6 +570,50 @@ function buildNote(): ViewHost {
   };
 }
 
+// ── New version ───────────────────────────────────────────────────────────────
+
+function buildUpdate(actions: ViewActions): ViewHost {
+  const title = h("div", { class: "title" });
+  const sub = h("div", { class: "sub" });
+  const row = h("div", { class: "actions" },
+    btn("Actualizar ahora", "primary", () => actions.updateNow()),
+    btn("Más tarde", "secondary", () => actions.updateLater()),
+  );
+  const el = h("div", { class: "view" }, card("cyan", stack(116, 16, title, sub, row)));
+  return {
+    el,
+    sync() {
+      title.textContent = `Coucou ${State.updateVersion ?? ""} está disponible`;
+      sub.textContent = State.updateStatus ?? "Se descarga firmada desde GitHub, se instala y Coucou vuelve sola.";
+    },
+  };
+}
+
+// ── What's new, after an update ───────────────────────────────────────────────
+
+const RELEASES_URL = "https://github.com/JaimeTR/coucou-v2/releases";
+
+function buildWhatsNew(actions: ViewActions): ViewHost {
+  const title = h("div", { class: "title" });
+  const notes = h("div", { class: "stack", style: "gap:3px;padding:0" });
+  const so = h("div", { class: "sub" });
+  const row = h("div", { class: "actions" },
+    btn("Listo", "primary", () => actions.collapse()),
+    btn("Ver todo", "secondary", () => actions.openUrl(RELEASES_URL)),
+  );
+  const el = h("div", { class: "view" }, card("indigo", stack(108, 16, title, notes, so, row)));
+  return {
+    el,
+    sync() {
+      const w = State.whatsNew;
+      title.textContent = `Novedades de Coucou ${w?.version ?? ""}`;
+      clear(notes);
+      for (const line of w?.notes ?? []) notes.append(h("div", { class: "sub", style: "color:#d5d8de", text: `• ${line}` }));
+      so.textContent = w?.soFar ? `Tu Coucou hasta ahora: ${w.soFar}` : "";
+    },
+  };
+}
+
 // ── In-island settings ────────────────────────────────────────────────────────
 
 function buildSettings(actions: ViewActions): ViewHost {
@@ -661,6 +708,8 @@ export function buildViews(
   map.set("note", buildNote());
   map.set("settings", buildSettings(actions));
   map.set("recap", buildRecap(actions));
+  map.set("update", buildUpdate(actions));
+  map.set("whatsnew", buildWhatsNew(actions));
   map.set("prompt", buildPrompt(onChatHeightChange));
   map.set("upload", buildUpload());
   map.set("uploading", buildUploading());

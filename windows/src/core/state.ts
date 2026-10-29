@@ -417,6 +417,11 @@ class AppState {
   promptContext: PromptContext | null = null;
   droppedFile: { name: string; path: string } | null = null;
   noteMessage: string | null = null;
+  /** A newer Coucou that was announced (island/updates.ts), and what installing it says. */
+  updateVersion: string | null = null;
+  updateStatus: string | null = null;
+  /** What the version just installed brings, shown once (island/updates.ts). */
+  whatsNew: { version: string; notes: string[]; soFar: string | null } | null = null;
   /** What the person is doing, from Rust (see core/modes.ts). */
   workMode: WorkMode = "work";
   modeAuto = true;
