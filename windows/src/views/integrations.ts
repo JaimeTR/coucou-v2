@@ -452,9 +452,32 @@ let githubSection: GithubSection = "review";
 const COPILOT_COLOR = "#C084FC";
 const GITHUB_RED = "#F4505E";
 
-function pulseOf(): Pulse | null {
-  const p = get("integration_github").pulse;
+/** GitHub, GitLab and Gitea share the card: the Rust pollers send the same `pulse`. */
+interface Forge {
+  id: string;
+  name: string;
+  color: string;
+  /** Copilot exists on GitHub only. */
+  copilot: boolean;
+}
+
+const FORGES: Record<string, Forge> = {
+  integration_github: { id: "integration_github", name: "GitHub", color: GITHUB_RED, copilot: true },
+  integration_gitlab: { id: "integration_gitlab", name: "GitLab", color: "#FC6D26", copilot: false },
+  integration_gitea: { id: "integration_gitea", name: "Gitea", color: "#609926", copilot: false },
+};
+
+function pulseOf(forge: Forge): Pulse | null {
+  const p = get(forge.id).pulse;
   return p && typeof p === "object" ? (p as Pulse) : null;
+}
+
+/** Where "N más" goes: GitHub's own pages, or the links GitLab's and Gitea's pollers send. */
+function sectionUrl(forge: Forge, section: GithubSection): string {
+  if (forge.copilot) return GITHUB_SECTIONS[section].url;
+  const links = (get(forge.id).links ?? {}) as Record<string, unknown>;
+  const pick = section === "mine" ? links.mine : section === "review" ? links.review : links.home;
+  return typeof pick === "string" ? pick : typeof links.home === "string" ? links.home : "";
 }
 
 function ciColor(ci: PrItem["ci"]): string {
@@ -516,13 +539,13 @@ function contributionGrid(cal: NonNullable<Pulse["calendar"]>): HTMLElement {
   return grid;
 }
 
-function githubCard(onDetail: () => void): HTMLElement {
-  const d = get("integration_github");
+function githubCard(forge: Forge, onDetail: () => void): HTMLElement {
+  const d = get(forge.id);
   const stars = Number(d.totalStars ?? 0);
   const repos = Number(d.totalRepos ?? 0);
   const fmt = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n));
-  const pulse = pulseOf();
-  const kind = `& Copilot · ★ ${fmt(stars)}`;
+  const pulse = pulseOf(forge);
+  const kind = forge.copilot ? `& Copilot · ★ ${fmt(stars)}` : `★ ${fmt(stars)}`;
 
   if (!pulse) {
     // Repository stats still work without pull request access: say why the rest is missing.
@@ -530,7 +553,7 @@ function githubCard(onDetail: () => void): HTMLElement {
     return h(
       "div",
       { class: "int-card" },
-      header(GITHUB_RED, "GitHub", kind),
+      header(forge.color, forge.name, kind),
       h("div", { class: "int-stats" }, statRow(ICONS.stack, "#6B7079", "Repositorios", String(repos))),
       h("div", { class: "int-sub", text: why }),
     );
@@ -575,20 +598,20 @@ function githubCard(onDetail: () => void): HTMLElement {
   return h(
     "div",
     { class: "int-card" },
-    header(GITHUB_RED, "GitHub", shortKind, extra),
+    header(forge.color, forge.name, shortKind, extra),
     h(
       "div",
       { class: "int-rows tight" },
       row("review", "Revisiones pedidas", pulse.toReview.length),
-      row("mine", "Mis pull requests", pulse.mine.length),
-      row("copilot", copilotLabel, pulse.copilot.length),
+      row("mine", forge.id === "integration_gitlab" ? "Mis merge requests" : "Mis pull requests", pulse.mine.length),
+      forge.copilot ? row("copilot", copilotLabel, pulse.copilot.length) : null,
     ),
   );
 }
 
-/** The list behind a row: up to three pull requests, each opening on GitHub. */
-function githubDetail(onBack: () => void): HTMLElement {
-  const pulse = pulseOf();
+/** The list behind a row: up to three pull requests, each opening on its forge. */
+function githubDetail(forge: Forge, onBack: () => void): HTMLElement {
+  const pulse = pulseOf(forge);
   const section = GITHUB_SECTIONS[githubSection];
   const prs = pulse ? listOf(pulse, githubSection) : [];
   const color = pulse ? section.color(pulse) : "#4B5563";
@@ -634,8 +657,8 @@ function githubDetail(onBack: () => void): HTMLElement {
       h("button", {
         class: "link-btn",
         style: `color:${color}d9;text-align:left;padding:2px 8px`,
-        text: `${prs.length - 3} más en GitHub`,
-        onclick: () => void Bridge.openUrl(section.url),
+        text: `${prs.length - 3} más en ${forge.name}`,
+        onclick: () => void Bridge.openUrl(sectionUrl(forge, githubSection)),
       }),
     );
   }
@@ -794,6 +817,8 @@ export function hasIntegrationData(id: string): boolean {
     case "integration_resend":
       return arr(id, "emails").length > 0;
     case "integration_github":
+    case "integration_gitlab":
+    case "integration_gitea":
       return get(id).totalRepos != null;
     case "integration_stripe":
       return info.loaded;
@@ -935,8 +960,9 @@ export function renderIntegrationCard(task: AgentTask, hooks: IntegrationCardHoo
   if (task.id === "agent_codex") return codexCard(task, hooks.openSettings);
   if (task.id.startsWith("custom_")) return customCard(task, hooks.openSettings);
   if (AGENT_LAUNCH[task.id]) return agentCard(task, hooks.openSettings);
-  if (task.id === "integration_github" && hasIntegrationData(task.id)) {
-    return hooks.detailOpen ? githubDetail(hooks.closeDetail) : githubCard(hooks.openDetail);
+  const forge = FORGES[task.id];
+  if (forge && hasIntegrationData(task.id)) {
+    return hooks.detailOpen ? githubDetail(forge, hooks.closeDetail) : githubCard(forge, hooks.openDetail);
   }
   if (task.id === "integration_vercel" && hasIntegrationData(task.id)) {
     return hooks.detailOpen ? vercelDetail(hooks.closeDetail) : vercelCard(hooks.openDetail);

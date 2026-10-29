@@ -69,6 +69,8 @@ pub fn start(app: AppHandle) {
     spawn(app.clone(), "integration_stripe", 6, 30, poll_stripe);
     spawn(app.clone(), "integration_resend", 6, 60, poll_resend);
     spawn(app.clone(), "integration_github", 3, 300, poll_github);
+    spawn(app.clone(), "integration_gitlab", 7, 300, poll_gitlab);
+    spawn(app.clone(), "integration_gitea", 7, 300, poll_gitea);
     spawn(app.clone(), "integration_calcom", 8, 300, poll_calcom);
     spawn(app, "integration_notion", 9, 300, poll_notion);
 }
@@ -110,6 +112,8 @@ pub async fn poll_once(app: AppHandle, id: &str) {
     match id {
         "integration_stripe" => poll_stripe(app).await,
         "integration_github" => poll_github(app).await,
+        "integration_gitlab" => poll_gitlab(app).await,
+        "integration_gitea" => poll_gitea(app).await,
         "integration_vercel" => poll_vercel(app).await,
         "integration_resend" => poll_resend(app).await,
         "integration_notion" => poll_notion(app).await,
@@ -119,16 +123,16 @@ pub async fn poll_once(app: AppHandle, id: &str) {
 }
 
 /// Remembers the newest id per integration so an event fires once, not on every poll.
-struct Seen(Mutex<std::collections::HashMap<&'static str, String>>);
+struct Seen(Mutex<std::collections::HashMap<String, String>>);
 
 static SEEN: std::sync::LazyLock<Seen> =
     std::sync::LazyLock::new(|| Seen(Mutex::new(std::collections::HashMap::new())));
 
 /// Returns true the first time a given id is seen (and false on the very first
 /// load, which only fills the card).
-fn is_new(key: &'static str, id: &str) -> bool {
+fn is_new(key: &str, id: &str) -> bool {
     let mut map = SEEN.0.lock().unwrap();
-    match map.insert(key, id.to_string()) {
+    match map.insert(key.to_string(), id.to_string()) {
         Some(previous) => previous != id,
         None => false, // first poll: populate silently, like the Swift pollers
     }
@@ -455,21 +459,28 @@ fn urls_where(list: &Value, pred: impl Fn(&Value) -> bool) -> String {
 /// failure on one of my PRs, a review asked of me, then anything from Copilot.
 /// The first poll after launch only fills the card.
 fn pulse_event(pulse: &Value) -> Option<IntegrationEvent> {
+    forge_event("github", pulse)
+}
+
+/// `pulse_event` for any forge: `forge` keeps each one's memory apart, so
+/// GitHub's news never hides GitLab's (or Gitea's).
+fn forge_event(forge: &str, pulse: &Value) -> Option<IntegrationEvent> {
     let first = |key: &str| pulse.get(key).and_then(|v| v.get(0)).cloned();
     let title = |p: &Option<Value>| p.as_ref().and_then(|p| p.get("title")).and_then(Value::as_str).map(str::to_string);
 
     // Always asks (so the memory follows the list down to empty and back), but
     // only an actual set of items can be news.
-    let fresh = |key: &'static str, ids: &str| is_new(key, ids) && !ids.is_empty();
+    let key = |what: &str| format!("{forge}_{what}");
+    let fresh = |what: &str, ids: &str| is_new(&key(what), ids) && !ids.is_empty();
 
     let failing = urls_where(&pulse["mine"], |p| p.get("ci").and_then(Value::as_str) == Some("failure"));
-    let fresh_failure = fresh("github_ci_failed", &failing);
+    let fresh_failure = fresh("ci_failed", &failing);
     let review_id = urls_where(&pulse["toReview"], |_| true);
-    let fresh_review = fresh("github_review", &review_id);
+    let fresh_review = fresh("review", &review_id);
     let copilot_prs = urls_where(&pulse["copilot"], |_| true);
-    let fresh_copilot_pr = fresh("github_copilot_pr", &copilot_prs);
+    let fresh_copilot_pr = fresh("copilot_pr", &copilot_prs);
     let copilot_reviews = urls_where(&pulse["mine"], |p| p.get("copilotReviewed").and_then(Value::as_bool).unwrap_or(false));
-    let fresh_copilot_review = fresh("github_copilot_review", &copilot_reviews);
+    let fresh_copilot_review = fresh("copilot_review", &copilot_reviews);
 
     if fresh_failure {
         let p = pulse["mine"].as_array()?.iter().find(|p| p.get("ci").and_then(Value::as_str) == Some("failure")).cloned();
@@ -477,7 +488,7 @@ fn pulse_event(pulse: &Value) -> Option<IntegrationEvent> {
     }
     // A default branch's CI: red is news, and so is green again after red.
     let red_repos = urls_where(&pulse["repos"], |p| p.get("ci").and_then(Value::as_str) == Some("failure"));
-    let repo_changed = is_new("github_branch_ci", &red_repos);
+    let repo_changed = is_new(&key("branch_ci"), &red_repos);
     if repo_changed && !red_repos.is_empty() {
         let name = pulse["repos"]
             .as_array()
@@ -598,6 +609,347 @@ async fn poll_github(app: AppHandle) {
         error: None,
         event,
     });
+}
+
+// ── GitLab and Gitea ──────────────────────────────────────────────────────────
+//
+// Two pills like GitHub's, for gitlab.com or your own instance: open merge and
+// pull requests, reviews asked of you, the default branch's CI and your
+// activity. Each sends the same `pulse` the GitHub card reads (without Copilot),
+// so the island draws them with the same card. From the original Coucou's
+// Windows 0.5.2 (#831).
+
+/// The instance's address from the credential store (`gitlab-url`, `gitea-url`),
+/// or `fallback`. Only http(s) with a host, without a trailing slash.
+fn forge_base(key: &str, fallback: Option<&str>) -> Option<String> {
+    let raw = secrets::get(key).filter(|v| !v.trim().is_empty()).or_else(|| fallback.map(str::to_string))?;
+    let raw = raw.trim().trim_matches(|c| c == '"' || c == '\'');
+    let with_scheme = if raw.contains("://") { raw.to_string() } else { format!("https://{raw}") };
+    let parsed = reqwest::Url::parse(&with_scheme).ok()?;
+    if !matches!(parsed.scheme(), "http" | "https") || parsed.host_str().is_none() {
+        return None;
+    }
+    Some(parsed.as_str().trim_end_matches('/').to_string())
+}
+
+/// The token goes to the instance the person typed, never to wherever it redirects.
+fn forge_client() -> reqwest::Client {
+    reqwest::Client::builder()
+        .timeout(TIMEOUT)
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .unwrap_or_default()
+}
+
+/// Gregorian date and Sunday-based weekday (0 = Sunday) of a day counted from 1970-01-01.
+fn civil_day(day: i64) -> (i64, u32, u32, u8) {
+    let z = day + 719_468;
+    let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1_460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = mp + if mp < 10 { 3 } else { -9 };
+    let year = yoe + era * 400 + i64::from(m <= 2);
+    (year, m as u32, d as u32, (day + 4).rem_euclid(7) as u8)
+}
+
+fn date_key(day: i64) -> String {
+    let (y, m, d, _) = civil_day(day);
+    format!("{y:04}-{m:02}-{d:02}")
+}
+
+fn today() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64 / 86_400)
+        .unwrap_or(0)
+}
+
+/// Contributions per day ("YYYY-MM-DD") → the calendar the GitHub card draws:
+/// the year's total, and the last 22 weeks as levels 0-4, a column per week
+/// starting on Sunday (like GitHub's).
+fn forge_calendar(counts: &std::collections::HashMap<String, i64>, today: i64) -> Value {
+    let total: i64 = (today - 364..=today).map(|d| counts.get(&date_key(d)).copied().unwrap_or(0)).sum();
+    let start = today - i64::from(civil_day(today).3) - 21 * 7;
+    let mut weeks: Vec<Vec<u8>> = Vec::new();
+    for day in start..=today {
+        if civil_day(day).3 == 0 || weeks.is_empty() {
+            weeks.push(Vec::new());
+        }
+        let n = counts.get(&date_key(day)).copied().unwrap_or(0);
+        let level = match n {
+            i64::MIN..=0 => 0,
+            1 => 1,
+            2..=3 => 2,
+            4..=7 => 3,
+            _ => 4,
+        };
+        weeks.last_mut().unwrap().push(level);
+    }
+    json!({ "total": total, "weeks": weeks })
+}
+
+fn forge_pr(repo: &str, number: i64, title: &str, url: &str, draft: bool, ci: &str) -> Value {
+    json!({
+        "number": number, "title": if title.is_empty() { "(untitled)" } else { title }, "url": url, "repo": repo,
+        "isDraft": draft, "reviewDecision": "", "ci": ci, "author": "",
+        "isCopilot": false, "copilotReviewed": false, "updatedAt": "",
+    })
+}
+
+fn forge_pulse(mine: Vec<Value>, to_review: Vec<Value>, repos: Vec<Value>, calendar: Value) -> Value {
+    json!({
+        "mine": mine, "toReview": to_review, "copilot": [], "copilotReviewedMine": 0,
+        "repos": repos, "calendar": calendar,
+    })
+}
+
+fn gitlab_ci(status: Option<&str>) -> Option<&'static str> {
+    match status? {
+        "success" => Some("success"),
+        "failed" | "canceled" => Some("failure"),
+        "running" | "pending" | "created" | "preparing" | "waiting_for_resource" | "scheduled" => Some("pending"),
+        _ => None,
+    }
+}
+
+/// A GitLab merge request as the card needs it. Its project comes from
+/// `references.full` ("group/project!12").
+fn gitlab_mr(mr: &Value) -> Option<Value> {
+    let full = mr.pointer("/references/full").and_then(Value::as_str)?;
+    let repo = full.rsplit_once('!').map(|(r, _)| r).unwrap_or(full);
+    let ci = gitlab_ci(mr.pointer("/head_pipeline/status").and_then(Value::as_str)).unwrap_or("unknown");
+    Some(forge_pr(
+        repo,
+        mr.get("iid").and_then(Value::as_i64)?,
+        mr.get("title").and_then(Value::as_str).unwrap_or(""),
+        mr.get("web_url").and_then(Value::as_str)?,
+        mr.get("draft").or_else(|| mr.get("work_in_progress")).and_then(Value::as_bool).unwrap_or(false),
+        ci,
+    ))
+}
+
+fn gitlab_counts(events: &[Value]) -> std::collections::HashMap<String, i64> {
+    let mut counts = std::collections::HashMap::new();
+    for e in events {
+        if let Some(date) = e.get("created_at").and_then(Value::as_str).and_then(|s| s.get(..10)) {
+            *counts.entry(date.to_string()).or_insert(0) += 1;
+        }
+    }
+    counts
+}
+
+async fn forge_list(request: reqwest::RequestBuilder) -> Vec<Value> {
+    match request.send().await {
+        Ok(r) if r.status().is_success() => r.json::<Vec<Value>>().await.unwrap_or_default(),
+        _ => Vec::new(),
+    }
+}
+
+async fn poll_gitlab(app: AppHandle) {
+    let Some(token) = secrets::get("gitlab-token") else { return };
+    let Some(base) = forge_base("gitlab-url", Some("https://gitlab.com")) else {
+        emit(&app, IntegrationUpdate { id: "integration_gitlab", data: json!({}), error: Some("La dirección de GitLab no es válida".into()), event: None });
+        return;
+    };
+    let http = forge_client();
+    let get = |path: String| http.get(format!("{base}/api/v4{path}")).header("PRIVATE-TOKEN", &token);
+
+    let Ok(user) = get("/user".into()).send().await else { return };
+    if !user.status().is_success() {
+        emit(&app, IntegrationUpdate {
+            id: "integration_gitlab",
+            data: json!({}),
+            error: Some(status_error(user.status().as_u16(), "Al token le falta el permiso read_api")),
+            event: None,
+        });
+        return;
+    }
+    let user: Value = user.json().await.unwrap_or(json!({}));
+    let login = user.get("username").and_then(Value::as_str).unwrap_or("").to_string();
+
+    // The projects you own, most recently active first: their count and stars,
+    // and the first ten's default-branch CI.
+    let mut projects = Vec::new();
+    for page in 1..=5 {
+        let batch = forge_list(get(format!("/projects?owned=true&simple=true&order_by=last_activity_at&per_page=100&page={page}"))).await;
+        let done = batch.len() < 100;
+        projects.extend(batch);
+        if done {
+            break;
+        }
+    }
+    let stars: i64 = projects.iter().filter_map(|p| p.get("star_count").and_then(Value::as_i64)).sum();
+    let mut repos = Vec::new();
+    for p in projects.iter().take(10) {
+        let (Some(id), Some(name), Some(url)) = (
+            p.get("id").and_then(Value::as_i64),
+            p.get("path_with_namespace").and_then(Value::as_str),
+            p.get("web_url").and_then(Value::as_str),
+        ) else { continue };
+        let Some(branch) = p.get("default_branch").and_then(Value::as_str) else { continue };
+        let pipelines = forge_list(get(format!("/projects/{id}/pipelines?per_page=1&ref={}", urlencode(branch)))).await;
+        if let Some(ci) = gitlab_ci(pipelines.first().and_then(|p| p.get("status")).and_then(Value::as_str)) {
+            repos.push(json!({ "name": name, "url": format!("{url}/-/pipelines"), "branch": branch, "ci": ci }));
+        }
+    }
+
+    let mine: Vec<Value> = forge_list(get("/merge_requests?scope=created_by_me&state=opened&per_page=20".into()))
+        .await.iter().filter_map(gitlab_mr).collect();
+    let to_review: Vec<Value> = if login.is_empty() {
+        Vec::new()
+    } else {
+        forge_list(get(format!("/merge_requests?scope=all&state=opened&reviewer_username={}&per_page=20", urlencode(&login))))
+            .await.iter().filter_map(gitlab_mr).collect()
+    };
+
+    let now = today();
+    let after = date_key(now - 366);
+    let mut events = Vec::new();
+    for page in 1..=10 {
+        let batch = forge_list(get(format!("/events?after={after}&per_page=100&page={page}"))).await;
+        let done = batch.len() < 100;
+        events.extend(batch);
+        if done {
+            break;
+        }
+    }
+
+    let pulse = forge_pulse(mine, to_review, repos, forge_calendar(&gitlab_counts(&events), now));
+    let event = forge_event("gitlab", &pulse);
+    let user_q = urlencode(&login);
+    emit(&app, IntegrationUpdate {
+        id: "integration_gitlab",
+        data: json!({
+            "totalRepos": projects.len(),
+            "totalStars": stars,
+            "login": login,
+            "pulse": pulse,
+            "pulseError": Value::Null,
+            "links": {
+                "home": user.get("web_url").and_then(Value::as_str).unwrap_or(&base),
+                "mine": format!("{base}/dashboard/merge_requests?author_username={user_q}"),
+                "review": format!("{base}/dashboard/merge_requests?reviewer_username={user_q}"),
+            },
+        }),
+        error: None,
+        event,
+    });
+}
+
+fn gitea_ci(state: Option<&str>) -> Option<&'static str> {
+    match state? {
+        "success" => Some("success"),
+        "failure" | "error" => Some("failure"),
+        "pending" => Some("pending"),
+        _ => None,
+    }
+}
+
+fn gitea_pr(issue: &Value) -> Option<Value> {
+    Some(forge_pr(
+        issue.pointer("/repository/full_name").and_then(Value::as_str)?,
+        issue.get("number").and_then(Value::as_i64)?,
+        issue.get("title").and_then(Value::as_str).unwrap_or(""),
+        issue.get("html_url").and_then(Value::as_str)?,
+        issue.pointer("/pull_request/draft").and_then(Value::as_bool).unwrap_or(false),
+        "unknown",
+    ))
+}
+
+/// Gitea's heatmap (a timestamp in seconds per bucket) as contributions per day.
+fn gitea_counts(heatmap: &[Value]) -> std::collections::HashMap<String, i64> {
+    let mut counts = std::collections::HashMap::new();
+    for entry in heatmap {
+        let Some(ts) = entry.get("timestamp").and_then(Value::as_i64) else { continue };
+        let day = if ts > 10_000_000_000 { ts / 86_400_000 } else { ts / 86_400 };
+        let n = entry.get("contributions").and_then(Value::as_i64).unwrap_or(0).max(0);
+        *counts.entry(date_key(day)).or_insert(0) += n;
+    }
+    counts
+}
+
+async fn poll_gitea(app: AppHandle) {
+    let Some(token) = secrets::get("gitea-token") else { return };
+    let Some(base) = forge_base("gitea-url", None) else {
+        emit(&app, IntegrationUpdate { id: "integration_gitea", data: json!({}), error: Some("Falta la dirección de tu Gitea".into()), event: None });
+        return;
+    };
+    let http = forge_client();
+    let get = |path: String| http.get(format!("{base}/api/v1{path}")).header("Authorization", format!("token {token}"));
+
+    let Ok(user) = get("/user".into()).send().await else { return };
+    if !user.status().is_success() {
+        emit(&app, IntegrationUpdate {
+            id: "integration_gitea",
+            data: json!({}),
+            error: Some(status_error(user.status().as_u16(), "Al token le falta el permiso de lectura")),
+            event: None,
+        });
+        return;
+    }
+    let user: Value = user.json().await.unwrap_or(json!({}));
+    let login = user.get("login").and_then(Value::as_str).unwrap_or("").to_string();
+
+    let owned: Vec<Value> = forge_list(get("/user/repos?limit=50".into()))
+        .await
+        .into_iter()
+        .filter(|r| r.pointer("/owner/login").and_then(Value::as_str) == Some(login.as_str()))
+        .collect();
+    let stars: i64 = owned.iter().filter_map(|r| r.get("stars_count").and_then(Value::as_i64)).sum();
+    let mut repos = Vec::new();
+    for r in owned.iter().take(10) {
+        let (Some(name), Some(url)) = (r.get("full_name").and_then(Value::as_str), r.get("html_url").and_then(Value::as_str)) else { continue };
+        let branch = r.get("default_branch").and_then(Value::as_str).unwrap_or("main");
+        let status: Value = match get(format!("/repos/{name}/commits/{}/status", urlencode(branch))).send().await {
+            Ok(resp) if resp.status().is_success() => resp.json().await.unwrap_or(Value::Null),
+            _ => Value::Null,
+        };
+        if status.get("total_count").and_then(Value::as_i64).unwrap_or(0) == 0 {
+            continue;
+        }
+        if let Some(ci) = gitea_ci(status.get("state").and_then(Value::as_str)) {
+            repos.push(json!({ "name": name, "url": format!("{url}/actions"), "branch": branch, "ci": ci }));
+        }
+    }
+
+    let mine: Vec<Value> = forge_list(get("/repos/issues/search?type=pulls&state=open&created=true&limit=20".into()))
+        .await.iter().filter_map(gitea_pr).collect();
+    let to_review: Vec<Value> = forge_list(get("/repos/issues/search?type=pulls&state=open&review_requested=true&limit=20".into()))
+        .await.iter().filter_map(gitea_pr).collect();
+    let heatmap = if login.is_empty() { Vec::new() } else { forge_list(get(format!("/users/{}/heatmap", urlencode(&login)))).await };
+
+    let pulse = forge_pulse(mine, to_review, repos, forge_calendar(&gitea_counts(&heatmap), today()));
+    let event = forge_event("gitea", &pulse);
+    emit(&app, IntegrationUpdate {
+        id: "integration_gitea",
+        data: json!({
+            "totalRepos": owned.len(),
+            "totalStars": stars,
+            "login": login,
+            "pulse": pulse,
+            "pulseError": Value::Null,
+            "links": {
+                "home": format!("{base}/{}", urlencode(&login)),
+                "mine": format!("{base}/pulls?type=created_by"),
+                "review": format!("{base}/pulls?type=review_requested"),
+            },
+        }),
+        error: None,
+        event,
+    });
+}
+
+/// Percent-encodes a path or query piece (a branch like `release/1.0`, a login).
+fn urlencode(raw: &str) -> String {
+    raw.bytes()
+        .map(|b| match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => (b as char).to_string(),
+            _ => format!("%{b:02X}"),
+        })
+        .collect()
 }
 
 // ── Vercel ────────────────────────────────────────────────────────────────────
@@ -1013,5 +1365,75 @@ mod github_tests {
         // A Copilot PR on its own is news.
         let copilot = parse_pulse(&answer(vec![pr(1, "me", "SUCCESS", &[])], vec![pr(10, "colleague", "PENDING", &[]), pr(13, "other", "PENDING", &[]), pr(14, "x", "PENDING", &[])], vec![pr(20, "Copilot", "SUCCESS", &[]), pr(21, "Copilot", "PENDING", &[])]));
         assert_eq!(pulse_event(&copilot).unwrap().label, "Copilot abrió un pull request");
+    }
+}
+
+#[cfg(test)]
+mod forge_tests {
+    use super::*;
+
+    #[test]
+    fn civil_days_are_gregorian_dates_with_their_weekday() {
+        assert_eq!(civil_day(0), (1970, 1, 1, 4));
+        assert_eq!(date_key(19_723), "2024-01-01");
+        assert_eq!(civil_day(19_723).3, 1, "1 January 2024 was a Monday");
+        assert_eq!(date_key(19_782), "2024-02-29");
+    }
+
+    #[test]
+    fn a_forge_calendar_has_sunday_columns_and_counts_the_year() {
+        let today = 19_723; // a Monday
+        let mut counts = std::collections::HashMap::new();
+        counts.insert(date_key(today), 9);
+        counts.insert(date_key(today - 300), 2);
+        counts.insert(date_key(today - 400), 50); // more than a year ago
+        let cal = forge_calendar(&counts, today);
+        assert_eq!(cal["total"], 11);
+        let weeks = cal["weeks"].as_array().unwrap();
+        assert_eq!(weeks.len(), 22);
+        assert!(weeks[..21].iter().all(|w| w.as_array().unwrap().len() == 7));
+        let last = weeks[21].as_array().unwrap();
+        assert_eq!(last.len(), 2, "Sunday and Monday");
+        assert_eq!(last[1], 4);
+    }
+
+    #[test]
+    fn gitlab_merge_requests_and_pipelines_become_the_github_shape() {
+        let mr = json!({ "iid": 12, "title": "Fix", "web_url": "https://gitlab.com/g/p/-/merge_requests/12",
+            "references": { "full": "g/p!12" }, "draft": true, "head_pipeline": { "status": "failed" } });
+        let item = gitlab_mr(&mr).unwrap();
+        assert_eq!((item["repo"].as_str(), item["number"].as_i64(), item["ci"].as_str()), (Some("g/p"), Some(12), Some("failure")));
+        assert_eq!(item["isDraft"], true);
+        assert_eq!(gitlab_ci(Some("running")), Some("pending"));
+        assert_eq!(gitlab_ci(Some("skipped")), None);
+        let counts = gitlab_counts(&[json!({ "created_at": "2024-01-01T10:00:00Z" }), json!({ "created_at": "2024-01-01T23:00:00Z" })]);
+        assert_eq!(counts["2024-01-01"], 2);
+    }
+
+    #[test]
+    fn gitea_heatmap_takes_seconds_or_milliseconds() {
+        let counts = gitea_counts(&[
+            json!({ "timestamp": 19_723 * 86_400 + 3600, "contributions": 3 }),
+            json!({ "timestamp": 19_723_i64 * 86_400_000, "contributions": 1 }),
+        ]);
+        assert_eq!(counts["2024-01-01"], 4);
+        let pr = gitea_pr(&json!({ "number": 3, "title": "T", "html_url": "https://git.example/o/r/pulls/3",
+            "repository": { "full_name": "o/r" }, "pull_request": { "draft": false } })).unwrap();
+        assert_eq!(pr["repo"], "o/r");
+    }
+
+    #[test]
+    fn each_forge_remembers_its_own_news() {
+        let pulse = |url: &str| forge_pulse(Vec::new(), vec![forge_pr("o/r", 1, "Review me", url, false, "unknown")], Vec::new(), Value::Null);
+        assert!(forge_event("test_forge_a", &pulse("https://a/1")).is_none(), "the first poll only fills the card");
+        assert!(forge_event("test_forge_b", &pulse("https://a/1")).is_none(), "another forge has its own first poll");
+        let news = forge_event("test_forge_a", &pulse("https://a/2")).unwrap();
+        assert_eq!(news.label, "Revisión pedida");
+    }
+
+    #[test]
+    fn urlencode_keeps_a_branch_one_path_piece() {
+        assert_eq!(urlencode("release/1.0"), "release%2F1.0");
+        assert_eq!(urlencode("main"), "main");
     }
 }

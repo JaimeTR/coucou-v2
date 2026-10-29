@@ -14,6 +14,8 @@ import type { Island } from "./island";
 const KEY_FOR: Record<string, string> = {
   integration_stripe: "stripe-api-key",
   integration_github: "github-token",
+  integration_gitlab: "gitlab-token",
+  integration_gitea: "gitea-token",
   integration_vercel: "vercel-token",
   integration_resend: "resend-api-key",
   integration_notion: "notion-api-key",

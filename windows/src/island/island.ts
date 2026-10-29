@@ -64,6 +64,8 @@ export class Island {
   private picker!: HTMLElement;
   private miniGrid!: HTMLElement;
   private countdown!: HTMLElement;
+  private clockEl!: HTMLElement;
+  private clockTimer?: number;
   private wakeStrip!: HTMLElement;
 
   private header!: ViewHost;
@@ -237,8 +239,11 @@ export class Island {
           if (mine.openUrl) void Bridge.openUrl(mine.openUrl);
           return;
         }
+        // GitLab and Gitea live wherever the person's instance is: their pollers send the link.
+        const home = (State.integrations[task.id]?.data?.links as { home?: unknown } | undefined)?.home;
         if (task.id === "integration_claude") this.openSessionTerminal();
         else if (urls[task.id]) void Bridge.openUrl(urls[task.id]);
+        else if (typeof home === "string") void Bridge.openUrl(home);
       },
       openUrl: (url) => {
         if (url) void Bridge.openUrl(url);
@@ -281,6 +286,7 @@ export class Island {
     this.greetingCanvas = h("canvas", { id: "greeting-canvas" });
     this.picker = h("div", { id: "greeting-picker" });
     this.miniGrid = h("div", { id: "mini-grid" });
+    this.clockEl = h("div", { id: "island-clock" });
     this.countdown = h("div", { id: "countdown" });
 
     this.header = buildHeader(actions);
@@ -316,6 +322,7 @@ export class Island {
       this.botGlow,
       this.botCanvas,
       this.miniGrid,
+      this.clockEl,
       this.countdown,
     );
 
@@ -720,6 +727,7 @@ export class Island {
       this.miniGrid.style.left = `${w - 40 - 14.5}px`;
       this.miniGrid.style.top = `${hh / 2 - 14.5}px`;
     }
+    this.clockEl.style.height = `${hh}px`;
     this.greetingCanvas.style.left = `${(w - EXPANDED_W) / 2}px`;
     this.picker.style.left = `${(w - EXPANDED_W) / 2}px`;
     this.uploadCanvas.el.style.left = `${(w - EXPANDED_W) / 2}px`;
@@ -1239,8 +1247,26 @@ export class Island {
       }
     }
 
+    this.updateClock();
+
     syncMiniBotStates(State.tasks);
     this.engine.setState(State.effectiveState);
+  }
+
+  /**
+   * The clock sits in the middle of the compact island, where a Mac has its
+   * notch (from the original's Windows 0.5.1, #788). Not in the vertical shape:
+   * there is no middle there.
+   */
+  private updateClock() {
+    const on = State.mode === "compact" && State.settings.showClock && !this.vertical();
+    this.clockEl.style.opacity = on ? "1" : "0";
+    if (!on) return;
+    const now = new Date();
+    const date = now.toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" });
+    const time = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    const text = `${date}  ${time}`;
+    if (this.clockEl.textContent !== text) this.clockEl.textContent = text;
   }
 
   /** Applies settings coming from Rust at boot. */
@@ -1313,6 +1339,8 @@ export class Island {
     const outfit = isOutfit(State.settings.mochiOutfit) ? State.settings.mochiOutfit : "auto";
     wear(resolve(outfit, new Date()));
     State.notify();
+    // One timer for the life of the window, and only when the clock is wanted: a minute is its finest tick.
+    if (State.settings.showClock) this.clockTimer ??= window.setInterval(() => this.updateClock(), 10_000);
   }
 
   get panelSize() {

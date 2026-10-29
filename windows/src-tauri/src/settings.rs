@@ -92,6 +92,9 @@ pub struct Settings {
     /// The island opens when the pointer reaches it and folds when it leaves (off by default).
     #[serde(default)]
     pub open_on_hover: bool,
+    /// The date and time in the middle of the compact island, where a Mac has its notch (off by default).
+    #[serde(default)]
+    pub show_clock: bool,
     /// A colour of your own for a pill: pill id → "#rrggbb".
     #[serde(default)]
     pub pill_colors: std::collections::BTreeMap<String, String>,
@@ -461,6 +464,7 @@ impl Default for Settings {
             updates: default_updates(),
             music_dance: true,
             open_on_hover: false,
+            show_clock: false,
             pill_colors: Default::default(),
             mochi_outfit: default_outfit(),
             pet_enabled: false,

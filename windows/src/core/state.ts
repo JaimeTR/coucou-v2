@@ -142,6 +142,8 @@ export const INTEGRATION_AGENTS: AgentTask[] = [
   task("integration_resend", "Resend", "#22C55E", "n8n"),
   task("integration_vercel", "Vercel", "#7C5CFF", "n8n"),
   task("integration_github", "GitHub", "#F4505E", "n8n"),
+  task("integration_gitlab", "GitLab", "#FC6D26", "n8n"),
+  task("integration_gitea", "Gitea", "#609926", "n8n"),
   task("integration_notion", "Notion", "#8C8C8C", "n8n"),
   task("integration_calcom", "Cal.com", "#C9956A", "n8n"),
   task("integration_stripe", "Stripe", "#0570DE", "n8n"),
@@ -166,7 +168,7 @@ export const INTEGRATION_AGENTS: AgentTask[] = [
 ];
 
 export const TOGGLEABLE_INTEGRATION_IDS = [
-  "integration_resend", "integration_vercel", "integration_github",
+  "integration_resend", "integration_vercel", "integration_github", "integration_gitlab", "integration_gitea",
   "integration_notion", "integration_calcom", "integration_stripe",
   "agent_gemini", "agent_opencode", "agent_copilot", "agent_muse", "agent_codex", "agent_cursor", "agent_amp", "agent_hermes",
   "agent_claude-desktop", "agent_vscode", "integration_system", "integration_spotify",
@@ -262,6 +264,8 @@ export interface Settings {
   musicDance: boolean;
   /** The island opens when the pointer reaches it and folds when it leaves. */
   openOnHover: boolean;
+  /** The date and time in the middle of the compact island. */
+  showClock: boolean;
   /** A colour of your own for a pill: id → #rrggbb. */
   pillColors: Record<string, string>;
   /** What Mochi wears: "auto" follows the date. */
@@ -351,6 +355,7 @@ export const DEFAULT_SETTINGS: Settings = {
   updates: "auto",
   musicDance: true,
   openOnHover: false,
+  showClock: false,
   pillColors: {},
   mochiOutfit: "auto",
   petEnabled: false,

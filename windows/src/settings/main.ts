@@ -894,7 +894,7 @@ function personalSection(detectedName: string): HTMLElement {
   // Which pill opens first: Claude Code, or any of the ones that are switched on.
   const startPill = h("select", {}) as HTMLSelectElement;
   const names: Record<string, string> = {
-    integration_claude: "Claude Code", integration_github: "GitHub",
+    integration_claude: "Claude Code", integration_github: "GitHub", integration_gitlab: "GitLab", integration_gitea: "Gitea",
     integration_vercel: "Vercel", integration_resend: "Resend", integration_notion: "Notion",
     integration_calcom: "Cal.com", integration_stripe: "Stripe", integration_system: "Modo", integration_spotify: "Spotify",
     agent_gemini: "Gemini CLI", agent_opencode: "OpenCode", agent_copilot: "Copilot CLI", agent_muse: "Muse Code",
@@ -1623,6 +1623,17 @@ const INTEGRATIONS: IntegrationDef[] = [
     fields: [{ key: "stripe-api-key", label: "Clave secreta", placeholder: "sk_live_…", secret: true }] },
   { id: "integration_github", name: "GitHub", color: "#F4505E",
     fields: [{ key: "github-token", label: "Token", placeholder: "ghp_…", secret: true }] },
+  // GitLab and Gitea: gitlab.com or your own instance. The address is kept with the token.
+  { id: "integration_gitlab", name: "GitLab", color: "#FC6D26",
+    fields: [
+      { key: "gitlab-url", label: "Dirección (vacía = gitlab.com)", placeholder: "https://gitlab.com", secret: false },
+      { key: "gitlab-token", label: "Token (read_api)", placeholder: "glpat-…", secret: true },
+    ] },
+  { id: "integration_gitea", name: "Gitea", color: "#609926",
+    fields: [
+      { key: "gitea-url", label: "Dirección", placeholder: "https://gitea.example.com", secret: false },
+      { key: "gitea-token", label: "Token (lectura)", placeholder: "…", secret: true },
+    ] },
   { id: "integration_vercel", name: "Vercel", color: "#7C5CFF",
     fields: [{ key: "vercel-token", label: "Token", placeholder: "…", secret: true }] },
   { id: "integration_resend", name: "Resend", color: "#22C55E",
@@ -1679,6 +1690,8 @@ function integrationsSection(present: Record<string, boolean>): HTMLElement {
           input.placeholder = value ? "••••••••  (guardada)" : f.placeholder;
           dotEl.style.background = value ? "#22c55e" : "#f4505e";
           state.textContent = value ? "Guardada." : "Sin guardar.";
+          // A new key (or a new GitLab or Gitea address) shows on the card now, not in five minutes.
+          if (settings.activeIntegrations.includes(def.id)) void Bridge.refreshIntegration(def.id);
         } catch {
           dotEl.style.background = "#f5a524";
           state.textContent = "No se pudo guardar.";
@@ -1833,6 +1846,11 @@ function generalSection(): HTMLElement {
       h("label", { text: "Abrir al pasar el puntero" }),
       toggle(settings.openOnHover, (v) => { settings.openOnHover = v; void save(); }),
       h("span", { class: "hint", text: "la isla se abre al llegar el puntero y se pliega poco después de irse; un clic dentro la mantiene abierta" }),
+    ),
+    h("div", { class: "row" },
+      h("label", { text: "Mostrar el reloj en la isla" }),
+      toggle(settings.showClock, (v) => { settings.showClock = v; void save(); }),
+      h("span", { class: "hint", text: "la fecha y la hora en el centro de la isla compacta, donde un Mac tiene el notch" }),
     ),
     h("div", { class: "row" },
       h("label", { text: "Cierre automático" }),
