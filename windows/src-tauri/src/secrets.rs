@@ -24,6 +24,24 @@ pub const KNOWN_KEYS: &[&str] = &[
     "local-api-key",
 ];
 
+/// WhatsApp credentials: Rust-only, never exposed to the webview through the public API.
+pub const INTERNAL_KEYS: &[&str] = &[
+    "whatsapp-url",
+    "whatsapp-api-key",
+    "whatsapp-webhook-secret",
+];
+
+pub fn is_internal(key: &str) -> bool {
+    INTERNAL_KEYS.contains(&key)
+}
+
+pub fn set_internal(key: &str, value: &str) -> Result<(), String> {
+    if !is_internal(key) {
+        return Err(format!("not an internal key: {key}"));
+    }
+    set(key, value)
+}
+
 /// The token of a custom pill: "custom-<slug>-token".
 fn is_custom_key(key: &str) -> bool {
     key.len() <= 48

@@ -121,6 +121,22 @@ async function main() {
     } else if (name === "toggle") {
       setPaused(false);
       island.toggleFromShortcut();
+    } else if (name === "toggleIsland") {
+      island.toggleIsland();
+    } else if (name === "openChat") {
+      island.openChat();
+    } else if (name === "goToAlert") {
+      island.goToAlert();
+    } else if (name === "jumpToTerminal") {
+      island.jumpToTerminal();
+    } else if (name === "nextPill") {
+      island.nextPill();
+    } else if (name === "prevPill") {
+      island.prevPill();
+    } else if (name === "muteToggle") {
+      island.muteToggle();
+    } else if (name === "desktopToggle") {
+      island.desktopToggle();
     }
   });
 

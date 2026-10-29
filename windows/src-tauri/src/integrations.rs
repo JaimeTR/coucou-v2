@@ -504,7 +504,7 @@ fn pulse_event(pulse: &Value) -> Option<IntegrationEvent> {
     None
 }
 
-async fn poll_github(app: AppHandle) {
+pub async fn poll_github(app: AppHandle) {
     let Some(token) = secrets::get("github-token") else { return };
     let http = client();
 
@@ -1015,3 +1015,4 @@ mod github_tests {
         assert_eq!(pulse_event(&copilot).unwrap().label, "Copilot abrió un pull request");
     }
 }
+

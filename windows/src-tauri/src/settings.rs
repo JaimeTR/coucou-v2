@@ -73,6 +73,9 @@ pub struct Settings {
     /// "left" or "right" — or None while it floats. Only Rust writes it.
     #[serde(default)]
     pub island_dock: Option<String>,
+    /// Where Mochi sits on the desktop (None = not on the desktop).
+    #[serde(default)]
+    pub desktop_spot: Option<DesktopSpot>,
     /// The sync server ("" = sync off). The account code itself is in the keychain.
     #[serde(default)]
     pub sync_url: String,
@@ -380,6 +383,18 @@ fn default_island_position() -> String {
     "fixed".into()
 }
 
+/// Where Mochi sits on the desktop: display index and logical position.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct DesktopSpot {
+    pub display: usize,
+    pub x: f64,
+    pub y: f64,
+}
+
+fn default_desktop_spot() -> DesktopSpot {
+    DesktopSpot { display: 0, x: 0.0, y: 0.0 }
+}
+
 fn default_greeting_language() -> String {
     "auto".into()
 }
@@ -455,6 +470,7 @@ impl Default for Settings {
             island_position: default_island_position(),
             island_offset: None,
             island_dock: None,
+            desktop_spot: None,
             sync_url: String::new(),
             sync_rev: 0,
             sync_device: String::new(),

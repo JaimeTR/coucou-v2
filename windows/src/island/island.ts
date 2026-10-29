@@ -181,6 +181,62 @@ export class Island {
   /** Ctrl+Alt+C: open the island, or close it if it is already open. */
   toggleFromShortcut() {
     if (State.mode === "expanded" && !State.isPinned) this.collapse();
+  /** Toggle the whole island (open default view or collapse). */
+  toggleIsland() {
+    if (State.mode === "expanded" && !State.isPinned) this.collapse();
+    else this.alert(State.defaultView());
+  }
+
+  /** Open the chat view. */
+  openChat() {
+    this.setView("chat");
+  }
+
+  /** Open the alerts view. */
+  goToAlert() {
+    this.setView("alerts");
+  }
+
+  /** Jump to the terminal of the focused session. */
+  jumpToTerminal() {
+    this.openSessionTerminal();
+  }
+
+  /** Move focus to the next pill. */
+  nextPill() {
+    const idx = State.tasks.findIndex(t => t.id === State.focusId);
+    const next = (idx + 1) % State.tasks.length;
+    if (next >= 0) State.setFocus(State.tasks[next].id);
+  }
+
+  /** Move focus to the previous pill. */
+  prevPill() {
+    const idx = State.tasks.findIndex(t => t.id === State.focusId);
+    const prev = (idx - 1 + State.tasks.length) % State.tasks.length;
+    if (prev >= 0) State.setFocus(State.tasks[prev].id);
+  }
+
+  /** Mute or unmute sound. */
+  muteToggle() {
+    State.settings.soundEnabled = !State.settings.soundEnabled;
+    Sound.setEnabled(State.settings.soundEnabled);
+    void Bridge.saveSettings(State.settings);
+    State.notify();
+  }
+
+  /** Show or hide the Mochi desktop window. */
+  desktopToggle() {
+    if (Bridge.desktopIsVisible()) {
+      Bridge.desktopHide();
+    } else {
+      const pos = Bridge.desktopPosition();
+      if (!pos) {
+        Bridge.desktopShow(0, 0);
+      } else {
+        Bridge.desktopShow(pos.x, pos.y);
+      }
+    }
+  }
     else this.alert(State.defaultView());
   }
 

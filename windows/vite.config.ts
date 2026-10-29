@@ -6,7 +6,7 @@ import { resolve, join, extname } from "node:path";
 // THE one and only place the shared sound folder is declared.
 // The 28 WAVs live in the macOS app and are NOT duplicated in the repo; when they
 // move to `shared/sounds/`, change this single line.
-export const SOUNDS_DIR = resolve(__dirname, "../NotchBuddy/Resources/sounds");
+export const SOUNDS_DIR = resolve(__dirname, "dist/sounds");
 // ───────────────────────────────────────────────────────────────────────────────
 
 /**
@@ -57,6 +57,7 @@ export default defineConfig({
         island: resolve(__dirname, "index.html"),
         settings: resolve(__dirname, "settings.html"),
         pet: resolve(__dirname, "pet.html"),
+        mochi: resolve(__dirname, "src/mochi.html"),
       },
     },
   },

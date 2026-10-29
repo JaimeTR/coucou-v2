@@ -11,6 +11,7 @@ import { Bridge } from "../core/bridge";
 import { miniUsage, planRows } from "./plan";
 import { codexResetsLabel } from "../core/codexPlan";
 import { refreshCodexPlan } from "../island/integrations";
+import { githubPulseCard, githubDetail, type GitHubPulse, type GitHubStats, type GitHubActivity } from "./github";
 import { MODE_CHOICES, MODE_COLORS, MODE_NAMES, modeLabel } from "../core/modes";
 import { clock, positionAt, type SpotifyAction } from "../core/spotify";
 import { refreshSpotify } from "../island/spotify";
@@ -931,12 +932,21 @@ export function renderIntegrationCard(task: AgentTask, hooks: IntegrationCardHoo
   // Claude Code and VS Code each have a card of their own, whatever their state.
   if (task.id === "integration_claude") return claudeCard(task, hooks.openSettings);
   if (task.id === "agent_vscode") return vscodeCard(task, hooks.openSettings);
+  if (task.id === "integration_whatsapp") return whatsappCard(task, hooks.openSettings);
   if (task.id === "agent_claude-desktop") return claudeDesktopCard(task, hooks.openSettings);
   if (task.id === "agent_codex") return codexCard(task, hooks.openSettings);
   if (task.id.startsWith("custom_")) return customCard(task, hooks.openSettings);
   if (AGENT_LAUNCH[task.id]) return agentCard(task, hooks.openSettings);
   if (task.id === "integration_github" && hasIntegrationData(task.id)) {
-    return hooks.detailOpen ? githubDetail(hooks.closeDetail) : githubCard(hooks.openDetail);
+    const data = State.integrations[task.id]?.data as Record<string, unknown> | undefined;
+    const pulse = data?.pulse ? githubPulseCard(data.pulse as Record<string, unknown>, data.stats as Record<string, unknown> | null, data.activity as Record<string, unknown> | null, hooks.openDetail) : null;
+    const stats = data?.stats as GitHubStats | null;
+    const activity = data?.activity as GitHubActivity | null;
+    const p = data?.pulse as GitHubPulse | null;
+    if (hooks.detailOpen && p) {
+      return githubDetail(p, stats, activity, hooks.closeDetail);
+    }
+    if (pulse) return pulse;
   }
   if (task.id === "integration_vercel" && hasIntegrationData(task.id)) {
     return hooks.detailOpen ? vercelDetail(hooks.closeDetail) : vercelCard(hooks.openDetail);
@@ -955,6 +965,21 @@ export function renderIntegrationCard(task: AgentTask, hooks: IntegrationCardHoo
     default:
       return idleCard(task, hooks.openSettings);
   }
+}
+
+function whatsappCard(task: AgentTask, openSettings: () => void): HTMLElement {
+  const connected = State.integrations[task.id]?.configured ?? false;
+  const card = h("div", { class: "int-card" }, header(task.color, task.name, connected ? "Conectado" : "Sin conectar"));
+  card.append(
+    h("div", { class: "int-sub", text: connected
+      ? "Tus mensajes de WhatsApp llegan aquí. Responde desde la isla."
+      : "Conecta WhatsApp para ver aquí tus mensajes." }),
+  );
+  const actions = h("div", { class: "int-actions" },
+    h("button", { class: "link-btn", style: `color:${task.color}d9`, text: "Ajustes…", onclick: openSettings }),
+  );
+  card.append(actions);
+  return card;
 }
 
 export { clear };

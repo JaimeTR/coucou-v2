@@ -9,6 +9,14 @@ import { getCurrentWebview } from "@tauri-apps/api/webview";
 import type { ProjectInfo, RemoteDevice, Settings } from "./state";
 import type { SpotifyAction, SpotifyState } from "./spotify";
 import type { Rule, RuleDraft } from "../island/rules";
+import type {
+  WhatsAppInstallStep,
+  WhatsAppIslandView,
+  WhatsAppLinkState,
+  WhatsAppSettingsView,
+  WhatsAppTestResult,
+  WhatsAppWebhookState,
+} from "./whatsapp";
 
 export const IS_TAURI =
   typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -252,6 +260,43 @@ export const Bridge = {
 
   /** Tray → Pause. Stops the integration pollers, not just the island. */
   setPaused: (paused: boolean) => call<void>("set_paused", { paused }),
+
+  // ── WhatsApp ─────────────────────────────────────────────────────────────
+  whatsappSettings: () => call<WhatsAppSettingsView>("whatsapp_settings"),
+  whatsappSetOptions: (enabled: boolean, muteGroups: boolean, markReadOnOpen: boolean) =>
+    call<void>("whatsapp_set_options", { enabled, muteGroups, markReadOnOpen }),
+  whatsappSaveGateway: (
+    gateway: string,
+    url: string,
+    credential: string | null,
+    port: number,
+    autoStart: boolean,
+    gowaPath: string,
+  ) =>
+    call<void>("whatsapp_save_gateway", {
+      gateway,
+      url,
+      credential,
+      port,
+      autoStart,
+      gowaPath,
+    }),
+  whatsappTest: () => call<WhatsAppTestResult>("whatsapp_test"),
+  whatsappInstall: () => call<void>("whatsapp_install"),
+  whatsappSend: (chat: string, text: string) => call<void>("whatsapp_send", { chat, text }),
+  whatsappIgnore: (chat: string) => call<void>("whatsapp_ignore", { chat }),
+  whatsappUnignore: (chat: string) => call<void>("whatsapp_unignore", { chat }),
+
+
+  // ── Desktop (Mochi) window ─────────────────────────────────────────────────
+  desktopCreate: () => call<void>("desktop_create"),
+  desktopShow: (x: number, y: number) => call<void>("desktop_show", { x, y }),
+  desktopHide: () => call<void>("desktop_hide"),
+  desktopMove: (x: number, y: number) => call<void>("desktop_move", { x, y }),
+  desktopPosition: () => call<{ x: number; y: number } | null>("desktop_position"),
+  desktopIsVisible: () => call<boolean>("desktop_is_visible"),
+  // ── GitHub ────────────────────────────────────────────────────────────────
+  githubRefresh: (section: "pulse" | "activity") => call<void>("github_refresh", { section }),
 };
 
 export interface IntegrationUpdate {
@@ -305,7 +350,11 @@ export type BridgeEvent =
   | { name: "cursor"; payload: { x: number; y: number } }
   | { name: "tray"; payload: string }
   | { name: "hook"; payload: Record<string, unknown> }
-  | { name: "screen-changed"; payload: null };
+  | { name: "screen-changed"; payload: null }
+  | { name: "desktop"; payload: { kind: string; x: number; y: number } }
+  | { name: "whatsapp"; payload: WhatsAppIslandView }
+  | { name: "whatsapp-settings"; payload: WhatsAppSettingsView }
+  | { name: "whatsapp-pill"; payload: { kind: "message" | "read" | "reset"; name?: string } };
 
 export interface DragDropPayload {
   type: "enter" | "over" | "drop" | "leave";

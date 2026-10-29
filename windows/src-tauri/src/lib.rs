@@ -1,13 +1,16 @@
 // Coucou for Windows — app wiring and the commands the island calls.
 
+mod agent_hooks;
 mod agents;
 mod claude;
 mod codex_plan;
 mod compat;
 mod custom;
+mod desktop;
 mod dictation;
 mod devmark;
 mod files;
+mod github;
 mod hooks;
 mod identity;
 mod integrations;
@@ -21,12 +24,14 @@ mod recap_image;
 mod rules;
 mod secrets;
 mod settings;
+mod shortcuts;
 mod sounds;
 mod spotify;
 mod sync;
 mod tray;
 mod updater;
 mod voice;
+mod whatsapp;
 mod workspaces;
 
 use std::process::Command;
@@ -40,11 +45,13 @@ use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut,
 use tauri_plugin_notification::NotificationExt;
 
 use claude::{Chat, ChatContext, ChatReply};
+use desktop::{create, home, hide, is_visible, move_to, position, show};
 use files::DroppedFile;
 use hooks::{HookPreview, HookStatus};
 use island::{PollGate, ScreenInfo};
 use pipe::Pending;
 use settings::Settings;
+use whatsapp::{whatsapp_ignore, whatsapp_install, whatsapp_save_gateway, whatsapp_send, whatsapp_set_options, whatsapp_settings, whatsapp_test, whatsapp_unignore};
 
 pub struct Shared {
     pub settings: Mutex<Settings>,
@@ -1104,10 +1111,54 @@ async fn refresh_integration(app: AppHandle, id: String) {
     integrations::poll_once(app, &id).await;
 }
 
+/// Manual GitHub refresh (pulse + activity).
+#[tauri::command]
+async fn github_refresh(app: AppHandle, section: String) {
+    let _ = section;
+    integrations::poll_github(app).await;
+}
+
+/// The planned global shortcuts (id + default keys), for the settings view.
+#[tauri::command]
+fn shortcuts_plan() -> Vec<shortcuts::ActionDef> {
+    shortcuts::ACTIONS.to_vec()
+}
+
 /// Lets the island write to the same log as the Rust side.
 #[tauri::command]
-fn log_line(message: String) {
+fn log_line(app: AppHandle, message: String) {
     log::line(format!("ui  {message}"));
+}
+
+/// Desktop (Mochi) window — create, show, hide, move, position, visible.
+#[tauri::command]
+fn desktop_create(app: AppHandle) -> Result<(), String> {
+    desktop::create(&app).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn desktop_show(app: AppHandle, x: f64, y: f64) {
+    desktop::show(&app, x, y);
+}
+
+#[tauri::command]
+fn desktop_hide(app: AppHandle) {
+    desktop::hide(&app);
+}
+
+#[tauri::command]
+fn desktop_move(app: AppHandle, x: f64, y: f64) {
+    desktop::move_to(&app, x, y);
+}
+
+#[tauri::command]
+fn desktop_position(app: AppHandle) -> Option<(f64, f64)> {
+    desktop::position(&app)
+}
+
+#[tauri::command]
+fn desktop_is_visible(app: AppHandle) -> bool {
+    desktop::is_visible(&app)
 }
 
 // ── Settings window ───────────────────────────────────────────────────────────
@@ -1307,6 +1358,7 @@ pub fn run() {
             secret_set,
             secret_clear,
             refresh_integration,
+            github_refresh,
             open_settings_window,
             set_paused,
             set_ui_language,
@@ -1317,6 +1369,21 @@ pub fn run() {
             voice_speak,
             voice_list,
             voice_transcribe,
+            whatsapp_settings,
+            whatsapp_set_options,
+            whatsapp_save_gateway,
+            whatsapp_test,
+            whatsapp_install,
+            whatsapp_send,
+            whatsapp_ignore,
+            whatsapp_unignore,
+            shortcuts_plan,
+            desktop_create,
+            desktop_show,
+            desktop_hide,
+            desktop_move,
+            desktop_position,
+            desktop_is_visible,
         ])
         .setup(move |app| {
             // No Dock icon, no menu bar: the island and the tray are the whole app.
@@ -1352,9 +1419,16 @@ pub fn run() {
             dictation::apply(&handle, loaded.dictation, &loaded.dictation_key);
             sync::spawn(handle.clone());
             updater::spawn(handle.clone());
+            whatsapp::start(&handle, &loaded.active_integrations);
+            shortcuts::start(&handle);
+            desktop::create(&handle);
             Ok(())
         })
-        .run(tauri::generate_context!())
+        .run(|ctx, event| {
+            if let tauri::RunEvent::Exit = event {
+                whatsapp::shutdown();
+            }
+        })
         .expect("error while running Coucou");
 }
 
