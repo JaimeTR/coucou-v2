@@ -552,6 +552,12 @@ fn migrate(settings: &mut Settings) {
     settings.active_integrations.retain(|id| id != "integration_n8n");
     let mut seen = std::collections::HashSet::new();
     settings.active_integrations.retain(|id| seen.insert(id.clone()));
+    // ElevenLabs retired the premade "Rachel" (21m00Tcm4TlvDq8ikWAM) into its paid-only
+    // shared library: anyone who never picked their own voice was left with an id the
+    // API now answers 402 (payment required) to, so ElevenLabs silently never spoke.
+    if settings.eleven_voice == "21m00Tcm4TlvDq8ikWAM" {
+        settings.eleven_voice = crate::voice::DEFAULT_VOICE.into();
+    }
 }
 
 #[cfg(test)]
@@ -577,6 +583,20 @@ mod tests {
         s.active_integrations = vec!["integration_github".into(), "agent_terminal".into(), "agent_vscode".into()];
         migrate(&mut s);
         assert_eq!(s.active_integrations, vec!["integration_github", "agent_vscode"]);
+    }
+
+    #[test]
+    fn a_saved_rachel_voice_is_replaced_by_the_new_default() {
+        let mut s = Settings::default();
+        s.eleven_voice = "21m00Tcm4TlvDq8ikWAM".into();
+        migrate(&mut s);
+        assert_eq!(s.eleven_voice, crate::voice::DEFAULT_VOICE);
+
+        // A voice the person picked themselves is left alone.
+        let mut s = Settings::default();
+        s.eleven_voice = "my-own-cloned-voice-id".into();
+        migrate(&mut s);
+        assert_eq!(s.eleven_voice, "my-own-cloned-voice-id");
     }
 }
 

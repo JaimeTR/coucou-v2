@@ -4,6 +4,10 @@
 
 Coucou v2 es el fork de [JaimeTR](https://github.com/JaimeTR) de [Coucou, de Louis Raillé](https://github.com/Louis-CFM/coucou) (MIT). Las notas de la versión de macOS siguen en el [CHANGELOG.md](../CHANGELOG.md) de la raíz.
 
+## 1.5.2 — 1 de noviembre de 2026
+- **Corregido: ElevenLabs se quedaba callado para quien nunca eligió su propia voz.** ElevenLabs retiró la voz prediseñada "Rachel" a su biblioteca compartida, de pago; la API llevaba tiempo respondiendo 402 (pago requerido) al id que Coucou traía por defecto, y el fallo se tragaba sin avisar. Ahora el valor por defecto es "Sarah" (plan gratis, propia de cada cuenta), y a quien tenía guardado el id viejo se le cambia solo.
+- **Los fallos de ElevenLabs ya no son silenciosos.** La primera vez que ElevenLabs no puede hablar en una sesión (clave mala, sin crédito, una voz retirada), un aviso de Windows lo dice y explica por qué; Mochi sigue hablando al momento con la voz gratis del sistema, como antes.
+
 ## 1.5.1 — 1 de noviembre de 2026
 - **Permisos de Claude Desktop** *(Windows)*: un permiso de una sesión de Claude Desktop se responde desde la isla. Sus preguntas siguen yendo a la app de Claude.
 - **La isla queda bajo una barra de tareas superior** *(Windows)*: empieza debajo de la barra en vez de taparla.

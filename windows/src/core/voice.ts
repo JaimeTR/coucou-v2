@@ -62,6 +62,12 @@ function speakSystem(said: string, onEnd?: () => void): boolean {
   return true;
 }
 
+/**
+ * ElevenLabs failed once this session: further failures still fall back to the
+ * system voice quietly, so Mochi is never mute and one bad key never spams.
+ */
+let warnedOnce = false;
+
 /** Says `said` with ElevenLabs; if that fails, with the system voice, so Mochi is never mute. */
 function speakEleven(said: string, onEnd?: () => void): boolean {
   speaking = true;
@@ -88,6 +94,13 @@ function speakEleven(said: string, onEnd?: () => void): boolean {
     (err) => {
       console.error("[coucou] ElevenLabs", err);
       speaking = false;
+      // Falling back silently every time left people thinking ElevenLabs was
+      // on when it was not (a bad key, no credit, a retired voice): say so
+      // once, with a native toast, the first time it happens this session.
+      if (!warnedOnce) {
+        warnedOnce = true;
+        void Bridge.notify(t("No pude hablar con ElevenLabs"), String(err).replace(/^Error:\s*/, ""));
+      }
       speakSystem(said, onEnd);
     },
   );

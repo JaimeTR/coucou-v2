@@ -371,7 +371,10 @@ export const DEFAULT_SETTINGS: Settings = {
   detectMeetings: true,
   petPhrases: {},
   voiceEngine: "system",
-  elevenVoice: "21m00Tcm4TlvDq8ikWAM",
+  // "Sarah": every account's own voice, usable on the free plan (must match
+  // DEFAULT_VOICE in src-tauri/src/voice.rs — the old "Rachel" id moved to the
+  // paid-only shared library and the API now refuses it with 402).
+  elevenVoice: "EXAVITQu4vr4xnSDxMaL",
   elevenModel: "eleven_multilingual_v2",
   wakeWord: false,
   listenShortcut: "Ctrl+Alt+M",

@@ -23,9 +23,11 @@ pub const ELEVEN_KEY: &str = "elevenlabs-api-key";
 const GROQ_KEY: &str = "groq-api-key";
 const TIMEOUT: Duration = Duration::from_secs(60);
 
-/// Premade "Rachel": available on every plan and speaks Spanish with the
-/// multilingual models.
-pub const DEFAULT_VOICE: &str = "21m00Tcm4TlvDq8ikWAM";
+/// Premade "Sarah": in every account's own voice library, so the free plan can
+/// use it through the API (library/shared voices need a paid plan and answer
+/// 402; "Rachel", `21m00Tcm4TlvDq8ikWAM`, moved there and stopped working).
+/// Speaks Spanish with the multilingual models.
+pub const DEFAULT_VOICE: &str = "EXAVITQu4vr4xnSDxMaL";
 pub const DEFAULT_MODEL: &str = "eleven_multilingual_v2";
 const STT_MODELS: &[&str] = &["whisper-large-v3-turbo", "whisper-large-v3"];
 /// ElevenLabs charges per character and is only for Mochi's own short phrases.

@@ -12,7 +12,7 @@ Approve permissions, watch your agents work, drop a file, chat with Claude — a
 
 iPhone y Android (una sola app): [mobile](mobile/README.md) · Windows y Linux · Windows/Linux: [README](windows/README.md) · [en español](windows/README.es.md) · [CHANGELOG](windows/CHANGELOG.md) · [en español](windows/CHANGELOG.es.md)
 
-[![Coucou v2](https://img.shields.io/badge/Coucou%20v2-1.5.1-0A84FF)](windows/CHANGELOG.md)
+[![Coucou v2](https://img.shields.io/badge/Coucou%20v2-1.5.2-0A84FF)](windows/CHANGELOG.md)
 
 **New in 0.4: Coucou is a real Mac app.** Hold a key anywhere, speak, let go: your words are pasted where you type, like Wispr Flow — free, open source, and offline with Parakeet. Record your calls without a bot in the meeting and get the transcript, the summary and the to-dos.
 

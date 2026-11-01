@@ -4,6 +4,10 @@
 
 Coucou v2 is [JaimeTR](https://github.com/JaimeTR)'s fork of [Coucou by Louis Raillé](https://github.com/Louis-CFM/coucou) (MIT). The macOS release notes stay in the root [CHANGELOG.md](../CHANGELOG.md).
 
+## 1.5.2 — November 1, 2026
+- **Fixed: ElevenLabs stayed silent for everyone who never picked their own voice.** ElevenLabs retired the premade "Rachel" voice into its paid-only shared library; the API has been answering 402 (payment required) to the id Coucou shipped as default, and the failure was swallowed without a word. The default is now "Sarah" (free plan, every account's own voice), and anyone with the old id saved gets moved over automatically.
+- **ElevenLabs failures are no longer silent.** The first time ElevenLabs cannot speak in a session (bad key, no credit, a retired voice), a Windows toast says so and names the reason; Mochi still falls back to the free system voice right away, as before.
+
 ## 1.5.1 — November 1, 2026
 - **Claude Desktop permissions** *(Windows)*: a permission request from a Claude Desktop session is answered from the island. Its questions still go to the Claude app.
 - **The island sits under a taskbar at the top** *(Windows)*: it starts below a top taskbar instead of covering it.
