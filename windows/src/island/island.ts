@@ -20,10 +20,11 @@ import { Greeting } from "../mochi/greeting";
 import { createMiniBot, pruneMiniBots, syncMiniBotStates, tickMiniBots } from "../mochi/minibots";
 import { UploadCanvas } from "../upload/canvas";
 import { USC, UploadSeq } from "../upload/sequence";
+import { planColor, primaryPercent } from "../views/plan";
 import { buildHeader, buildViews, type ViewActions, type ViewHost } from "../views/views";
 import { h } from "../views/dom";
 import { IslandStateMachine } from "./fsm";
-import { endQuestion, Recap } from "./hooks";
+import { endQuestion, promoteNextApproval, Recap, restoreAlertFocus } from "./hooks";
 import { startMusic } from "./music";
 import { markHandled } from "./remote";
 import { startSpotify } from "./spotify";
@@ -63,6 +64,9 @@ export class Island {
   /** The "where do we start?" chips, laid over the greeting's left half. */
   private picker!: HTMLElement;
   private miniGrid!: HTMLElement;
+  private compactPlan!: HTMLElement;
+  private compactPlanDot!: HTMLElement;
+  private compactPlanLabel!: HTMLElement;
   private countdown!: HTMLElement;
   private wakeStrip!: HTMLElement;
 
@@ -175,6 +179,7 @@ export class Island {
     this.fsm.pinned = false;
     State.updateTask(pill, "working");
     State.setPillBadge(pill, null);
+    if (promoteNextApproval(this)) return;
     this.setView(State.defaultView());
   }
 
@@ -336,6 +341,23 @@ export class Island {
     this.miniGrid = h("div", { id: "mini-grid" });
     this.countdown = h("div", { id: "countdown" });
 
+    this.compactPlanDot = h("i", { class: "compact-plan-dot" });
+    this.compactPlanLabel = h("span", { class: "compact-plan-label" });
+    this.compactPlan = h(
+      "button",
+      {
+        id: "compact-plan",
+        title: "Uso del plan de Claude",
+        onmousedown: (e: Event) => e.stopPropagation(),
+        onclick: (e: Event) => {
+          e.stopPropagation();
+          if ((e as MouseEvent).button === 0) this.openClaudePlan();
+        },
+      },
+      this.compactPlanDot,
+      this.compactPlanLabel,
+    );
+
     this.header = buildHeader(actions);
     this.views = buildViews(actions, () => this.animateGeometry(false));
     this.viewsEl = h("div", { id: "views" });
@@ -369,6 +391,7 @@ export class Island {
       this.botGlow,
       this.botCanvas,
       this.miniGrid,
+      this.compactPlan,
       this.countdown,
     );
 
@@ -547,6 +570,8 @@ export class Island {
       Sound.play("close");
       State.isPinned = false;
       void Bridge.focusWindow(false);
+      // Another pill's alert borrowed the front: the pill you had comes back.
+      restoreAlertFocus();
     }
     if (mode !== "expanded") {
       this.engine.resetMorph();
@@ -568,6 +593,15 @@ export class Island {
   /** Navigating out of the drop flow ends the sequence, as on macOS. */
   private stopSequenceIfLeaving(view: IslandViewName) {
     if (UploadSeq.isActive && !UPLOAD_VIEWS.has(view)) UploadSeq.deactivate();
+  }
+
+  /** Click on the compact plan gauge: the island opens on the overview with the plan card. */
+  openClaudePlan() {
+    Sound.resume();
+    State.showingPlanDetail = true;
+    this.fsm.forceHome();
+    this.expand("overview");
+    State.notify();
   }
 
   expand(view: IslandViewName) {
@@ -1290,6 +1324,17 @@ export class Island {
         }
         pruneMiniBots();
       }
+    }
+
+    // Compact plan gauge, next to the mini grid
+    const showPlan = State.mode === "compact" && State.settings.planGaugeCompact && State.plan != null;
+    this.compactPlan.style.opacity = showPlan ? "1" : "0";
+    this.compactPlan.style.pointerEvents = showPlan ? "auto" : "none";
+    if (showPlan) {
+      const pct = primaryPercent(State.plan);
+      this.compactPlan.style.setProperty("--plan", planColor(pct));
+      this.compactPlan.style.right = State.otherTasks.length > 0 ? "58px" : "20px";
+      this.compactPlanLabel.textContent = pct == null ? "—" : `${Math.round(pct)}%`;
     }
 
     syncMiniBotStates(State.tasks);

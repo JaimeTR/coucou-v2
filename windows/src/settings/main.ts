@@ -1112,12 +1112,18 @@ function planSection(status: HookStatus): HTMLElement {
       // Turning it on without the relay would show nothing: offer to install it.
       if (v && !status.statuslineInstalled) void showPreview(true);
     });
+    const showCompact = toggle(settings.planGaugeCompact, (v) => {
+      settings.planGaugeCompact = v;
+      void save();
+      if (v && !status.statuslineInstalled) void showPreview(true);
+    });
     body.append(
       h("div", {
         class: "hint",
         text: "Un pequeño pill en la cabecera de la isla con lo que llevas gastado de tu plan de Claude (ventanas de 5 horas y 7 días). Claude Code solo lo informa en los planes Pro y Max.",
       }),
       h("div", { class: "row" }, h("label", { text: "Mostrar en la isla" }), show),
+      h("div", { class: "row" }, h("label", { text: "Mostrar en la isla compacta" }), showCompact),
       h("div", { class: "row" },
         h("label", { text: "Relay" }),
         h("span", { class: "hint", text: installed ? "Instalado" : "Sin instalar" }),
@@ -1833,6 +1839,11 @@ function generalSection(): HTMLElement {
       h("label", { text: "Abrir al pasar el puntero" }),
       toggle(settings.openOnHover, (v) => { settings.openOnHover = v; void save(); }),
       h("span", { class: "hint", text: "la isla se abre al llegar el puntero y se pliega poco después de irse; un clic dentro la mantiene abierta" }),
+    ),
+    h("div", { class: "row" },
+      h("label", { text: "Avisar de todos los pills" }),
+      toggle(settings.alertsFromAllPills, (v) => { settings.alertsFromAllPills = v; void save(); }),
+      h("span", { class: "hint", text: "cuando otro pill termina o da un error, la isla lo muestra un momento y vuelve el pill que tenías" }),
     ),
     h("div", { class: "row" },
       h("label", { text: "Cierre automático" }),

@@ -4,6 +4,13 @@
 
 Coucou v2 is [JaimeTR](https://github.com/JaimeTR)'s fork of [Coucou by Louis Raillé](https://github.com/Louis-CFM/coucou) (MIT). The macOS release notes stay in the root [CHANGELOG.md](../CHANGELOG.md).
 
+## Unreleased
+
+Ported from the original's Windows and Linux 0.5.8 (Ohualtex):
+- **Permission requests wait their turn**: up to 5 requests queue in the island instead of the second one going back to the terminal; each gives up on its own clock.
+- **Plan usage in the compact island**: a new option (Settings → Claude → Usage) shows your Claude plan percentage next to the agent dots; click it for the details.
+- **Alerts from every pill**: a new option (Settings → General): when another pill finishes or hits an error, the island shows it for a moment, then the pill you had comes back.
+
 ## 1.4.0 — October 16, 2026
 
 **Your computers, in step**

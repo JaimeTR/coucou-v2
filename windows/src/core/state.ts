@@ -259,6 +259,8 @@ export interface Settings {
   musicDance: boolean;
   /** The island opens when the pointer reaches it and folds when it leaves. */
   openOnHover: boolean;
+  /** Open the island for a moment when any pill finishes or hits an error. */
+  alertsFromAllPills: boolean;
   /** A colour of your own for a pill: id → #rrggbb. */
   pillColors: Record<string, string>;
   /** What Mochi wears: "auto" follows the date. */
@@ -312,6 +314,8 @@ export interface Settings {
   devmarkMaxTokens: number;
   /** Show the plan usage pill in the island's header. */
   planGauge: boolean;
+  /** Show the plan percentage in the compact island, next to the agent dots. */
+  planGaugeCompact: boolean;
   nativeNotifications: boolean;
   globalShortcuts: boolean;
 }
@@ -348,6 +352,7 @@ export const DEFAULT_SETTINGS: Settings = {
   updates: "auto",
   musicDance: true,
   openOnHover: false,
+  alertsFromAllPills: false,
   pillColors: {},
   mochiOutfit: "auto",
   petEnabled: false,
@@ -379,6 +384,7 @@ export const DEFAULT_SETTINGS: Settings = {
   devmarkModel: "llama3.2:1b",
   devmarkMaxTokens: 400,
   planGauge: false,
+  planGaugeCompact: false,
   nativeNotifications: true,
   globalShortcuts: true,
 };
@@ -428,6 +434,8 @@ class AppState {
   searchResult: SearchResult | null = null;
   chatHistory: ChatMessage[] = [];
   pendingApproval: ApprovalInfo | null = null;
+  /** Requests waiting in line while another card is up (Mac ApprovalQueue). */
+  approvalQueue: ApprovalInfo[] = [];
   /** What Spotify plays, while its pill is on screen. */
   spotify: SpotifyState | null = null;
   pendingQuestion: PendingQuestion | null = null;

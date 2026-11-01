@@ -4,6 +4,13 @@
 
 Coucou v2 es el fork de [JaimeTR](https://github.com/JaimeTR) de [Coucou, de Louis Raillé](https://github.com/Louis-CFM/coucou) (MIT). Las notas de la versión de macOS siguen en el [CHANGELOG.md](../CHANGELOG.md) de la raíz.
 
+## Sin publicar
+
+Traído de Windows y Linux 0.5.8 del original (Ohualtex):
+- **Las peticiones de permiso esperan su turno**: hasta 5 peticiones hacen cola en la isla en vez de devolver la segunda a la terminal; cada una caduca por su cuenta.
+- **Uso del plan en la isla compacta**: una opción nueva (Ajustes → Claude → Uso del plan) muestra el porcentaje de tu plan de Claude junto a los puntos de los agentes; con un clic ves el detalle.
+- **Avisos de todos los pills**: una opción nueva (Ajustes → General): cuando otro pill termina o da error, la isla lo muestra un momento y vuelve el pill que tenías.
+
 ## 1.4.0 — 16 de octubre de 2026
 
 **Tus equipos, al compás**

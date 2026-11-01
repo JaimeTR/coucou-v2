@@ -36,13 +36,88 @@ export const Recap = new RecapRecorder({
   },
 });
 
-/** Clears the approval card if no decision was made before the hook gave up. */
-let pendingTimeout: number | null = null;
+/** Most requests waiting at once, the one on the card included (Mac ApprovalQueue.maxPending). */
+const MAX_PENDING = 5;
+
+/**
+ * Each request gives up on its own clock: 110 s after it arrived, on the card or
+ * still in line (the relay has stopped waiting by then). Checked by id, so it can
+ * never take down a request that came later.
+ */
+function armRequestTimeout(island: Island, requestId: string) {
+  window.setTimeout(() => {
+    if (State.pendingApproval?.requestId === requestId) {
+      void Bridge.setDecisionShortcuts(false);
+      const pill = State.pendingApproval.agentId ?? CLAUDE_ID;
+      State.pendingApproval = null;
+      State.isPinned = false;
+      island.dropPin();
+      State.updateTask(pill, "working");
+      State.setPillBadge(pill, null);
+      if (!promoteNextApproval(island) && State.view === "approval") island.setView(State.defaultView());
+      State.notify();
+    } else {
+      const gone = State.approvalQueue.find((x) => x.requestId === requestId);
+      if (!gone) return;
+      State.approvalQueue = State.approvalQueue.filter((x) => x !== gone);
+      const pill = gone.agentId ?? CLAUDE_ID;
+      if (!State.approvalQueue.some((x) => (x.agentId ?? CLAUDE_ID) === pill)) State.setPillBadge(pill, null);
+      State.notify();
+    }
+  }, 110_000);
+}
+
+/**
+ * The card is free: the oldest request in line takes it, the way a new one comes up.
+ * Returns whether one did.
+ */
+export function promoteNextApproval(island: Island): boolean {
+  const next = State.approvalQueue.shift();
+  if (!next) return false;
+  const pill = next.agentId ?? CLAUDE_ID;
+  State.pendingApproval = next;
+  void Bridge.setDecisionShortcuts(true);
+  State.updateTask(pill, "approval");
+  State.isPinned = true;
+  if (pill !== CLAUDE_ID) State.setFocus(pill);
+  Sound.play("approval");
+  island.alert("approval");
+  State.notify();
+  return true;
+}
 /** Same, for a question from Claude (the relay waits 128 s, the app 125 s). */
 let questionTimeout: number | null = null;
 /** Diffs are forgotten after an hour without activity. */
 let diffExpiry: number | null = null;
 const DIFF_IDLE_MS = 60 * 60 * 1000;
+
+/** The pill that was focused before another pill's alert borrowed the front. */
+let focusBeforeAlert: string | null = null;
+let alertPill: string | null = null;
+
+/** Whether this pill's finish or error gets the card now (its own pill is in front, or the setting lets it borrow the front). */
+function showsAlert(pill: string, focused: boolean): boolean {
+  if (State.pendingApproval || State.pendingQuestion) return false;
+  if (focused) return true;
+  if (!State.settings.alertsFromAllPills) return false;
+  if (State.mode === "expanded" && !(["overview", "finished", "error", "empty"] as string[]).includes(State.view)) return false;
+  if (focusBeforeAlert == null) focusBeforeAlert = State.focusId;
+  alertPill = pill;
+  State.setFocus(pill);
+  return true;
+}
+
+/** The pill you had comes back once the borrowed alert is over. */
+export function restoreAlertFocus(): void {
+  if (!focusBeforeAlert) return;
+  const prev = focusBeforeAlert;
+  const borrowed = alertPill;
+  focusBeforeAlert = null;
+  alertPill = null;
+  if (!State.pendingApproval && State.focusId === borrowed && borrowed !== prev && State.tasks.some((t) => t.id === prev)) {
+    State.setFocus(prev);
+  }
+}
 
 interface HookPayload {
   hook_event_name?: string;
@@ -455,9 +530,12 @@ function handleHook(island: Island, payload: HookPayload) {
       State.updateTask(agentId, "finished");
       if (payload.message) State.appendStep(agentId, payload.message.slice(0, 60));
       Sound.play("finish");
-      if (State.focusId === agentId) surface("finished", true);
+      if (showsAlert(agentId, State.focusId === agentId)) surface("finished", true);
       else State.setPillBadge(agentId, "finished");
-      window.setTimeout(settle, 5200);
+      window.setTimeout(() => {
+        if (isExternalAgent || State.mode !== "expanded") restoreAlertFocus();
+        settle();
+      }, 5200);
       break;
 
     case "StopFailure":
@@ -471,7 +549,7 @@ function handleHook(island: Island, payload: HookPayload) {
       State.updateTask(agentId, "error");
       if (payload.message) State.appendStep(agentId, payload.message.slice(0, 60));
       Sound.play("error");
-      if (State.focusId === agentId) surface("error", true);
+      if (showsAlert(agentId, State.focusId === agentId)) surface("error", true);
       else State.setPillBadge(agentId, "error");
       // An agent's failure is about one run: it does not stay red for ever.
       if (isExternalAgent) {
@@ -551,16 +629,40 @@ function handleHook(island: Island, payload: HookPayload) {
       // (A card raised for a request on another of your computers gives way to this one.)
       if (State.pendingApproval?.remote) State.pendingApproval = null;
       if (State.pendingQuestion?.remote) State.pendingQuestion = null;
-      if (
-        (State.pendingApproval && State.pendingApproval.requestId !== requestId) ||
-        State.pendingQuestion
-      ) {
+      // A question card is never displaced; approvals queue behind each other (up to MAX_PENDING).
+      if (State.pendingQuestion) {
         if (requestId) void Bridge.approvalDecline(requestId);
+        break;
+      }
+      if (State.pendingApproval) {
+        if (State.pendingApproval.requestId === requestId || State.approvalQueue.some((x) => x.requestId === requestId)) {
+          if (requestId) void Bridge.approvalAck(requestId);
+          break;
+        }
+        if (1 + State.approvalQueue.length >= MAX_PENDING) {
+          if (requestId) void Bridge.approvalDecline(requestId);
+          break;
+        }
+        if (isExternalAgent) ensurePill();
+        else upsert(projectName, cwd);
+        State.approvalQueue.push({
+          requestId,
+          sessionId: payload.session_id ?? "",
+          tool,
+          command: approvalTarget(tool, input),
+          rule: ruleFor(tool, input, cwd),
+          agentId,
+        });
+        if (requestId) {
+          void Bridge.approvalAck(requestId);
+          armRequestTimeout(island, requestId);
+        }
+        Sound.play("approval");
+        State.setPillBadge(agentId, "approval");
         break;
       }
       if (isExternalAgent) ensurePill();
       else upsert(projectName, cwd);
-      if (pendingTimeout != null) window.clearTimeout(pendingTimeout);
       State.pendingApproval = {
         requestId,
         sessionId: payload.session_id ?? "",
@@ -590,18 +692,7 @@ function handleHook(island: Island, payload: HookPayload) {
       }
       // Coucou answers within 108 s or not at all; after that the terminal has
       // taken over and the card would be lying.
-      pendingTimeout = window.setTimeout(() => {
-        pendingTimeout = null;
-        if (!State.pendingApproval) return;
-        void Bridge.setDecisionShortcuts(false);
-        State.pendingApproval = null;
-        State.isPinned = false;
-        island.dropPin();
-        State.updateTask(agentId, "working");
-        State.setPillBadge(agentId, null);
-        if (State.view === "approval") island.setView(State.defaultView());
-        State.notify();
-      }, 110_000);
+      if (requestId) armRequestTimeout(island, requestId);
       break;
     }
 

@@ -95,6 +95,9 @@ pub struct Settings {
     /// The island opens when the pointer reaches it and folds when it leaves (off by default).
     #[serde(default)]
     pub open_on_hover: bool,
+    /// Another pill's finish or error shows for a moment; then the pill you had comes back.
+    #[serde(default)]
+    pub alerts_from_all_pills: bool,
     /// A colour of your own for a pill: pill id → "#rrggbb".
     #[serde(default)]
     pub pill_colors: std::collections::BTreeMap<String, String>,
@@ -176,6 +179,9 @@ pub struct Settings {
     /// Show the plan usage pill in the island's header.
     #[serde(default)]
     pub plan_gauge: bool,
+    /// Show the plan percentage in the compact island, next to the agent dots.
+    #[serde(default)]
+    pub plan_gauge_compact: bool,
     /// Pop a native Windows notification when a request needs a person and the
     /// island is hidden.
     #[serde(default = "default_true")]
@@ -477,6 +483,7 @@ impl Default for Settings {
             updates: default_updates(),
             music_dance: true,
             open_on_hover: false,
+            alerts_from_all_pills: false,
             pill_colors: Default::default(),
             mochi_outfit: default_outfit(),
             pet_enabled: false,
@@ -506,6 +513,7 @@ impl Default for Settings {
             local_url: default_local_url(),
             local_model: default_local_model(),
             plan_gauge: false,
+            plan_gauge_compact: false,
             native_notifications: true,
             global_shortcuts: true,
             toggle_shortcut: default_toggle_shortcut(),

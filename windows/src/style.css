@@ -156,6 +156,42 @@ body {
 }
 
 /* Compact 2×2 mini grid, to the right of the notch. */
+/* Compact plan gauge, next to the agent dots in the compact island. */
+#compact-plan {
+  --plan: #6b7079;
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 7px;
+  border: 1px solid color-mix(in srgb, var(--plan) 14%, transparent);
+  border-radius: 999px;
+  background: #0e0f11;
+  color: #9aa0a8;
+  font: 600 10px sans-serif;
+  font-variant-numeric: tabular-nums;
+  line-height: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.25s ease-in-out, right 0.2s ease, background 0.18s, border-color 0.18s;
+  user-select: none;
+  z-index: 2;
+}
+#compact-plan:hover {
+  background: color-mix(in srgb, var(--plan) 18%, transparent);
+  border-color: color-mix(in srgb, var(--plan) 55%, transparent);
+}
+#compact-plan .compact-plan-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--plan);
+  flex-shrink: 0;
+}
+
 #mini-grid {
   position: absolute;
   width: 29px;
