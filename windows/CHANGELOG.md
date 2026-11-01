@@ -4,7 +4,7 @@
 
 Coucou v2 is [JaimeTR](https://github.com/JaimeTR)'s fork of [Coucou by Louis Raillé](https://github.com/Louis-CFM/coucou) (MIT). The macOS release notes stay in the root [CHANGELOG.md](../CHANGELOG.md).
 
-## Unreleased
+## 1.5.0 — November 1, 2026
 - **Claude Desktop permissions** *(Windows)*: a permission request from a Claude Desktop session is answered from the island. Its questions still go to the Claude app.
 - **The island sits under a taskbar at the top** *(Windows)*: it starts below a top taskbar instead of covering it.
 - **Uninstalling keeps your status line** *(Windows)*: the status line Coucou stands in for is saved outside the folder the uninstaller removes, and an existing copy is moved there at launch.
