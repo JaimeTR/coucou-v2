@@ -1,0 +1,182 @@
+// Finds the user's Thunderbird profile and lists what it has configured —
+// never touches prefs.js beyond locating the default profile's folder, never
+// reads mail content. Every function here takes a root path so tests run
+// against a throwaway directory, never the developer's real profile.
+
+use std::path::{Path, PathBuf};
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Folder {
+    pub name: String,
+    pub mbox_path: PathBuf,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Account {
+    pub id: String,
+    pub label: String,
+    pub folders: Vec<Folder>,
+}
+
+/// A dead-simple `profiles.ini` reader: enough to find the section with
+/// `Default=1` (or the only section, if there is just one) and its `Path`.
+/// `IsRelative=1` (the normal case) means the path is relative to `root`.
+pub fn default_profile_dir(root: &Path) -> Option<PathBuf> {
+    let text = std::fs::read_to_string(root.join("profiles.ini")).ok()?;
+    let mut sections: Vec<Vec<(String, String)>> = Vec::new();
+    let mut current: Option<Vec<(String, String)>> = None;
+    for line in text.lines() {
+        let line = line.trim();
+        if line.starts_with('[') && line.ends_with(']') {
+            if let Some(done) = current.take() {
+                sections.push(done);
+            }
+            if line.starts_with("[Profile") {
+                current = Some(Vec::new());
+            }
+        } else if let Some(section) = current.as_mut() {
+            if let Some((k, v)) = line.split_once('=') {
+                section.push((k.trim().to_string(), v.trim().to_string()));
+            }
+        }
+    }
+    if let Some(done) = current.take() {
+        sections.push(done);
+    }
+    let get = |s: &[(String, String)], key: &str| s.iter().find(|(k, _)| k == key).map(|(_, v)| v.clone());
+    let chosen = sections
+        .iter()
+        .find(|s| get(s, "Default").as_deref() == Some("1"))
+        .or_else(|| sections.first())?;
+    let path = get(chosen, "Path")?;
+    let is_relative = get(chosen, "IsRelative").as_deref() != Some("0");
+    let dir = if is_relative { root.join(&path) } else { PathBuf::from(&path) };
+    dir.is_dir().then_some(dir)
+}
+
+fn folders_in(dir: &Path) -> Vec<Folder> {
+    let Ok(entries) = std::fs::read_dir(dir) else { return Vec::new() };
+    let mut out = Vec::new();
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+        // An mbox folder file has no extension; its sibling index does
+        // (.msf) and so do a handful of Thunderbird bookkeeping files.
+        if path.extension().is_some() {
+            continue;
+        }
+        let Some(name) = path.file_name().and_then(|n| n.to_str()) else { continue };
+        out.push(Folder { name: name.to_string(), mbox_path: path.clone() });
+    }
+    out.sort_by(|a, b| a.name.cmp(&b.name));
+    out
+}
+
+/// Every IMAP account under `ImapMail/`, plus "Carpetas locales" if the
+/// profile has any `Mail/Local Folders`. Accounts with no folders at all are
+/// left out.
+pub fn accounts(profile_dir: &Path) -> Vec<Account> {
+    let mut out = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(profile_dir.join("ImapMail")) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if !path.is_dir() {
+                continue;
+            }
+            let Some(server) = path.file_name().and_then(|n| n.to_str()) else { continue };
+            let folders = folders_in(&path);
+            if !folders.is_empty() {
+                out.push(Account { id: format!("imap:{server}"), label: server.to_string(), folders });
+            }
+        }
+    }
+    let local = profile_dir.join("Mail").join("Local Folders");
+    let local_folders = folders_in(&local);
+    if !local_folders.is_empty() {
+        out.push(Account { id: "local".into(), label: "Carpetas locales".into(), folders: local_folders });
+    }
+    out.sort_by(|a, b| a.label.cmp(&b.label));
+    out
+}
+
+/// Where Thunderbird keeps its profiles on this platform.
+pub fn thunderbird_root() -> PathBuf {
+    #[cfg(windows)]
+    {
+        std::env::var_os("APPDATA").map(|p| PathBuf::from(p).join("Thunderbird")).unwrap_or_else(|| PathBuf::from("."))
+    }
+    #[cfg(not(windows))]
+    {
+        crate::platform::home_dir().join(".thunderbird")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    // One directory per test: cargo runs tests in parallel threads of one
+    // process, so a shared pid-only name would let one test wipe another's
+    // fixture mid-run.
+    fn fixture_root(tag: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("coucou-mail-profile-test-{}-{tag}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn finds_the_default_profile_from_profiles_ini() {
+        let root = fixture_root("default-profile");
+        fs::write(
+            root.join("profiles.ini"),
+            "[Profile0]\nName=default\nIsRelative=1\nPath=abc123.default-release\nDefault=1\n\n[Profile1]\nName=old\nIsRelative=1\nPath=zzz.old\n",
+        )
+        .unwrap();
+        fs::create_dir_all(root.join("abc123.default-release")).unwrap();
+        let found = default_profile_dir(&root).unwrap();
+        assert_eq!(found, root.join("abc123.default-release"));
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn no_profiles_ini_means_no_profile_found() {
+        let root = fixture_root("no-profiles-ini");
+        assert_eq!(default_profile_dir(&root), None);
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn lists_imap_and_local_accounts_with_their_mbox_folders() {
+        let root = fixture_root("imap-and-local");
+        let imap = root.join("ImapMail").join("imap.example.com");
+        fs::create_dir_all(&imap).unwrap();
+        fs::write(imap.join("INBOX"), b"").unwrap();
+        fs::write(imap.join("INBOX.msf"), b"").unwrap();
+        fs::write(imap.join("Sent"), b"").unwrap();
+        let local = root.join("Mail").join("Local Folders");
+        fs::create_dir_all(&local).unwrap();
+        fs::write(local.join("Trash"), b"").unwrap();
+
+        let accounts = accounts(&root);
+        let imap_account = accounts.iter().find(|a| a.id.contains("imap.example.com")).unwrap();
+        let mut names: Vec<&str> = imap_account.folders.iter().map(|f| f.name.as_str()).collect();
+        names.sort();
+        assert_eq!(names, vec!["INBOX", "Sent"]);
+
+        let local_account = accounts.iter().find(|a| a.label == "Carpetas locales").unwrap();
+        assert_eq!(local_account.folders.len(), 1);
+        assert_eq!(local_account.folders[0].name, "Trash");
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_profile_with_no_mail_at_all_lists_no_accounts() {
+        let root = fixture_root("no-mail");
+        assert_eq!(accounts(&root), Vec::<Account>::new());
+        let _ = fs::remove_dir_all(&root);
+    }
+}
