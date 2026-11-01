@@ -144,7 +144,8 @@ export const INTEGRATION_AGENTS: AgentTask[] = [
   // What the person is doing (Work, Game, Meeting, Video): shows it and switches it.
   task("integration_system", "Modo", "#A78BFA", "n8n"),
   // What Spotify plays, with its controls. Nothing to connect: it is read from Windows.
-  task("integration_spotify", "Spotify", "#1DB954", "n8n"),\n    task("integration_whatsapp", "WhatsApp", "#25D366", "n8n"),
+  task("integration_spotify", "Spotify", "#1DB954", "n8n"),
+  task("integration_whatsapp", "WhatsApp", "#25D366", "n8n"),
   // Other agents next to Claude Code. Their ids are the contract the relay's
   // `--agent <name>` produces (agent_<name>); the colours follow the Mac catalog.
   task("agent_gemini", "Gemini CLI", "#8AB4F8", "agent"),

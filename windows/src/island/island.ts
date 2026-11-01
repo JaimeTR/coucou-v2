@@ -181,6 +181,9 @@ export class Island {
   /** Ctrl+Alt+C: open the island, or close it if it is already open. */
   toggleFromShortcut() {
     if (State.mode === "expanded" && !State.isPinned) this.collapse();
+    else this.alert(State.defaultView());
+  }
+
   /** Toggle the whole island (open default view or collapse). */
   toggleIsland() {
     if (State.mode === "expanded" && !State.isPinned) this.collapse();
@@ -189,12 +192,12 @@ export class Island {
 
   /** Open the chat view. */
   openChat() {
-    this.setView("chat");
+    this.setView("prompt");
   }
 
   /** Open the alerts view. */
   goToAlert() {
-    this.setView("alerts");
+    this.alert(State.defaultView());
   }
 
   /** Jump to the terminal of the focused session. */
@@ -225,19 +228,13 @@ export class Island {
   }
 
   /** Show or hide the Mochi desktop window. */
-  desktopToggle() {
-    if (Bridge.desktopIsVisible()) {
-      Bridge.desktopHide();
+  async desktopToggle() {
+    if (await Bridge.desktopIsVisible()) {
+      await Bridge.desktopHide();
     } else {
-      const pos = Bridge.desktopPosition();
-      if (!pos) {
-        Bridge.desktopShow(0, 0);
-      } else {
-        Bridge.desktopShow(pos.x, pos.y);
-      }
+      const pos = await Bridge.desktopPosition();
+      await Bridge.desktopShow(pos?.x ?? 0, pos?.y ?? 0);
     }
-  }
-    else this.alert(State.defaultView());
   }
 
   /**

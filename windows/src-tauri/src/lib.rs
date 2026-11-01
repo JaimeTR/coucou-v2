@@ -1133,7 +1133,7 @@ fn log_line(app: AppHandle, message: String) {
 /// Desktop (Mochi) window — create, show, hide, move, position, visible.
 #[tauri::command]
 fn desktop_create(app: AppHandle) -> Result<(), String> {
-    desktop::create(&app).map_err(|e| e.to_string())
+    desktop::create(&app).map(|_| ()).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -1421,15 +1421,16 @@ pub fn run() {
             updater::spawn(handle.clone());
             whatsapp::start(&handle, &loaded.active_integrations);
             shortcuts::start(&handle);
-            desktop::create(&handle);
+            let _ = desktop::create(&handle);
             Ok(())
         })
-        .run(|ctx, event| {
+        .build(tauri::generate_context!())
+        .expect("error while building Coucou")
+        .run(|_app, event| {
             if let tauri::RunEvent::Exit = event {
                 whatsapp::shutdown();
             }
-        })
-        .expect("error while running Coucou");
+        });
 }
 
 #[cfg(test)]

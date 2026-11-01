@@ -78,7 +78,7 @@ export const GH_STRINGS = {
   get noContributions() { return "Sin contribuciones"; },
   oneContribution: "{count} contribución",
   contributions: (n: number) => n === 1 ? "{count} contribución" : "{count} contribuciones",
-  pastYear: (total: string) => `{total} el último año`,
+  pastYear: "{total} el último año",
   repos: (n: number) => n === 1 ? "{count} repo" : "{count} repos",
 };
 
@@ -183,7 +183,7 @@ export function activityHeader(
 ): string {
   if (picked) return `${dayLabel(picked.date)} · ${contributionsLabel(picked.count)}`;
   if (!activity) return "";
-  const total = GH_STRINGS.pastYear.replace("{total}", totalLabel(activity.total));
+  const total = GH_STRINGS.pastYear.replace("{total}", activity.total.toLocaleString("en-US"));
   return stats ? `${total} · ${GH_STRINGS.repos(stats.totalRepos).replace("{count}", String(stats.totalRepos))}` : total;
 }
 

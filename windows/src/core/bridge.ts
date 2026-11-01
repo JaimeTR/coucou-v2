@@ -10,12 +10,9 @@ import type { ProjectInfo, RemoteDevice, Settings } from "./state";
 import type { SpotifyAction, SpotifyState } from "./spotify";
 import type { Rule, RuleDraft } from "../island/rules";
 import type {
-  WhatsAppInstallStep,
   WhatsAppIslandView,
-  WhatsAppLinkState,
   WhatsAppSettingsView,
   WhatsAppTestResult,
-  WhatsAppWebhookState,
 } from "./whatsapp";
 
 export const IS_TAURI =

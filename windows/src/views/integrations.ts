@@ -11,7 +11,6 @@ import { Bridge } from "../core/bridge";
 import { miniUsage, planRows } from "./plan";
 import { codexResetsLabel } from "../core/codexPlan";
 import { refreshCodexPlan } from "../island/integrations";
-import { githubPulseCard, githubDetail, type GitHubPulse, type GitHubStats, type GitHubActivity } from "./github";
 import { MODE_CHOICES, MODE_COLORS, MODE_NAMES, modeLabel } from "../core/modes";
 import { clock, positionAt, type SpotifyAction } from "../core/spotify";
 import { refreshSpotify } from "../island/spotify";
@@ -938,15 +937,7 @@ export function renderIntegrationCard(task: AgentTask, hooks: IntegrationCardHoo
   if (task.id.startsWith("custom_")) return customCard(task, hooks.openSettings);
   if (AGENT_LAUNCH[task.id]) return agentCard(task, hooks.openSettings);
   if (task.id === "integration_github" && hasIntegrationData(task.id)) {
-    const data = State.integrations[task.id]?.data as Record<string, unknown> | undefined;
-    const pulse = data?.pulse ? githubPulseCard(data.pulse as Record<string, unknown>, data.stats as Record<string, unknown> | null, data.activity as Record<string, unknown> | null, hooks.openDetail) : null;
-    const stats = data?.stats as GitHubStats | null;
-    const activity = data?.activity as GitHubActivity | null;
-    const p = data?.pulse as GitHubPulse | null;
-    if (hooks.detailOpen && p) {
-      return githubDetail(p, stats, activity, hooks.closeDetail);
-    }
-    if (pulse) return pulse;
+    return hooks.detailOpen ? githubDetail(hooks.closeDetail) : githubCard(hooks.openDetail);
   }
   if (task.id === "integration_vercel" && hasIntegrationData(task.id)) {
     return hooks.detailOpen ? vercelDetail(hooks.closeDetail) : vercelCard(hooks.openDetail);

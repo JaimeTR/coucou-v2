@@ -340,8 +340,7 @@ pub fn whatsapp_send(window: WebviewWindow, chat: String, text: String) -> Resul
         only(&window, crate::island::WINDOW_LABEL)?;
     }
     let chat = model::chat_from_entry(&chat).ok_or("not a chat")?;
-    let control = ctl();
-    let provider = control.provider.get().ok_or("not connected")?;
+    let provider = ctl().provider.get().ok_or("not connected")?.clone();
     tauri::async_runtime::spawn(async move {
         let _ = provider.send(&chat, &text).await;
     });
@@ -372,9 +371,8 @@ pub fn whatsapp_unignore(window: WebviewWindow, chat: String) -> Result<(), Stri
 }
 
 async fn test_connection() -> TestResult {
-    let c = ctl();
-    let provider = match c.provider.get() {
-        Some(p) => p,
+    let provider = match ctl().provider.get() {
+        Some(p) => p.clone(),
         None => return TestResult::Failed { detail: "not configured".into() },
     };
     match provider.status().await {

@@ -57,7 +57,7 @@ export default defineConfig({
         island: resolve(__dirname, "index.html"),
         settings: resolve(__dirname, "settings.html"),
         pet: resolve(__dirname, "pet.html"),
-        mochi: resolve(__dirname, "src/mochi.html"),
+        mochi: resolve(__dirname, "mochi.html"),
       },
     },
   },

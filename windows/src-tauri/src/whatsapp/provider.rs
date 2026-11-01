@@ -35,6 +35,7 @@ impl std::fmt::Display for WaError {
 impl std::error::Error for WaError {}
 
 /// The provider talks to the gateway over HTTP.
+#[derive(Clone)]
 pub struct Provider {
     client: Client,
     base_url: String,

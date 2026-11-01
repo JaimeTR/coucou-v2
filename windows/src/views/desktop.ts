@@ -1,8 +1,7 @@
 ﻿// The desktop window where Mochi lives: DOM view of the mochi window.
 import { h, svg } from "./dom";
 import { ICONS } from "./icons";
-import { Bridge } from "../core/bridge";
-import { t } from "../core/translate";
+import { t } from "../core/i18n";
 
 export interface DesktopProps {
   visible: boolean;
@@ -27,7 +26,7 @@ export function DesktopView(p: DesktopProps): HTMLElement {
   toolbar.append(h("span", { class: "net-dot" }), h("span", { class: "net-label", text: t("Mochi en el escritorio") }));
   el.append(toolbar);
   const hover = h("div", { class: "desktop-hover" });
-  hover.append(h("button", { class: "desktop-btn" }, svg(ICONS.chevronUp, 9, { stroke: 2.2 })));
+  hover.append(h("button", { class: "desktop-btn" }, svg(ICONS.chevronLeft, 9, { stroke: 2.2 })));
   hover.append(h("button", { class: "desktop-btn" }, svg(ICONS.arrowUpRight, 9, { stroke: 2.2 })));
   hover.append(h("button", { class: "desktop-btn" }, svg(ICONS.xmark, 9, { stroke: 2.2 })));
   el.append(hover);

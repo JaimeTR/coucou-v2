@@ -1,7 +1,6 @@
 ﻿// Entry point for the Mochi desktop window.
 import "./style.css";
 import { DesktopView } from "../views/desktop";
-import { h } from "../views/dom";
 import { Bridge } from "../core/bridge";
 import { onEvent } from "../core/bridge";
 
@@ -15,7 +14,7 @@ async function loadState() {
     position = { x: pos.x, y: pos.y };
   }
   const visibleNow = await Bridge.desktopIsVisible();
-  visible = visibleNow;
+  visible = visibleNow ?? false;
 }
 
 void loadState();

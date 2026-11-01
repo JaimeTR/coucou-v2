@@ -7,13 +7,12 @@
 import { h, svg, clear, dot } from "./dom";
 import { ICONS } from "./icons";
 import { Bridge } from "../core/bridge";
-import { State } from "../core/state";
 import {
   WHATSAPP_GREEN,
   type WhatsAppConversation,
   type WhatsAppIslandView,
 } from "../core/whatsapp";
-import { language, t, tl } from "../core/translate";
+import { t, uiLanguage as language } from "../core/i18n";
 import { onEvent } from "../core/bridge";
 
 export interface WhatsAppCardHost {
@@ -39,15 +38,27 @@ function avatar(name: string, _isGroup: boolean, size = 16): HTMLElement {
   return el;
 }
 
-function bubble(m: { fromMe: boolean; senderName?: string; text?: string; media?: string }): HTMLElement {
-  const box = h("div", { class: `wa-bubble${m.fromMe ? " mine" : ""}` });
-  if (!m.fromMe && m.senderName) box.append(h("div", { class: "wa-sender", text: m.senderName }));
-  if (m.media) box.append(h("div", { class: "wa-media", text: t(m.media) }));
-  if (m.text) box.append(h("div", { class: "wa-text", text: m.text }));
-  return h("div", { class: `${m.fromMe ? "wa-line mine" : "wa-line"}` }, box);
-}
+export function buildWhatsAppCard(host: WhatsAppCardHost): WhatsAppCard {
+  const unreadTag = h("span", { class: "wa-unread" });
+  const head = h("div", { class: "int-head" }, dot(WHATSAPP_GREEN, 7), h("b", { text: "WhatsApp" }), unreadTag);
+  const listBody = h("div", {});
+  const listView = h("div", { class: "wa-list" }, head, listBody);
+
+  const back = h("button", { class: "int-back wa-back", title: t("Back") }, svg(ICONS.chevronLeft, 10, { stroke: 2.4 }));
+  const convoAvatar = h("span", {});
+  const convoName = h("b", { class: "wa-name" });
+  const convoHead = h("div", { class: "wa-head" }, back, convoAvatar, convoName);
+  const messages = h("div", { class: "wa-messages" });
+  const field = h("textarea", { class: "wa-field", rows: "1", spellcheck: "true" }) as HTMLTextAreaElement;
+  const sendBtn = h("button", { class: "wa-send", title: t("Send") }, svg(ICONS.arrowUp, 12, { fill: "#0B0C0E" }));
+  const reply = h("div", { class: "wa-reply" }, field, sendBtn);
+  const note = h("div", { class: "wa-note" });
+  const convoView = h("div", { class: "wa-convo" }, convoHead, messages, reply, note);
+
+  const el = h("div", { class: "int-card wa-card" }, listView, convoView);
 
   let openChat: string | null = null;
+  let lastView: WhatsAppIslandView | null = null;
   let listKey = "";
 
   function row(c: WhatsAppConversation): HTMLElement {
@@ -62,13 +73,13 @@ function bubble(m: { fromMe: boolean; senderName?: string; text?: string; media?
 
   function open(id: string) {
     openChat = id;
-    sync();
+    if (lastView) sync(lastView);
   }
 
   function close() {
     openChat = null;
     field.value = "";
-    sync();
+    if (lastView) sync(lastView);
   }
 
   function syncSendButton() {
@@ -106,7 +117,7 @@ function bubble(m: { fromMe: boolean; senderName?: string; text?: string; media?
   back.addEventListener("click", close);
 
   function syncList(view: WhatsAppIslandView) {
-    unreadTag.textContent = view.unread > 0 ? t("{0} no leídos", { 0: view.unread }) : "";
+    unreadTag.textContent = view.unread > 0 ? `${view.unread} ${t("no leídos")}` : "";
     unreadTag.style.display = view.unread > 0 ? "" : "none";
     clear(listBody);
     if (view.link.state === "off") {
@@ -137,6 +148,7 @@ function bubble(m: { fromMe: boolean; senderName?: string; text?: string; media?
   }
 
   function sync(view: WhatsAppIslandView) {
+    lastView = view;
     const key = [language(), view.link.state, view.unread, ...view.conversations.map((c) => `${c.id}|${c.unread}`)].join("~");
     if (key === listKey && openChat === null) return;
     listKey = key;
@@ -152,21 +164,3 @@ function bubble(m: { fromMe: boolean; senderName?: string; text?: string; media?
 
   return { el, sync };
 }
-export function buildWhatsAppCard(host: WhatsAppCardHost): WhatsAppCard {
-  const unreadTag = h("span", { class: "wa-unread" });
-  const head = h("div", { class: "int-head" }, dot(WHATSAPP_GREEN, 7), h("b", { text: "WhatsApp" }), unreadTag);
-  const listBody = h("div", {});
-  const listView = h("div", { class: "wa-list" }, head, listBody);
-
-  const back = h("button", { class: "int-back wa-back", title: tl("Back") }, svg(ICONS.chevronLeft, 10, { stroke: 2.4 }));
-  const convoAvatar = h("span", {});
-  const convoName = h("b", { class: "wa-name" });
-  const convoHead = h("div", { class: "wa-head" }, back, convoAvatar, convoName);
-  const messages = h("div", { class: "wa-messages" });
-  const field = h("textarea", { class: "wa-field", rows: "1", spellcheck: "true" }) as HTMLTextAreaElement;
-  const sendBtn = h("button", { class: "wa-send", title: tl("Send") }, svg(ICONS.arrowUp, 12, { fill: "#0B0C0E" }));
-  const reply = h("div", { class: "wa-reply" }, field, sendBtn);
-  const note = h("div", { class: "wa-note" });
-  const convoView = h("div", { class: "wa-convo" }, convoHead, messages, reply, note);
-
-  const el = h("div", { class: "int-card wa-card" }, listView, convoView);

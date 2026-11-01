@@ -147,6 +147,6 @@ mod tests {
     fn a_disabled_action_is_off() {
         let p = plan(&Bindings::new());
         let toggle = p.iter().find(|(d, _)| d.id == "toggleIsland").unwrap();
-        assert_eq!(toggle.1.unwrap_err(), ShortcutStatus::Off);
+        assert_eq!(toggle.1.as_ref().unwrap_err(), &ShortcutStatus::Off);
     }
 }
