@@ -14,6 +14,7 @@ import type {
   WhatsAppSettingsView,
   WhatsAppTestResult,
 } from "./whatsapp";
+import type { MailAccountInfo, MailMessageInfo } from "./mail";
 
 export const IS_TAURI =
   typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -301,6 +302,12 @@ export const Bridge = {
   whatsappIgnore: (chat: string) => call<void>("whatsapp_ignore", { chat }),
   whatsappUnignore: (chat: string) => call<void>("whatsapp_unignore", { chat }),
 
+  mailAccounts: () => call<MailAccountInfo[]>("mail_accounts"),
+  mailList: (account: string, folder: string) => call<MailMessageInfo[]>("mail_list", { account, folder }),
+  mailSearch: (query: string) => call<MailMessageInfo[]>("mail_search", { query }),
+  mailRead: (account: string, folder: string, offset: number, len: number) => call<string>("mail_read", { account, folder, offset, len }),
+  mailSetWatched: (accounts: string[]) => call<void>("mail_set_watched", { accounts }),
+
 
   // ── Desktop (Mochi) window ─────────────────────────────────────────────────
   desktopCreate: () => call<void>("desktop_create"),
@@ -368,7 +375,9 @@ export type BridgeEvent =
   | { name: "desktop"; payload: { kind: string; x: number; y: number } }
   | { name: "whatsapp"; payload: WhatsAppIslandView }
   | { name: "whatsapp-settings"; payload: WhatsAppSettingsView }
-  | { name: "whatsapp-pill"; payload: { kind: "message" | "read" | "reset"; name?: string } };
+  | { name: "whatsapp-pill"; payload: { kind: "message" | "read" | "reset"; name?: string } }
+  | { name: "mail"; payload: null }
+  | { name: "mail-code"; payload: { code: string; subject: string; from: string } };
 
 export interface DragDropPayload {
   type: "enter" | "over" | "drop" | "leave";

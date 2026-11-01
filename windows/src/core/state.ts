@@ -150,6 +150,7 @@ export const INTEGRATION_AGENTS: AgentTask[] = [
   // What Spotify plays, with its controls. Nothing to connect: it is read from Windows.
   task("integration_spotify", "Spotify", "#1DB954", "n8n"),
   task("integration_whatsapp", "WhatsApp", "#25D366", "n8n"),
+  task("integration_mail_thunderbird", "Mail", "#1B6FC9", "n8n"),
   // Other agents next to Claude Code. Their ids are the contract the relay's
   // `--agent <name>` produces (agent_<name>); the colours follow the Mac catalog.
   task("agent_gemini", "Gemini CLI", "#8AB4F8", "agent"),
@@ -220,6 +221,8 @@ export interface Settings {
   autoCloseInterval: number;
   absenceInterval: number;
   activeIntegrations: string[];
+  /** Thunderbird account ids (profile::Account.id) the Mail pill watches. */
+  mailWatchedAccounts: string[];
   screen: "primary" | "cursor";
   autostart: boolean;
   hooksInstalled: boolean;
@@ -330,6 +333,7 @@ export const DEFAULT_SETTINGS: Settings = {
   autoCloseInterval: 15,
   absenceInterval: 180,
   activeIntegrations: ["integration_github"],
+  mailWatchedAccounts: [],
   screen: "primary",
   autostart: false,
   hooksInstalled: false,
