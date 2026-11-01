@@ -54,6 +54,14 @@ mod tests {
         assert_eq!(info.id, "imap:x");
         assert_eq!(info.folders, vec!["INBOX", "Sent"]);
     }
+
+    #[test]
+    fn require_watched_rejects_an_account_not_in_the_watched_list() {
+        let watched = vec!["imap:a".to_string()];
+        assert!(require_watched(&watched, "imap:a").is_ok());
+        assert!(require_watched(&watched, "imap:b").is_err());
+        assert!(require_watched(&[], "imap:a").is_err());
+    }
 }
 
 /// One `FolderIndex` per (account id, folder name), kept for the life of the
@@ -77,6 +85,16 @@ fn find_folder(account_id: &str, folder: &str) -> Result<profile::Folder, String
     account.folders.into_iter().find(|f| f.name == folder).ok_or_else(|| "Esa carpeta ya no existe.".to_string())
 }
 
+/// Every account-reading command routes through this: nothing is read for an
+/// account the person hasn't explicitly added to Settings' watched list.
+fn require_watched(watched: &[String], account: &str) -> Result<(), String> {
+    if watched.iter().any(|w| w == account) {
+        Ok(())
+    } else {
+        Err("Esa cuenta no está activada en Ajustes.".to_string())
+    }
+}
+
 #[tauri::command]
 pub fn mail_accounts() -> Result<Vec<AccountInfo>, String> {
     let dir = profile_dir()?;
@@ -84,7 +102,14 @@ pub fn mail_accounts() -> Result<Vec<AccountInfo>, String> {
 }
 
 #[tauri::command]
-pub fn mail_list(state: tauri::State<MailState>, account: String, folder: String) -> Result<Vec<MessageInfo>, String> {
+pub fn mail_list(
+    state: tauri::State<MailState>,
+    shared: tauri::State<crate::Shared>,
+    account: String,
+    folder: String,
+) -> Result<Vec<MessageInfo>, String> {
+    let watched = shared.settings.lock().unwrap().mail_watched_accounts.clone();
+    require_watched(&watched, &account)?;
     let f = find_folder(&account, &folder)?;
     let bytes = std::fs::read(&f.mbox_path).map_err(|e| e.to_string())?;
     let mut indexes = state.indexes.lock().unwrap();
