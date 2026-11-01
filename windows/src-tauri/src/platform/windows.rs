@@ -607,18 +607,23 @@ pub fn spotify_control(action: crate::spotify::Action) -> bool {
 /// Where the Codex CLI may be, best first: %PATH% (codex.exe or npm's codex.cmd),
 /// then npm's global folder and the Volta / Bun / pnpm ones.
 pub fn codex_candidates() -> Vec<PathBuf> {
-    let mut out: Vec<PathBuf> = find_on_path("codex").into_iter().collect();
+    cli_candidates("codex")
+}
+
+/// Where a command-line tool installed with npm, Volta, pnpm or Bun may be, best first.
+pub fn cli_candidates(name: &str) -> Vec<PathBuf> {
+    let mut out: Vec<PathBuf> = find_on_path(name).into_iter().collect();
     let var = |k: &str| std::env::var_os(k).map(PathBuf::from).filter(|p| p.is_absolute());
     if let Some(appdata) = var("APPDATA") {
-        out.push(appdata.join("npm").join("codex.cmd"));
+        out.push(appdata.join("npm").join(format!("{name}.cmd")));
     }
     if let Some(local) = var("LOCALAPPDATA") {
-        out.push(local.join("Volta").join("bin").join("codex.exe"));
-        out.push(local.join("pnpm").join("codex.cmd"));
+        out.push(local.join("Volta").join("bin").join(format!("{name}.exe")));
+        out.push(local.join("pnpm").join(format!("{name}.cmd")));
     }
     if let Some(home) = var("USERPROFILE") {
-        out.push(home.join(".bun").join("bin").join("codex.exe"));
-        out.push(home.join(".local").join("bin").join("codex.exe"));
+        out.push(home.join(".bun").join("bin").join(format!("{name}.exe")));
+        out.push(home.join(".local").join("bin").join(format!("{name}.exe")));
     }
     out.retain(|p| p.is_file());
     out

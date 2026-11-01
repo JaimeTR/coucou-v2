@@ -10,6 +10,8 @@ Coucou v2 es el fork de [JaimeTR](https://github.com/JaimeTR) de [Coucou, de Lou
 - **Desinstalar conserva tu status line** *(Windows)*: la status line que Coucou reemplaza se guarda fuera de la carpeta que borra el desinstalador, y la copia existente se mueve allí al iniciar.
 - **"Abrir terminal" trae la ventana al frente** *(Windows)*: Coucou sube la terminal de la sesión aunque la isla nunca toma el foco.
 - **Las apps abiertas desde Coucou conservan tu configuración de GStreamer** *(Linux, no compilado aquí)*.
+- **Chat con tu plan de Claude, sin clave API** (0.5.5 del original): sin clave de Anthropic guardada y con Claude Code instalado, el chat lo responde tu propio `claude -p`, con tu cuenta. Cada ejecución no carga tus ajustes, hooks ni servidores MCP, no guarda sesión y solo puede buscar en la web (o leer el archivo soltado, sin web). Al guardar una clave vuelve a la API.
+- **Buscador de ajustes** (0.5.7 del original): un campo arriba de la barra lateral encuentra un ajuste por sus palabras, abre su página y lo resalta.
 
 Traído de Windows y Linux 0.5.8 del original (Ohualtex):
 - **Las peticiones de permiso esperan su turno**: hasta 5 peticiones hacen cola en la isla en vez de devolver la segunda a la terminal; cada una caduca por su cuenta.

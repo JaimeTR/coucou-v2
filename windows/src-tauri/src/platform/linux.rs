@@ -486,3 +486,8 @@ pub fn spotify_control(_action: crate::spotify::Action) -> bool {
 pub fn codex_candidates() -> Vec<std::path::PathBuf> {
     find_on_path("codex").into_iter().collect()
 }
+
+/// Where a command-line tool may be: on PATH.
+pub fn cli_candidates(name: &str) -> Vec<std::path::PathBuf> {
+    find_on_path(name).into_iter().collect()
+}

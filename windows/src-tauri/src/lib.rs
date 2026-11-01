@@ -3,6 +3,7 @@
 mod agent_hooks;
 mod agents;
 mod claude;
+mod claude_code;
 mod codex_plan;
 mod compat;
 mod custom;
@@ -1025,6 +1026,10 @@ async fn chat_send(
             let base = compat::local_base(&local_url)?;
             compat::send(&compat_chat, &compat::LOCAL, &base, &local_model, query, context).await
         }
+        // No API key saved: the chat is answered by the person's own Claude Code, on their plan.
+        _ if secrets::get("anthropic-api-key").is_none() && claude_code::available() => {
+            claude_code::send(&model, query, context).await
+        }
         _ => claude::send(&chat, &model, query, context).await,
     }
 }
@@ -1037,6 +1042,7 @@ fn chat_reset(
     compat_chat: State<compat::CompatChat>,
 ) {
     chat.reset();
+    claude_code::reset();
     devmark_chat.reset();
     compat_chat.reset();
 }

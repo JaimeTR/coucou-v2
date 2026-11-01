@@ -10,6 +10,8 @@ Coucou v2 is [JaimeTR](https://github.com/JaimeTR)'s fork of [Coucou by Louis Ra
 - **Uninstalling keeps your status line** *(Windows)*: the status line Coucou stands in for is saved outside the folder the uninstaller removes, and an existing copy is moved there at launch.
 - **"Open terminal" brings the window forward** *(Windows)*: Coucou raises the session's terminal even though the island never takes focus.
 - **Apps opened from Coucou keep your own GStreamer settings** *(Linux, not compiled here)*.
+- **Chat on your Claude plan, no API key** (0.5.5 of the original): with no Anthropic key saved and Claude Code installed, the chat is answered by your own `claude -p`, signed in with your account. Each run loads none of your settings, hooks or MCP servers, saves no session and may only search the web (or read the one dropped file, with no web). Saving a key switches back to the API.
+- **Search the settings** (0.5.7 of the original): a field at the top of the sidebar finds a setting by its words, opens its page and makes it glow.
 
 Ported from the original's Windows and Linux 0.5.8 (Ohualtex):
 - **Permission requests wait their turn**: up to 5 requests queue in the island instead of the second one going back to the terminal; each gives up on its own clock.

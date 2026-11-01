@@ -2128,8 +2128,47 @@ async function main() {
     buttons.forEach((b, key) => b.classList.toggle("on", key === group.id));
     try { localStorage.setItem("coucou.settingsTab", group.id); } catch { /* storage blocked */ }
   };
+  // Search the settings: finds a row by its words (accents and case ignored), opens its page and makes it glow.
+  const fold = (x: string) => x.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  const results = h("div", { class: "search-results" });
+  const search = h("input", { class: "search", type: "search", placeholder: "Buscar ajuste…", spellcheck: "false" }) as HTMLInputElement;
+  const findRows = (q: string) => {
+    const hits: { group: (typeof groups)[number]; row: HTMLElement; label: string }[] = [];
+    const needle = fold(q.trim());
+    if (!needle) return hits;
+    for (const g of groups) {
+      for (const section of g.sections) {
+        for (const row of section.querySelectorAll<HTMLElement>(".row, .field")) {
+          const text = (row.textContent ?? "").replace(/\s+/g, " ").trim();
+          if (text && fold(text).includes(needle)) hits.push({ group: g, row, label: text.slice(0, 70) });
+          if (hits.length >= 8) return hits;
+        }
+      }
+    }
+    return hits;
+  };
+  const jump = (hit: { group: (typeof groups)[number]; row: HTMLElement }) => {
+    show(hit.group.id);
+    hit.row.scrollIntoView({ block: "center" });
+    hit.row.classList.add("found");
+    window.setTimeout(() => hit.row.classList.remove("found"), 2200);
+    search.value = "";
+    clear(results);
+  };
+  search.addEventListener("input", () => {
+    clear(results);
+    for (const hit of findRows(search.value)) {
+      results.append(h("button", { class: "search-hit", onclick: () => jump(hit) }, h("b", { text: hit.group.label }), h("span", { text: hit.label })));
+    }
+  });
+  search.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") { search.value = ""; clear(results); }
+    if (e.key === "Enter") { const first = findRows(search.value)[0]; if (first) jump(first); }
+  });
   const nav = h("nav", { class: "side" },
     h("div", { class: "brand" }, h("span", { text: "Coucou" }), h("span", { class: "version", text: version })),
+    search,
+    results,
     ...groups.map((g) => {
       const b = h("button", { class: "nav-item", title: g.label, onclick: () => show(g.id) }, svg(g.icon, 16), h("span", { text: g.label }));
       buttons.set(g.id, b);
