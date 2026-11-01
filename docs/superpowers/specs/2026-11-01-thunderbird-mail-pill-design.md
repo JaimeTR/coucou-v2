@@ -33,19 +33,32 @@ client is Thunderbird. This is new ground for the project, not a port.
   island briefly) *and* the code highlighted inline when the message is
   read later from the inbox list.
 
-## Why Thunderbird's own index, not a hand-rolled mbox parser
+## Why mbox headers, not gloda (correction, 2026-11-01)
 
-Confirmed on the user's machine: Thunderbird keeps a global search index
-(`global-messages-db.sqlite`, "gloda") in the profile root, actively
-populated (27 MB, used by Thunderbird's own search). Reading this SQLite
-file for the list/search view is far less work and far more robust than
-parsing raw mbox folders by hand, and it already has subject, sender,
-date, folder and account — exactly what the inbox list needs.
+The original draft of this section proposed reading Thunderbird's search
+index (`global-messages-db.sqlite`, "gloda") for subject/sender/date, to
+avoid parsing mbox by hand. Checked against the user's real profile while
+writing the implementation plan: **this doesn't work.** Two findings, from
+the file's actual schema (structure only — table and column names — never
+message content):
 
-The mbox files themselves (`ImapMail/<server>/<Folder>`, `Mail/Local
-Folders/<Folder>`) are read only when:
-- a message is opened (its full body), or
-- scanning for a code in a newly-arrived message (see below).
+- `messages` has no subject/sender columns at all: `id, folderID,
+  messageKey, conversationID, date, headerMessageID, deleted,
+  jsonAttributes, notability`. Subject lives in the full-text tables
+  (`messagesText`/`messagesText_content`).
+- Querying those full-text tables failed with `unknown tokenizer:
+  mozporter` — Thunderbird registers that tokenizer itself at runtime: a
+  bare SQLite connection (Python's `sqlite3`, and `rusqlite` the same
+  way) cannot read them at all.
+
+So gloda is dropped from Phase 1. Instead, Coucou builds its own small
+index by reading each watched folder's **mbox headers directly** —
+cheap, since a message's headers are only its first few KB; the "From "
+line separators between messages are the standard mbox format, need no
+Thunderbird-specific code. The body is decoded only when a message is
+opened. New mail is found by tracking each mbox file's last-seen byte
+length (growth-only — Thunderbird appends new synced mail at the end)
+and parsing only the bytes added since, not gloda's row count.
 
 Coucou never writes to any Thunderbird file. Read-only, always.
 
@@ -56,10 +69,10 @@ New Rust module `src-tauri/src/mail/` (sibling to `whatsapp/`, `github.rs`):
 | File | Role |
 |---|---|
 | `mod.rs` | Public commands (`mail_accounts`, `mail_list`, `mail_search`, `mail_read`, `mail_watch` state), Tauri command registration. |
-| `profile.rs` | Finds the Thunderbird profile(s) (`%APPDATA%\Thunderbird\Profiles\*.default*` on Windows, the XDG path on Linux — `profiles.ini` names the default), lists its configured accounts/folders by reading `profiles.ini` + each account's `.msf`/folder layout. Read-only; never touches `prefs.js` beyond locating paths. |
-| `gloda.rs` | Opens `global-messages-db.sqlite` **read-only** (SQLite `?mode=ro`, never through Thunderbird itself, which may have it open — WAL mode makes concurrent read-only access safe) and queries message metadata: subject, sender, date, folder, a short snippet. Used for the list view and search. |
-| `mbox.rs` | A small mbox reader: given a folder's mbox file and a byte offset (from gloda or our own index), extracts one message's raw RFC 822 text and decodes it (MIME multipart, quoted-printable/base64, charset) to plain text for display. |
-| `watch.rs` | Polls `global-messages-db.sqlite`'s row count (or `mtime`) every few seconds, same pattern as `sync.rs`/`codex_plan.rs` polling. On growth, re-queries gloda for the new row(s), reads the body via `mbox.rs`, and runs code detection. |
+| `profile.rs` | Finds the Thunderbird profile(s) (`%APPDATA%\Thunderbird\Profiles\*.default*` on Windows, the XDG path on Linux — `profiles.ini` names the default), lists its configured accounts/folders by reading `profiles.ini` + each account's folder layout under `ImapMail/`/`Mail/Local Folders/`. Read-only; never touches `prefs.js` beyond locating paths. |
+| `mbox.rs` | An mbox reader: splits a folder's mbox file on `"\nFrom "` message boundaries, parses one message's headers (Subject, From, Date, Message-ID) cheaply, and — only when asked — decodes the full body (MIME multipart, quoted-printable/base64, charset) to plain text. |
+| `index.rs` | Coucou's own lightweight per-folder index: for each watched mbox file, the byte length last scanned and the parsed header list built from it so far, kept in memory (rebuilt fresh each app start — nothing written to disk). |
+| `watch.rs` | Polls each watched mbox file's size every few seconds, same pattern as `sync.rs`/`codex_plan.rs` polling. On growth, parses only the new bytes via `mbox.rs`, updates `index.rs`, and runs code detection on any new message. |
 | `otp.rs` | The code-detection heuristic (see below) — pure function, well tested, no I/O. |
 
 TypeScript: `src/core/mail.ts` (types + Bridge calls), `src/views/mail.ts`
@@ -95,8 +108,8 @@ aparecen aquí a menos que los agregues a Thunderbird."*
 - No network call Coucou makes of its own for this feature — zero.
 - A message's full body is decoded in memory for as long as it is open
   in the island/pill, then dropped. Coucou keeps no cache of bodies on
-  disk; the list/search index comes from Thunderbird's own gloda
-  database, read fresh each query.
+  disk; the list/search index (`index.rs`) holds headers only (subject,
+  sender, date), rebuilt in memory each app start, never written to disk.
 - The code-detection scan reads a message's body in memory to find the
   pattern and discards it immediately after; only the matched code
   string (plus the message's existing metadata: subject, sender, date)
@@ -109,9 +122,12 @@ aparecen aquí a menos que los agregues a Thunderbird."*
 
 - No Thunderbird profile found → the Settings section says so plainly,
   no pill appears.
-- `global-messages-db.sqlite` locked or unreadable (e.g. Thunderbird
-  mid-compaction) → retry on the next poll tick; never crash, never
-  retry in a tight loop (same backoff shape as `sync.rs`).
+- A watched mbox file locked, missing or unreadable (e.g. Thunderbird
+  mid-compaction, which rewrites the whole file) → retry on the next
+  poll tick; if the file is shorter than last seen (compaction, not
+  growth), the index for that folder is rebuilt from scratch rather
+  than erroring. Never crash, never retry in a tight loop (same
+  backoff shape as `sync.rs`).
 - A message that fails to decode (corrupt MIME, unknown charset) shows
   "No se pudo leer este mensaje" in the reader instead of raw bytes or
   a panic.
@@ -119,10 +135,10 @@ aparecen aquí a menos que los agregues a Thunderbird."*
 ## Testing
 
 - `otp.rs`: pure unit tests, positive and negative fixtures (see above).
-- `gloda.rs`/`mbox.rs`: tests against small, synthetic fixture files
-  checked into the repo (a tiny hand-built SQLite db and mbox file) —
-  never against the developer's own real `global-messages-db.sqlite`.
-- `watch.rs`: a test that polling detects a row-count change and emits
+- `mbox.rs`/`index.rs`: tests against small, synthetic fixture mbox
+  files checked into the repo — never against the developer's own real
+  mail.
+- `watch.rs`: a test that polling detects a file-size change and emits
   exactly once per new message (no duplicate alerts on a tick where
   nothing changed).
 - TS side: `tests/mail.test.mjs` for the view's pure logic (snippet
