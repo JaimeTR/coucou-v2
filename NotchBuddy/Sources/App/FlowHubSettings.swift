@@ -14,6 +14,7 @@ struct HubSettingsPage: View {
     var body: some View {
         HubPageScaffold(title: String(localized: "hub.page.settings")) {
             HubLabel(String(localized: "hub.settings.keys"))
+                .settingsHeading("flow.keys")
             HubCard {
                 HubRow(title: String(localized: "flow.enable")) {
                     Toggle("", isOn: $flow.isEnabled).toggleStyle(.switch).labelsHidden()
@@ -51,8 +52,55 @@ struct HubSettingsPage: View {
                     HubKeyCap(text: String(localized: "hub.key-esc"))
                 }
             }
+                .settingsAnchor("flow.keys", cornerRadius: 14)
+
+            HubLabel(String(localized: "flow.ai.title"))
+                .settingsHeading("flow.ai")
+            HubCard {
+                HubRow(title: String(localized: "flow.prompt-mode"), detail: String(localized: "flow.prompt-mode-detail")) {
+                    Toggle("", isOn: $store.promptMode)
+                        .toggleStyle(.switch)
+                        .labelsHidden()
+                        .disabled(!FlowCleanup.hasKey && !store.promptMode)
+                }
+                HubDivider()
+                HubRow(title: String(localized: "flow.translate"),
+                       detail: FlowLanguages.language(store.translateTo).map {
+                           String(format: String(localized: "flow.translate-on %@"), $0.name)
+                       } ?? String(localized: "flow.translate-detail")) {
+                    Picker("", selection: $store.translateTo) {
+                        Text("flow.translate-off").tag("")
+                        Divider()
+                        ForEach(FlowLanguages.sorted) { Text(verbatim: $0.name).tag($0.code) }
+                    }
+                    .labelsHidden()
+                    .fixedSize()
+                    .disabled(!FlowCleanup.hasKey && store.translateTo.isEmpty)
+                }
+                if !FlowCleanup.hasKey {
+                    HStack(spacing: 10) {
+                        Image(systemName: "key")
+                            .foregroundColor(HubTheme.accent)
+                        Text("hub.cleanup-key")
+                            .font(.system(size: 12.5))
+                            .foregroundColor(Color(hex: "#C7CAD0"))
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer()
+                        Button(String(localized: "hub.open-settings")) {
+                            NotificationCenter.default.post(name: .openFullSettings, object: "chat")
+                        }
+                        .buttonStyle(HubButtonStyle())
+                    }
+                }
+                Text("flow.ai-privacy")
+                    .font(.system(size: 12))
+                    .foregroundColor(HubTheme.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+                .settingsAnchor("flow.ai", cornerRadius: 14)
 
             HubLabel(String(localized: "hub.settings.permission"))
+                .settingsHeading("flow.permission")
             HubCard {
                 if flow.trusted {
                     Label(String(localized: "flow.access-ok"), systemImage: "checkmark.circle.fill")
@@ -67,13 +115,17 @@ struct HubSettingsPage: View {
                         .buttonStyle(HubButtonStyle(primary: true))
                 }
             }
+                .settingsAnchor("flow.permission", cornerRadius: 14)
 
             HubLabel(String(localized: "hub.settings.recognition"))
+                .settingsHeading("flow.recognition")
             HubCard {
                 HubRecognitionSettings(language: $language)
             }
+                .settingsAnchor("flow.recognition", cornerRadius: 14)
 
             HubLabel(String(localized: "hub.page.notes"))
+                .settingsHeading("flow.summary")
             HubCard {
                 HubSummaryEnginePicker()
                 Text("notes.engine-detail")
@@ -86,8 +138,10 @@ struct HubSettingsPage: View {
                     .foregroundColor(HubTheme.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
+                .settingsAnchor("flow.summary", cornerRadius: 14)
 
             HubLabel(String(localized: "hub.settings.app"))
+                .settingsHeading("flow.app")
             HubCard {
                 HubRow(title: String(localized: "hub.settings.dock"), detail: String(localized: "hub.settings.dock-detail")) {
                     Toggle("", isOn: Binding(get: { showInDock }, set: { showInDock = $0; FlowHubController.showInDock = $0 }))
@@ -101,8 +155,10 @@ struct HubSettingsPage: View {
                         .labelsHidden()
                 }
             }
+                .settingsAnchor("flow.app", cornerRadius: 14)
 
             HubLabel(String(localized: "hub.settings.privacy"))
+                .settingsHeading("flow.privacy")
             HubCard {
                 HubRow(title: String(localized: "hub.settings.keep")) {
                     Picker("", selection: $store.keepDays) {
@@ -127,6 +183,7 @@ struct HubSettingsPage: View {
                     .foregroundColor(HubTheme.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
+                .settingsAnchor("flow.privacy", cornerRadius: 14)
         }
         .onAppear { flow.recheckTrust() }
         .alert(String(localized: "hub.settings.clear-all-confirm"), isPresented: $confirmClear) {
