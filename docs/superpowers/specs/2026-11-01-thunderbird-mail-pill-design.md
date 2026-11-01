@@ -114,9 +114,8 @@ aparecen aquí a menos que los agregues a Thunderbird."*
   pattern and discards it immediately after; only the matched code
   string (plus the message's existing metadata: subject, sender, date)
   is kept for the card and the highlight.
-- Logging (`Bridge.log`) never includes message bodies or detected
-  codes — at most a folder name and a message count, matching how
-  `whatsapp`/`github` modules already log today.
+- No module in `mail/` logs a message's subject, sender, body or a
+  detected code, ever — not even at the lowest log level.
 
 ## Error handling
 
