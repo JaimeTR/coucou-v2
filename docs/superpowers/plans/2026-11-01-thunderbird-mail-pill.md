@@ -815,6 +815,7 @@ use std::sync::Mutex;
 use profile::Account;
 
 #[derive(Serialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 pub struct AccountInfo {
     pub id: String,
     pub label: String,
@@ -822,6 +823,7 @@ pub struct AccountInfo {
 }
 
 #[derive(Serialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 pub struct MessageInfo {
     pub account: String,
     pub folder: String,
@@ -1282,7 +1284,7 @@ export interface MailMessageInfo {
 }
 ```
 
-(Tauri's `camelCase` serde rename, already the project's convention per `#[serde(rename_all = "camelCase")]` on sibling structs, turns `date_rfc3339` into `dateRfc3339` on the wire — match `MessageInfo` in `mod.rs`, Task 5, by adding that same `#[serde(rename_all = "camelCase")]` attribute to it if it is not already inherited from a crate-wide default; check how `whatsapp`'s equivalent struct does it and copy that exactly.)
+(`MessageInfo` in `mod.rs`, Task 5, already carries `#[serde(rename_all = "camelCase")]`, so `date_rfc3339` reaches the front end as `dateRfc3339` — no extra work here, just match that exact spelling in this type.)
 
 - [ ] **Step 6: Typecheck and run the full test suite**
 
