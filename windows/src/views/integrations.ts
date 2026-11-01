@@ -14,6 +14,7 @@ import { refreshCodexPlan } from "../island/integrations";
 import { MODE_CHOICES, MODE_COLORS, MODE_NAMES, modeLabel } from "../core/modes";
 import { clock, positionAt, type SpotifyAction } from "../core/spotify";
 import { refreshSpotify } from "../island/spotify";
+import { buildMailCard } from "./mail";
 
 /** Same shape as the Swift `timeAgo` computed properties. */
 export function timeAgo(value: unknown): string {
@@ -932,6 +933,7 @@ export function renderIntegrationCard(task: AgentTask, hooks: IntegrationCardHoo
   if (task.id === "integration_claude") return claudeCard(task, hooks.openSettings);
   if (task.id === "agent_vscode") return vscodeCard(task, hooks.openSettings);
   if (task.id === "integration_whatsapp") return whatsappCard(task, hooks.openSettings);
+  if (task.id === "integration_mail_thunderbird") return buildMailCard({ openSettings: hooks.openSettings }).el;
   if (task.id === "agent_claude-desktop") return claudeDesktopCard(task, hooks.openSettings);
   if (task.id === "agent_codex") return codexCard(task, hooks.openSettings);
   if (task.id.startsWith("custom_")) return customCard(task, hooks.openSettings);
