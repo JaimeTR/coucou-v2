@@ -51,6 +51,7 @@ use desktop::{create, home, hide, is_visible, move_to, position, show};
 use files::DroppedFile;
 use hooks::{HookPreview, HookStatus};
 use island::{PollGate, ScreenInfo};
+use mail::{mail_accounts, mail_list, mail_read, mail_search, mail_set_watched, MailState};
 use pipe::Pending;
 use settings::Settings;
 use whatsapp::{whatsapp_ignore, whatsapp_install, whatsapp_save_gateway, whatsapp_send, whatsapp_set_options, whatsapp_settings, whatsapp_test, whatsapp_unignore};
@@ -1295,6 +1296,7 @@ pub fn run() {
         .manage(Chat::default())
         .manage(devmark::DevmarkChat::default())
         .manage(compat::CompatChat::default())
+        .manage(MailState::default())
         .invoke_handler(tauri::generate_handler![
             boot,
             detect_tools,
@@ -1391,6 +1393,11 @@ pub fn run() {
             whatsapp_send,
             whatsapp_ignore,
             whatsapp_unignore,
+            mail_accounts,
+            mail_list,
+            mail_search,
+            mail_read,
+            mail_set_watched,
             shortcuts_plan,
             desktop_create,
             desktop_show,

@@ -41,6 +41,10 @@ pub struct Settings {
     /// Apps of your own that get a pill: fed by a webhook or by polling a URL.
     #[serde(default)]
     pub custom_pills: Vec<CustomPill>,
+    /// Thunderbird accounts (`profile::Account.id`) the Mail pill watches. Empty
+    /// until the person picks one in Settings — nothing is read before that.
+    #[serde(default)]
+    pub mail_watched_accounts: Vec<String>,
     /// Dictation anywhere: hold the key, speak, let go, the words are pasted.
     #[serde(default)]
     pub dictation: bool,
@@ -467,6 +471,7 @@ impl Default for Settings {
             greeting_language: default_greeting_language(),
             language: default_greeting_language(),
             custom_pills: Vec::new(),
+            mail_watched_accounts: Vec::new(),
             dictation: false,
             dictation_key: default_dictation_key(),
             voice_greeting: false,
@@ -597,6 +602,15 @@ mod tests {
         s.eleven_voice = "my-own-cloned-voice-id".into();
         migrate(&mut s);
         assert_eq!(s.eleven_voice, "my-own-cloned-voice-id");
+    }
+
+    #[test]
+    fn mail_watched_accounts_defaults_to_empty_and_round_trips() {
+        let s = Settings::default();
+        assert!(s.mail_watched_accounts.is_empty());
+        let json = serde_json::to_string(&s).unwrap();
+        let back: Settings = serde_json::from_str(&json).unwrap();
+        assert!(back.mail_watched_accounts.is_empty());
     }
 }
 
