@@ -1305,18 +1305,23 @@ git commit -m "mail: pill catalog entry, Settings field, Bridge calls and types 
 **Files:**
 - Create: `src/views/mail.ts`
 - Modify: `src/views/integrations.ts` (route `integration_mail_thunderbird` to it, mirroring the `whatsappCard`/`whatsapp.ts` split already there)
+- Modify: `tsconfig.test.json` (add `src/views/mail.ts` to its `"files"` array, or `.test-build/views/mail.js` never gets produced)
 - Test: `windows/tests/mail.test.mjs` (append — pure rendering-adjacent logic: the snippet/date formatting helpers this file exports)
 
 **Interfaces:**
 - Consumes: `Bridge.mailAccounts/mailList/mailSearch/mailRead` (Task 7), `onEvent("mail", …)` (Task 6/7), `h`/`svg`/`clear` from `./dom` (the project's existing tiny DOM helper, used by every other view).
 - Produces: `export function buildMailCard(host): { el: HTMLElement; sync(): void }`, plus the pure helpers `shortDate`, `oneLine`, `highlightCode` (the last implements the user's "resaltado en la lista" decision from brainstorming — the same digit-run/trigger-word rule as `otp.rs`, re-applied client-side to mark up the reader's rendered text; it does not decide whether the code card opens, `otp.rs` alone does that). `buildMailCard`'s shape matches `buildWhatsAppCard` in `src/views/whatsapp.ts`, so `island/island.ts` wires it in exactly the same way (no changes needed there beyond what Task 9 adds for the code card).
 
+- [ ] **Step 0: Register the new file for test compilation**
+
+`windows/tests/*.mjs` import everything exclusively from `../.test-build/*.js` (verified: every existing test does this, none import `.ts` directly), and `tsconfig.test.json` only compiles the files explicitly listed in its `"files"` array — `src/views/mail.ts` is not in it yet, so nothing would emit `.test-build/views/mail.js` without this step. Add `"src/views/mail.ts"` to the `"files"` array in `windows/tsconfig.test.json` (anywhere in the list).
+
 - [ ] **Step 1: Write the failing test for the pure date/snippet helpers**
 
 Append to `windows/tests/mail.test.mjs`:
 
 ```js
-import { shortDate, oneLine, highlightCode } from "../src/views/mail.ts";
+import { shortDate, oneLine, highlightCode } from "../.test-build/views/mail.js";
 
 test("shortDate reads a date, hiding the year when it's this year", () => {
   const thisYear = new Date().getFullYear();
@@ -1527,7 +1532,7 @@ Add the import at the top of `integrations.ts`: `import { buildMailCard } from "
 
 - [ ] **Step 4: Run the tests to verify they pass**
 
-Run: `npx tsc --noEmit` (fix any type error before continuing — this is the step most likely to surface a mismatch against `MailCardHost`'s real shape once `hooks.openSettings` is checked against what `integrations.ts` actually passes to its sibling cards), then `node --test tests/mail.test.mjs`.
+Run: `npx tsc --noEmit` (fix any type error before continuing — this is the step most likely to surface a mismatch against `MailCardHost`'s real shape once `hooks.openSettings` is checked against what `integrations.ts` actually passes to its sibling cards), then `npx tsc -p tsconfig.test.json && node --test tests/mail.test.mjs` (the full test-build recompile, not a bare `node --test` — `.test-build/views/mail.js` must be regenerated from the implementation just written, or the test runs against stale/missing output).
 Expected: both clean; `mail.test.mjs` now has 7 passing tests.
 
 - [ ] **Step 5: Commit**
@@ -1545,18 +1550,23 @@ git commit -m "mail: inbox list, search and reader view (views/mail.ts)"
 - Create: `src/views/mailcode.ts`
 - Modify: `src/island/hooks.ts` (subscribe to `"mail-code"`, open the card the same way an approval/question card opens)
 - Modify: `src/style.css` (the card's styling, following the existing `.int-card`/`.wa-card` conventions)
+- Modify: `tsconfig.test.json` (add `src/views/mailcode.ts` to its `"files"` array, or `.test-build/views/mailcode.js` never gets produced)
 - Test: `windows/tests/mail.test.mjs` (append — the copy-to-clipboard helper's pure text-shaping logic only; the actual `navigator.clipboard` call is not unit tested, matching how the rest of this codebase treats browser-API calls)
 
 **Interfaces:**
 - Consumes: `onEvent("mail-code", …)` (Task 6/7), `State`/`island.alert` (existing island machinery — read `src/island/hooks.ts`'s `handleQuestion`/toast pattern before writing this, to match how a card takes the island over briefly).
 - Produces: `export function buildMailCodeCard(onClose: () => void): HTMLElement`; a new `IslandViewName` value `"mailcode"` registered the same way `"question"`/`"approval"` are (check `src/core/layout.ts`'s `IslandViewName` union and `VIEW_LAYOUTS` map — both need the new entry, sized like `"finished"` since this is a small, short-lived card, not a full chat-height view).
 
+- [ ] **Step 0: Register the new file for test compilation**
+
+Same reason as Task 8's Step 0: add `"src/views/mailcode.ts"` to the `"files"` array in `windows/tsconfig.test.json` (anywhere in the list), or nothing emits `.test-build/views/mailcode.js` for the test to import.
+
 - [ ] **Step 1: Write the failing test for the pure helper**
 
 Append to `windows/tests/mail.test.mjs`:
 
 ```js
-import { codeForDisplay } from "../src/views/mailcode.ts";
+import { codeForDisplay } from "../.test-build/views/mailcode.js";
 
 test("codeForDisplay groups digits in pairs for easier reading", () => {
   assert.equal(codeForDisplay("4821"), "48 21");
@@ -1615,7 +1625,7 @@ export function buildMailCodeCard(code: string, subject: string, onClose: () => 
 
 - [ ] **Step 4: Run the tests to verify they pass**
 
-Run: `node --test tests/mail.test.mjs`
+Run: `npx tsc -p tsconfig.test.json && node --test tests/mail.test.mjs`
 Expected: PASS, 8 tests.
 
 - [ ] **Step 5: Wire the island to open the card on `"mail-code"`**
