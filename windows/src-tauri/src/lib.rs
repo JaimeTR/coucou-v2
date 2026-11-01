@@ -1441,6 +1441,7 @@ pub fn run() {
             sync::spawn(handle.clone());
             updater::spawn(handle.clone());
             whatsapp::start(&handle, &loaded.active_integrations);
+            mail::watch::start(&handle);
             shortcuts::start(&handle);
             let _ = desktop::create(&handle);
             Ok(())
