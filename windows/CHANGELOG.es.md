@@ -5,6 +5,11 @@
 Coucou v2 es el fork de [JaimeTR](https://github.com/JaimeTR) de [Coucou, de Louis Raillé](https://github.com/Louis-CFM/coucou) (MIT). Las notas de la versión de macOS siguen en el [CHANGELOG.md](../CHANGELOG.md) de la raíz.
 
 ## Sin publicar
+- **Permisos de Claude Desktop** *(Windows)*: un permiso de una sesión de Claude Desktop se responde desde la isla. Sus preguntas siguen yendo a la app de Claude.
+- **La isla queda bajo una barra de tareas superior** *(Windows)*: empieza debajo de la barra en vez de taparla.
+- **Desinstalar conserva tu status line** *(Windows)*: la status line que Coucou reemplaza se guarda fuera de la carpeta que borra el desinstalador, y la copia existente se mueve allí al iniciar.
+- **"Abrir terminal" trae la ventana al frente** *(Windows)*: Coucou sube la terminal de la sesión aunque la isla nunca toma el foco.
+- **Las apps abiertas desde Coucou conservan tu configuración de GStreamer** *(Linux, no compilado aquí)*.
 
 Traído de Windows y Linux 0.5.8 del original (Ohualtex):
 - **Las peticiones de permiso esperan su turno**: hasta 5 peticiones hacen cola en la isla en vez de devolver la segunda a la terminal; cada una caduca por su cuenta.

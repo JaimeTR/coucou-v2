@@ -241,8 +241,22 @@ pub(crate) fn without_ours(existing: &Value) -> Value {
 // command after reporting the plan usage, so their status line looks and works
 // exactly as before. Uninstalling puts the original object back untouched.
 
+/// Kept in local_dir(), outside bin/: the uninstaller wipes bin/ and the person's own status line must survive it.
 fn previous_statusline_path() -> PathBuf {
+    settings::local_dir().join("statusline-previous.json")
+}
+
+/// Where earlier releases kept it: in bin/, which the uninstaller wipes.
+fn legacy_previous_statusline_path() -> PathBuf {
     settings::hook_exe_path().with_file_name("statusline-previous.json")
+}
+
+/// Moves a saved status line out of bin/, so an install made before the move is protected too.
+/// Never replaces a copy already at `new`.
+fn migrate_previous_statusline(legacy: &Path, new: &Path) {
+    if legacy.is_file() && !new.exists() && std::fs::rename(legacy, new).is_ok() {
+        crate::log::line("moved statusline-previous.json out of bin/");
+    }
 }
 
 fn statusline_is_ours(root: &Value) -> bool {
@@ -288,6 +302,7 @@ fn without_statusline(existing: &Value) -> Value {
         return Value::Object(root);
     }
     let previous = std::fs::read(previous_statusline_path())
+        .or_else(|_| std::fs::read(legacy_previous_statusline_path()))
         .ok()
         .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok())
         .and_then(|v| v.get("statusLine").cloned())
@@ -433,6 +448,7 @@ pub fn write_statusline(install: bool, fingerprint: &str) -> Result<String, Stri
     })?;
     if !install {
         let _ = std::fs::remove_file(previous_statusline_path());
+        let _ = std::fs::remove_file(legacy_previous_statusline_path());
     }
     Ok(backup)
 }
@@ -527,6 +543,7 @@ pub fn ensure_hook_exe(app: &AppHandle) {
     {
         return;
     }
+    migrate_previous_statusline(&legacy_previous_statusline_path(), &previous_statusline_path());
 
     let mut candidates: Vec<PathBuf> = Vec::new();
     if let Ok(p) = app.path().resolve(platform::HOOK_EXE, tauri::path::BaseDirectory::Resource) {
@@ -672,6 +689,23 @@ pub(crate) fn unified_diff(before: &str, after: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_saved_status_line_moves_out_of_bin_without_replacing_a_newer_one() {
+        let dir = std::env::temp_dir().join(format!("coucou-statusline-migrate-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("bin")).unwrap();
+        let (legacy, new) = (dir.join("bin").join("statusline-previous.json"), dir.join("statusline-previous.json"));
+        std::fs::write(&legacy, b"{\"a\":1}").unwrap();
+        migrate_previous_statusline(&legacy, &new);
+        assert!(!legacy.exists());
+        assert_eq!(std::fs::read(&new).unwrap(), b"{\"a\":1}");
+        std::fs::write(&legacy, b"{\"a\":2}").unwrap();
+        migrate_previous_statusline(&legacy, &new);
+        assert_eq!(std::fs::read(&new).unwrap(), b"{\"a\":1}");
+        assert!(legacy.exists());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     const WHERE: &str = "settings.json";
 

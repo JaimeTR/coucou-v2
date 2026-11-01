@@ -12,14 +12,17 @@ use ::windows::Win32::Security::Authorization::ConvertSidToStringSidW;
 use ::windows::Win32::Security::{GetTokenInformation, TokenUser, TOKEN_QUERY, TOKEN_USER};
 use ::windows::Win32::System::Ole::RevokeDragDrop;
 use ::windows::Win32::System::SystemInformation::GetLocalTime;
-use ::windows::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
+use ::windows::Win32::System::Threading::{
+    AttachThreadInput, GetCurrentProcess, GetCurrentThreadId, OpenProcessToken,
+};
 use ::windows::Win32::UI::Input::KeyboardAndMouse::{
     keybd_event, GetAsyncKeyState, KEYEVENTF_KEYUP, VK_LBUTTON, VK_MENU,
 };
 use ::windows::Win32::UI::WindowsAndMessaging::{
-    EnumChildWindows, EnumWindows, GetClassNameW, GetCursorPos, GetWindow, GetWindowLongPtrW,
-    GetWindowTextLengthW, GetWindowThreadProcessId, IsIconic, IsWindowVisible, SetForegroundWindow,
-    SetWindowLongPtrW, ShowWindow, GWL_EXSTYLE, GW_OWNER, SW_RESTORE, WS_EX_NOACTIVATE,
+    BringWindowToTop, EnumChildWindows, EnumWindows, GetClassNameW, GetCursorPos,
+    GetForegroundWindow, GetWindow, GetWindowLongPtrW, GetWindowTextLengthW,
+    GetWindowThreadProcessId, IsIconic, IsWindow, IsWindowVisible, SetForegroundWindow,
+    SetWindowLongPtrW, ShowWindow, GWL_EXSTYLE, GW_OWNER, SW_RESTORE, SW_SHOW, WS_EX_NOACTIVATE,
     WS_EX_TOOLWINDOW,
 };
 
@@ -192,16 +195,48 @@ pub fn focus_terminal(pids: &[u32]) -> bool {
     }
     let Some((_, hwnd)) = search.best else { return false };
 
+    bring_forward(hwnd)
+}
+
+/// Brings a window to the front. The island has WS_EX_NOACTIVATE, so a click on it
+/// does not make Coucou the foreground process and Windows would refuse a plain
+/// SetForegroundWindow: the thread is attached to the foreground one (and the
+/// target's) for the call, and a tap on Alt makes ours count as the last to get input.
+fn bring_forward(hwnd: HWND) -> bool {
     unsafe {
+        if !IsWindow(Some(hwnd)).as_bool() {
+            return false;
+        }
         if IsIconic(hwnd).as_bool() {
             let _ = ShowWindow(hwnd, SW_RESTORE);
+        } else {
+            let _ = ShowWindow(hwnd, SW_SHOW);
         }
-        // Windows only lets the process that last received input take the
-        // foreground. A tap on Alt makes ours count as that one.
+        let fg = GetForegroundWindow();
+        if fg == hwnd {
+            return true;
+        }
+        let cur = GetCurrentThreadId();
+        let fg_thread = if fg.0.is_null() { 0 } else { GetWindowThreadProcessId(fg, None) };
+        let target_thread = GetWindowThreadProcessId(hwnd, None);
+        let attached_fg = fg_thread != 0 && fg_thread != cur && AttachThreadInput(cur, fg_thread, true).as_bool();
+        let attached_target = target_thread != 0
+            && target_thread != cur
+            && target_thread != fg_thread
+            && AttachThreadInput(cur, target_thread, true).as_bool();
+
         keybd_event(VK_MENU.0 as u8, 0, Default::default(), 0);
+        let _ = BringWindowToTop(hwnd);
         let ok = SetForegroundWindow(hwnd).as_bool();
         keybd_event(VK_MENU.0 as u8, 0, KEYEVENTF_KEYUP, 0);
-        ok
+
+        if attached_target {
+            let _ = AttachThreadInput(cur, target_thread, false);
+        }
+        if attached_fg {
+            let _ = AttachThreadInput(cur, fg_thread, false);
+        }
+        ok || GetForegroundWindow() == hwnd
     }
 }
 

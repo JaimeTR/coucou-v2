@@ -88,6 +88,7 @@ pub fn local_dir() -> PathBuf {
 /// every launch, so each launch would rewrite the system's registry with
 /// plugin paths that vanish once Coucou quits. Give ours its own file.
 pub fn prepare_environment() {
+    let _ = INHERITED.set(OWN_OVERRIDES.iter().map(|k| (*k, std::env::var_os(k))).collect());
     if std::env::var_os("APPIMAGE").is_none() || std::env::var_os("GST_REGISTRY").is_some() {
         return;
     }
@@ -149,17 +150,63 @@ pub fn relay_socket_path() -> Option<PathBuf> {
 
 // ── Processes ─────────────────────────────────────────────────────────────────
 
-/// Nothing to hide: a spawned process only gets a terminal if it asks for one.
+/// What the variables Coucou sets for itself (prepare_environment) were when it
+/// started, so its children get the user's own values back.
+static INHERITED: std::sync::OnceLock<Vec<(&'static str, Option<std::ffi::OsString>)>> = std::sync::OnceLock::new();
+/// Set or changed by prepare_environment for this process only.
+const OWN_OVERRIDES: [&str; 1] = ["GST_REGISTRY"];
+/// Set by the AppImage's launcher for its bundled GStreamer: dropped when they
+/// point inside the AppImage, which a child cannot use.
+const APPIMAGE_GST: [&str; 3] = ["GST_REGISTRY_1_0", "GST_PLUGIN_SYSTEM_PATH", "GST_PLUGIN_SYSTEM_PATH_1_0"];
+
+/// The changes a child's environment needs: `Some` sets the value back, `None`
+/// removes the variable. Nothing for a variable Coucou left as it found it.
+fn child_env(
+    inherited: &[(&str, Option<std::ffi::OsString>)],
+    current: impl Fn(&str) -> Option<std::ffi::OsString>,
+    appdir: Option<&std::ffi::OsStr>,
+) -> Vec<(String, Option<std::ffi::OsString>)> {
+    let mut out = Vec::new();
+    for (key, was) in inherited {
+        if current(key) != *was {
+            out.push((key.to_string(), was.clone()));
+        }
+    }
+    if let Some(dir) = appdir.and_then(|d| d.to_str()).filter(|d| !d.is_empty()) {
+        for key in APPIMAGE_GST {
+            if current(key).is_some_and(|v| v.to_string_lossy().contains(dir)) {
+                out.push((key.to_string(), None));
+            }
+        }
+    }
+    out
+}
+
+/// Prepares a command to launch a child process: Coucou's own GStreamer settings
+/// (the registry file, the AppImage's plugin paths) go back to what the user had,
+/// so they do not leak into the browser, the editor or the apps it opens.
 pub fn no_console(cmd: &mut Command) -> &mut Command {
+    let inherited = INHERITED.get().map(Vec::as_slice).unwrap_or(&[]);
+    let appdir = std::env::var_os("APPDIR");
+    for (key, value) in child_env(inherited, |k| std::env::var_os(k), appdir.as_deref()) {
+        match value {
+            Some(v) => cmd.env(key, v),
+            None => cmd.env_remove(key),
+        };
+    }
     cmd
 }
 
 pub fn open_url(url: &str) {
-    let _ = Command::new("xdg-open").arg(url).spawn();
+    let mut cmd = Command::new("xdg-open");
+    cmd.arg(url);
+    let _ = no_console(&mut cmd).spawn();
 }
 
 pub fn reveal_folder(path: &str) {
-    let _ = Command::new("xdg-open").arg(path).spawn();
+    let mut cmd = Command::new("xdg-open");
+    cmd.arg(path);
+    let _ = no_console(&mut cmd).spawn();
 }
 
 /// There is no Claude desktop app on Linux.
@@ -363,6 +410,25 @@ fn apply_input_region(gw: &impl IsA<gtk::Widget>, rect: Region) {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn children_get_the_users_own_gstreamer_settings_back() {
+        use std::ffi::{OsStr, OsString};
+        let current = |k: &str| -> Option<OsString> {
+            match k {
+                "GST_REGISTRY" => Some("/home/u/.cache/coucou/gstreamer-registry.bin".into()),
+                "GST_PLUGIN_SYSTEM_PATH_1_0" => Some("/tmp/.mount_CoucouX/usr/lib/gstreamer-1.0".into()),
+                "GST_PLUGIN_SYSTEM_PATH" => Some("/usr/lib/gstreamer-1.0".into()),
+                _ => None,
+            }
+        };
+        let inherited = [("GST_REGISTRY", None)];
+        let fixes = super::child_env(&inherited, current, Some(OsStr::new("/tmp/.mount_CoucouX")));
+        assert_eq!(fixes, vec![
+            ("GST_REGISTRY".to_string(), None),
+            ("GST_PLUGIN_SYSTEM_PATH_1_0".to_string(), None),
+        ]);
+    }
+
     use super::*;
 
     #[test]

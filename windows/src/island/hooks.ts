@@ -371,7 +371,7 @@ export function registerHookHandlers(island: Island) {
 }
 
 /** The agents whose permission requests the relay can answer (hook/src: takes decisions). */
-const APPROVAL_AGENTS = new Set(["codex", "copilot", "muse"]);
+const APPROVAL_AGENTS = new Set(["codex", "copilot", "muse", "claude-desktop"]);
 
 function handleHook(island: Island, payload: HookPayload) {
   if (State.paused) {

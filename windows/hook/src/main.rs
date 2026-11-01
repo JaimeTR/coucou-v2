@@ -516,7 +516,14 @@ fn statusline_message(raw: &[u8]) -> Option<String> {
 /// Runs the statusLine command that was installed before ours, if any, with the
 /// same stdin, and returns what it printed. Colours and all.
 fn run_previous_statusline(stdin: &[u8]) -> Option<Vec<u8>> {
-    let file = std::env::current_exe().ok()?.parent()?.join("statusline-previous.json");
+    let exe = std::env::current_exe().ok()?;
+    // Saved outside bin/ (the uninstaller wipes it); older installs kept it beside the relay.
+    let file = exe
+        .parent()
+        .and_then(|p| p.parent())
+        .map(|p| p.join("statusline-previous.json"))
+        .filter(|p| p.is_file())
+        .unwrap_or_else(|| exe.with_file_name("statusline-previous.json"));
     let saved: serde_json::Value = serde_json::from_slice(&std::fs::read(file).ok()?).ok()?;
     let command = saved
         .get("statusLine")

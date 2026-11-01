@@ -148,6 +148,36 @@ pub fn screen_info(app: &AppHandle, pref: &str) -> ScreenInfo {
     }
 }
 
+/// Windows: how far a taskbar docked at the top of this display (or another
+/// app bar there) pushes the island down, read from the display's work area, so
+/// the island sits under it. An auto-hidden taskbar takes no work area and moves
+/// nothing. Linux anchors the island to the screen edge: 0.
+fn top_inset(m: &Monitor) -> i32 {
+    if cfg!(windows) {
+        top_inset_from(m.position().y, m.work_area().position.y)
+    } else {
+        0
+    }
+}
+
+fn top_inset_from(monitor_y: i32, work_y: i32) -> i32 {
+    let inset = work_y - monitor_y;
+    if (0..200).contains(&inset) { inset } else { 0 }
+}
+
+#[cfg(test)]
+mod top_inset_tests {
+    use super::top_inset_from;
+
+    #[test]
+    fn a_top_taskbar_moves_the_island_down_and_nothing_else_does() {
+        assert_eq!(top_inset_from(0, 0), 0);
+        assert_eq!(top_inset_from(-1080, -1032), 48);
+        assert_eq!(top_inset_from(0, -20), 0);
+        assert_eq!(top_inset_from(0, 900), 0);
+    }
+}
+
 /// Places and sizes the window. `collapsed` picks the wake strip instead of the panel.
 pub fn apply_geometry(app: &AppHandle, pref: &str, collapsed: bool) {
     let Some(win) = window(app) else { return };
@@ -161,7 +191,7 @@ pub fn apply_geometry(app: &AppHandle, pref: &str, collapsed: bool) {
     let pw = (lw * scale).round().max(1.0) as u32;
     let ph = (lh * scale).round().max(1.0) as u32;
     let mut x = mp.x + (ms.width as i32 - pw as i32) / 2;
-    let mut y = mp.y;
+    let mut y = mp.y + top_inset(&m);
     // Free mode puts the panel where it was dragged, kept whole on the display.
     // The wake strip (a paused island) always stays at the top centre.
     // ponytail: the panel, not the island, is clamped, so a small island can't
@@ -331,7 +361,7 @@ fn current_screen_key(app: &AppHandle) -> Option<(i32, i32, u32, u32, u64)> {
     let m = target_monitor(app, &pref)?;
     let p = m.position();
     let size = m.size();
-    Some((p.x, p.y, size.width, size.height, m.scale_factor().to_bits()))
+    Some((p.x, p.y + top_inset(&m), size.width, size.height, m.scale_factor().to_bits()))
 }
 
 /// Emits `cursor` (window-logical coordinates) at ~60 Hz while the island is
