@@ -4,7 +4,7 @@
 
 import "./settings.css";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { Bridge, IS_TAURI, onEvent, type AgentStatus, type DetectedTool, type HookStatus, type UpdateInfo } from "../core/bridge";
+import { Bridge, IS_TAURI, onEvent, type AgentStatus, type DetectedTool, type HookStatus, type SyncDevice, type UpdateInfo } from "../core/bridge";
 import { applyLanguage } from "../core/i18n";
 import { speak, stopSpeaking } from "../core/voice";
 import { State } from "../core/state";
@@ -1935,6 +1935,149 @@ function shortcutRow(
 
 // ── Sync between your computers ───────────────────────────────────────────────
 
+const DEVICES_EVERY_MS = 15_000;
+const ONLINE_MS = 90_000;
+
+/** Material "computer" and "smartphone" outlines, for the device cards. */
+const COMPUTER_ICON = "M4 6h16v10H4V6zm-2 12h20v2H2v-2zM4 4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2H4z";
+const PHONE_ICON = "M8 2h8a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm0 2v14h8V4H8zm4 15.2a1 1 0 1 0 0 2 1 1 0 0 0 0-2z";
+const DEVICES_ICON = "M4 6h18V4H4a2 2 0 0 0-2 2v11H0v3h14v-3H4V6zm19 2h-6a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V9a1 1 0 0 0-1-1zm-1 9h-4v-7h4v7z";
+
+/** Switches the settings window to another category (set once the sidebar exists). */
+let gotoGroup: (id: string) => void = () => {};
+
+/** "ahora", "5 min", "2 h", "3 d" since a device last reported. */
+function sinceLabel(at: number): string {
+  const s = Math.max(0, Math.round((Date.now() - at) / 1000));
+  if (s < 60) return "ahora";
+  if (s < 3600) return `${Math.round(s / 60)} min`;
+  if (s < 86_400) return `${Math.round(s / 3600)} h`;
+  return `${Math.round(s / 86_400)} d`;
+}
+
+function platformLabel(d: SyncDevice): string {
+  if (d.kind === "computer") return d.mine ? "Este equipo" : "Equipo";
+  return d.platform === "ios" ? "iPhone" : d.platform === "android" ? "Android" : "Teléfono";
+}
+
+function deviceCard(d: SyncDevice, forget: (d: SyncDevice) => void): HTMLElement {
+  const online = Date.now() - d.at < ONLINE_MS;
+  const detail = d.kind === "computer" && d.tasks > 0 ? `${d.tasks} ${d.tasks === 1 ? "agente trabajando" : "agentes trabajando"}` : "";
+  return h("div", { class: `device${online ? " online" : ""}` },
+    h("div", { class: "device-icon" }, svg(d.kind === "phone" ? PHONE_ICON : COMPUTER_ICON, 22, { fill: "currentColor" })),
+    h("div", { class: "device-body" },
+      h("div", { class: "device-name" }, h("span", { text: d.name }), d.mine ? h("span", { class: "badge", text: "Este equipo" }) : null),
+      h("div", { class: "hint", text: [platformLabel(d), detail].filter(Boolean).join(" · ") }),
+      h("div", { class: "row", style: "gap:6px" },
+        h("i", { class: "dot", style: `background:${online ? "#22c55e" : "#8e939c"}` }),
+        h("span", { class: "hint", text: online ? "en línea" : `visto hace ${sinceLabel(d.at)}` }),
+      ),
+    ),
+    // This computer cannot be removed from itself; an old phone or PC can.
+    d.mine ? null : h("button", { class: "danger", text: "Quitar", title: "Quitar de la lista de la cuenta", onclick: () => forget(d) }),
+  );
+}
+
+/** Dispositivos: every computer and phone linked to the sync account, live. */
+function devicesSection(): HTMLElement {
+  const summary = h("div", { class: "hint" });
+  const computers = h("div", { class: "devices" });
+  const phones = h("div", { class: "devices" });
+  const feedback = h("div");
+  const pair = h("div", { class: "hint" });
+  const body = h("div", { style: "display:flex;flex-direction:column;gap:12px" });
+
+  const say = (ok: boolean, text: string) => {
+    clear(feedback);
+    feedback.append(h("div", { class: `notice ${ok ? "ok" : "err"}`, text }));
+  };
+  const err = (e: unknown) => String(e).replace(/^Error:\s*/, "");
+
+  const fill = (box: HTMLElement, list: SyncDevice[], empty: string) => {
+    clear(box);
+    if (list.length === 0) box.append(h("div", { class: "hint", text: empty }));
+    for (const d of list) {
+      box.append(deviceCard(d, async (dev) => {
+        try {
+          await Bridge.syncForgetDevice(dev.id);
+          say(true, `${dev.name} ya no está en la lista.`);
+          void load();
+        } catch (e) { say(false, err(e)); }
+      }));
+    }
+  };
+
+  const load = async () => {
+    const st = await Bridge.syncStatus();
+    clear(body);
+    if (!st?.connected) {
+      body.append(
+        h("div", { class: "notice warn", text: "Este equipo aún no está conectado a la sincronización. Conéctalo para ver aquí tus otros PCs y tus teléfonos." }),
+        h("div", { class: "row" }, h("button", { text: "Ir a Sincronización", onclick: () => gotoGroup("sync") })),
+      );
+      return;
+    }
+    try {
+      // The server's list leaves this computer out: it goes first, as itself.
+      const others: SyncDevice[] = ((await Bridge.syncDevices()) ?? []).map((r) => ({
+        id: r.id,
+        kind: r.state.kind === "phone" ? ("phone" as const) : ("computer" as const),
+        name: (r.state.name || r.id).slice(0, 60),
+        platform: r.state.platform ?? "",
+        tasks: r.state.kind === "phone" ? 0 : (r.state.tasks ?? []).length,
+        at: r.at,
+        mine: false,
+      }));
+      const me: SyncDevice = { id: st.device, kind: "computer", name: st.device, platform: "", tasks: 0, at: Date.now(), mine: true };
+      const devices: SyncDevice[] = [me, ...others].sort((a, b) => Number(b.mine) - Number(a.mine) || b.at - a.at);
+      const pcs = devices.filter((d) => d.kind === "computer");
+      const phs = devices.filter((d) => d.kind === "phone");
+      const online = devices.filter((d) => Date.now() - d.at < ONLINE_MS).length;
+      clear(summary);
+      summary.textContent = `${pcs.length} ${pcs.length === 1 ? "equipo" : "equipos"} · ${phs.length} ${phs.length === 1 ? "teléfono" : "teléfonos"} · ${online} en línea`;
+      fill(computers, pcs, "Ningún equipo ha reportado todavía. Abre Coucou en tus otros PCs con la sincronización activa.");
+      fill(phones, phs, "Ningún teléfono conectado. Abre la app del teléfono y escanea el QR de abajo.");
+    } catch (e) {
+      clear(summary);
+      summary.textContent = err(e);
+    }
+    body.append(
+      summary,
+      h("div", { class: "group-title", text: "Equipos" }), computers,
+      h("div", { class: "group-title", text: "Teléfonos" }), phones,
+      h("div", { class: "group-title", text: "Conectar un teléfono" }),
+      h("div", { class: "row" },
+        h("button", { text: "Mostrar QR", onclick: async () => {
+          clear(pair);
+          const code = await Bridge.syncCode();
+          if (!code || !st.url) return;
+          pair.append(
+            pairingQr(st.url, code),
+            h("div", { text: "En la app del teléfono: pestaña PCs → Escanear el QR. Funciona en iPhone y en Android. Quien lo vea puede leer tus ajustes: ciérralo cuando termines." }),
+            h("button", { text: "Ocultar", onclick: () => clear(pair) }),
+          );
+        } }),
+        h("button", { text: "Actualizar", onclick: () => void load() }),
+      ),
+      pair,
+      feedback,
+    );
+  };
+  void load();
+
+  const section = h("section", {},
+    h("h2", {}, h("span", { text: "Dispositivos" })),
+    h("div", { class: "hint", text: "Los equipos y teléfonos que comparten tu cuenta de sincronización, y si están en línea ahora. Se actualiza sola." }),
+    body,
+  );
+  const timer = window.setInterval(() => {
+    // The category is only on screen while selected; keep the page cheap otherwise.
+    if (section.isConnected) void load();
+  }, DEVICES_EVERY_MS);
+  window.addEventListener("beforeunload", () => window.clearInterval(timer));
+  return section;
+}
+
 function syncSection(): HTMLElement {
   const body = h("div", { style: "display:flex;flex-direction:column;gap:10px" });
   const feedback = h("div");
@@ -2018,6 +2161,10 @@ function syncSection(): HTMLElement {
           } }),
         ),
         codeBox,
+        h("div", { class: "row" },
+          h("span", { class: "hint", text: "Quién está conectado y en línea (equipos, iPhone, Android):" }),
+          h("button", { text: "Ver dispositivos", onclick: () => gotoGroup("devices") }),
+        ),
       );
       return;
     }
@@ -2111,6 +2258,7 @@ async function main() {
     { id: "chat", label: "Chat e IA", icon: ICONS.bubble, sections: [providerSection(present), apiSection(hasKey)] },
     { id: "integrations", label: "Integraciones", icon: ICONS.arrowUpRight, sections: [integrationsSection(present), customSection()] },
     { id: "sync", label: "Sincronización", icon: SYNC_ICON, sections: [syncSection()] },
+    { id: "devices", label: "Dispositivos", icon: DEVICES_ICON, sections: [devicesSection()] },
     { id: "general", label: "General", icon: ICONS.gear, sections: [generalSection()] },
   ];
   const content = h("main", { class: "content" });
@@ -2165,6 +2313,7 @@ async function main() {
     if (e.key === "Escape") { search.value = ""; clear(results); }
     if (e.key === "Enter") { const first = findRows(search.value)[0]; if (first) jump(first); }
   });
+  gotoGroup = show;
   const nav = h("nav", { class: "side" },
     h("div", { class: "brand" }, h("span", { text: "Coucou" }), h("span", { class: "version", text: version })),
     search,

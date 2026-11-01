@@ -7,12 +7,6 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
-    "newArchEnabled": true,
-    "splash": {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#0B0C0E"
-    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.jaimetr.coucou"
@@ -23,7 +17,12 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0B0C0E"
       },
-      "edgeToEdgeEnabled": true
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -35,12 +34,41 @@
       "expo-secure-store",
       "expo-font",
       "expo-asset",
-      ["expo-notifications", { "color": "#0B0C0E" }],
-      ["expo-camera", { "cameraPermission": "Coucou usa la cámara solo para leer el QR que enlaza tu PC." }],
-      ["expo-local-authentication", { "faceIDPermission": "Coucou usa Face ID para confirmar que eres tú antes de permitir un comando en tu PC." }]
+      [
+        "expo-notifications",
+        {
+          "color": "#0B0C0E"
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Coucou usa la cámara solo para leer el QR que enlaza tu PC."
+        }
+      ],
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Coucou usa Face ID para confirmar que eres tú antes de permitir un comando en tu PC."
+        }
+      ],
+      "expo-status-bar",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#0B0C0E"
+        }
+      ]
     ],
     "extra": {
-      "author": "JaimeTR"
-    }
+      "author": "JaimeTR",
+      "router": {},
+      "eas": {
+        "projectId": "51d7908f-5a0d-4f19-baab-085bc56f5565"
+      }
+    },
+    "owner": "jaimetrdev"
   }
 }

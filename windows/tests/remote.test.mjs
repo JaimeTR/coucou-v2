@@ -19,6 +19,7 @@ test("agents go up with their step and project; integrations and idle ones stay 
   assert.deepEqual(s.tasks.map((t) => t.id), ["integration_claude"]);
   assert.equal(s.tasks[0].step, "Edita lib.rs");
   assert.equal(s.tasks[0].project, "coucou");
+  assert.equal(s.tasks[0].source, "claudeCode");
   assert.equal(s.approval, null);
 });
 

@@ -63,6 +63,10 @@ export interface RemoteDevice {
   at: number;
   state: {
     name?: string;
+    /** "phone" for the phone app's own entry; a computer says nothing. */
+    kind?: string;
+    /** Phones only: "ios" or "android". */
+    platform?: string;
     music?: { title: string; artist: string } | null;
     mode?: string;
     tasks?: { name: string; state: string; step: string; project: string }[];

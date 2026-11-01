@@ -751,3 +751,70 @@ section > h2[style*="none"] + .hint + .field {
 .search-hit span { opacity: 0.9; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
 .found { animation: found-glow 2.2s ease-out; }
 @keyframes found-glow { 0%, 60% { box-shadow: 0 0 0 2px rgba(120,160,255,0.7); background: rgba(120,160,255,0.12); } 100% { box-shadow: none; } }
+/* ── Dispositivos: one card per computer or phone on the account ─────────── */
+
+.devices {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 10px;
+}
+
+.device {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--card);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+}
+
+.device.online {
+  border-color: rgba(34, 197, 94, 0.35);
+}
+
+.device-icon {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--dim);
+}
+
+.device.online .device-icon {
+  color: #22c55e;
+}
+
+.device-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.device-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font: 600 14px var(--font);
+  overflow: hidden;
+}
+
+.device-name > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.badge {
+  font: 600 10px var(--font);
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(157, 177, 242, 0.16);
+  color: #9db1f2;
+  white-space: nowrap;
+}

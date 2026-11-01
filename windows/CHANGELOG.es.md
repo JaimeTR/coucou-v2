@@ -4,7 +4,7 @@
 
 Coucou v2 es el fork de [JaimeTR](https://github.com/JaimeTR) de [Coucou, de Louis Raillé](https://github.com/Louis-CFM/coucou) (MIT). Las notas de la versión de macOS siguen en el [CHANGELOG.md](../CHANGELOG.md) de la raíz.
 
-## 1.5.0 — 1 de noviembre de 2026
+## 1.5.1 — 1 de noviembre de 2026
 - **Permisos de Claude Desktop** *(Windows)*: un permiso de una sesión de Claude Desktop se responde desde la isla. Sus preguntas siguen yendo a la app de Claude.
 - **La isla queda bajo una barra de tareas superior** *(Windows)*: empieza debajo de la barra en vez de taparla.
 - **Desinstalar conserva tu status line** *(Windows)*: la status line que Coucou reemplaza se guarda fuera de la carpeta que borra el desinstalador, y la copia existente se mueve allí al iniciar.
@@ -17,6 +17,14 @@ Traído de Windows y Linux 0.5.8 del original (Ohualtex):
 - **Las peticiones de permiso esperan su turno**: hasta 5 peticiones hacen cola en la isla en vez de devolver la segunda a la terminal; cada una caduca por su cuenta.
 - **Uso del plan en la isla compacta**: una opción nueva (Ajustes → Claude → Uso del plan) muestra el porcentaje de tu plan de Claude junto a los puntos de los agentes; con un clic ves el detalle.
 - **Avisos de todos los pills**: una opción nueva (Ajustes → General): cuando otro pill termina o da error, la isla lo muestra un momento y vuelve el pill que tenías.
+## 1.5.0: 16 de octubre de 2026
+
+Quién está conectado, de un vistazo, y una app de teléfono que vale la pena abrir.
+
+- **Dispositivos** (categoría nueva en Ajustes): todos los equipos y teléfonos de tu cuenta de sincronización como tarjetas: nombre, Equipo / iPhone / Android, en línea o «visto hace», agentes trabajando; se actualiza sola. «Quitar» saca de la lista un teléfono viejo y «Mostrar QR» enlaza uno nuevo desde la misma página. Ajustes → Sincronización lleva hasta ahí. Esto es Windows y Linux; la app nativa de macOS tiene su propio enlace con el teléfono y todavía no usa este servidor.
+- **App del teléfono** (`mobile/`, Expo SDK 57): se abre en tus PCs; toca uno para ver su página: qué hace cada agente, el comando completo que espera permiso con Permitir / Denegar, y «Abrir Claude» para seguir en la app de Claude. La pestaña PCs muestra una insignia con los permisos que esperan; Hoy muestra primero tus PCs y, mientras no configures nada, los siguientes pasos en vez de una página vacía. Un diseño renovado y común a todas las pantallas, con vibración al tocar.
+- **El teléfono se anuncia** a la cuenta (cifrado, como todo lo demás), así los PCs pueden listarlo. Los avisos en el teléfono necesitan el proyecto enlazado con EAS (`npx eas-cli init`, hecho en este repo).
+- Las tareas que van al teléfono ahora dicen de dónde vienen (Claude Code u otro agente).
 
 ## 1.4.0 — 16 de octubre de 2026
 

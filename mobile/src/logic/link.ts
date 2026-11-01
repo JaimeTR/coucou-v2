@@ -143,6 +143,8 @@ export interface RemoteTask {
   state: string;
   step: string;
   project: string;
+  /** "claudeCode" or "agent" (Gemini, Codex…); older PCs do not say. */
+  source?: string;
 }
 
 export interface Computer {
@@ -165,17 +167,70 @@ function problem(status: number): string {
   return `El servidor respondió ${status}.`;
 }
 
-export async function fetchComputers(fetcher: Fetch, server: string, keys: Keys): Promise<Computer[]> {
+/** A phone linked to the account, as it announced itself. */
+export interface Phone {
+  id: string;
+  name: string;
+  platform: string;
+  /** When it last showed up (ms). */
+  at: number;
+}
+
+export interface Devices {
+  computers: Computer[];
+  phones: Phone[];
+}
+
+/** Everything on the account: the computers (with their agents) and the phones. */
+export async function fetchDevices(fetcher: Fetch, server: string, keys: Keys): Promise<Devices> {
   const res = await fetcher(url(server, keys, "devices"), { headers: auth(keys) });
   if (!res.ok) throw new Error(problem(res.status));
   const list = (await res.json()) as { id: string; blob: string; at: number }[];
-  const out: Computer[] = [];
+  const computers: Computer[] = [];
+  const phones: Phone[] = [];
   for (const d of list) {
-    const state = open<Omit<Computer, "id" | "at">>(keys, d.blob);
-    if (!state || !Array.isArray(state.tasks)) continue;
-    out.push({ id: d.id, at: d.at, name: String(state.name ?? d.id), tasks: state.tasks, approval: state.approval ?? null });
+    const state = open<Record<string, unknown>>(keys, d.blob);
+    if (!state) continue;
+    if (state.kind === "phone") {
+      phones.push({ id: d.id, at: d.at, name: String(state.name ?? d.id).slice(0, 60), platform: String(state.platform ?? "") });
+    } else if (Array.isArray(state.tasks)) {
+      computers.push({
+        id: d.id,
+        at: d.at,
+        name: String(state.name ?? d.id),
+        tasks: state.tasks as RemoteTask[],
+        approval: (state.approval as Computer["approval"]) ?? null,
+      });
+    }
   }
-  return out.sort((a, b) => b.at - a.at);
+  return { computers: computers.sort((a, b) => b.at - a.at), phones: phones.sort((a, b) => b.at - a.at) };
+}
+
+export async function fetchComputers(fetcher: Fetch, server: string, keys: Keys): Promise<Computer[]> {
+  return (await fetchDevices(fetcher, server, keys)).computers;
+}
+
+/**
+ * Tells the account this phone exists, so the computers can list it ("iPhone de
+ * Jaime, visto hace 1 min"). Encrypted like everything else; it carries no tasks,
+ * which is how every reader tells a phone from a computer.
+ */
+export async function announcePhone(
+  fetcher: Fetch, server: string, keys: Keys, phone: string, info: { name: string; platform: string }, nonce: Uint8Array,
+): Promise<void> {
+  const blob = seal(keys, { kind: "phone", name: info.name, platform: info.platform }, nonce);
+  const res = await fetcher(url(server, keys, `devices/${encodeURIComponent(phone)}`), {
+    method: "PUT",
+    headers: auth(keys),
+    body: JSON.stringify({ blob }),
+  });
+  if (!res.ok) throw new Error(problem(res.status));
+}
+
+/** Removes this phone from the account's list. */
+export async function forgetPhone(fetcher: Fetch, server: string, keys: Keys, phone: string): Promise<void> {
+  const res = await fetcher(url(server, keys, `devices/${encodeURIComponent(phone)}`), { method: "DELETE", headers: auth(keys) });
+  if (!res.ok) throw new Error(problem(res.status));
 }
 
 /** The shared settings the computers wrote (name, language…), or null. */
