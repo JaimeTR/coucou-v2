@@ -17,6 +17,7 @@ mod identity;
 mod integrations;
 mod island;
 mod log;
+mod mail;
 mod modes;
 mod pet;
 mod pipe;
