@@ -1637,6 +1637,7 @@ const INTEGRATIONS: IntegrationDef[] = [
     fields: [{ key: "notion-api-key", label: "Token de integración", placeholder: "ntn_…", secret: true }] },
   { id: "integration_calcom", name: "Cal.com", color: "#C9956A",
     fields: [{ key: "calcom-api-key", label: "Clave API", placeholder: "cal_…", secret: true }] },
+  { id: "integration_mail_thunderbird", name: "Mail", color: "#1B6FC9", fields: [] },
 ];
 
 const MAX_ACTIVE = 4;

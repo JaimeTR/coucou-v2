@@ -18,25 +18,28 @@ pub struct Account {
     pub folders: Vec<Folder>,
 }
 
-/// A dead-simple `profiles.ini` reader: enough to find the section with
-/// `Default=1` (or the only section, if there is just one) and its `Path`.
-/// `IsRelative=1` (the normal case) means the path is relative to `root`.
+/// A dead-simple `profiles.ini` reader. Modern Thunderbird (and Firefox)
+/// writes an `[InstallXXXXXXXX]` section whose own `Default=` is a *path*
+/// (not a flag) to the profile that install actually uses — found on a real
+/// machine to disagree with an older `[ProfileN]` section's `Default=1` flag
+/// left over from a previous profile switch. The Install section wins when
+/// present; the `[ProfileN]` flag search is the fallback for a profiles.ini
+/// with no Install section at all (older Thunderbird, or a from-scratch test
+/// fixture).
 pub fn default_profile_dir(root: &Path) -> Option<PathBuf> {
     let text = std::fs::read_to_string(root.join("profiles.ini")).ok()?;
-    let mut sections: Vec<Vec<(String, String)>> = Vec::new();
-    let mut current: Option<Vec<(String, String)>> = None;
+    let mut sections: Vec<(String, Vec<(String, String)>)> = Vec::new();
+    let mut current: Option<(String, Vec<(String, String)>)> = None;
     for line in text.lines() {
         let line = line.trim();
         if line.starts_with('[') && line.ends_with(']') {
             if let Some(done) = current.take() {
                 sections.push(done);
             }
-            if line.starts_with("[Profile") {
-                current = Some(Vec::new());
-            }
-        } else if let Some(section) = current.as_mut() {
+            current = Some((line[1..line.len() - 1].to_string(), Vec::new()));
+        } else if let Some((_, fields)) = current.as_mut() {
             if let Some((k, v)) = line.split_once('=') {
-                section.push((k.trim().to_string(), v.trim().to_string()));
+                fields.push((k.trim().to_string(), v.trim().to_string()));
             }
         }
     }
@@ -44,14 +47,30 @@ pub fn default_profile_dir(root: &Path) -> Option<PathBuf> {
         sections.push(done);
     }
     let get = |s: &[(String, String)], key: &str| s.iter().find(|(k, _)| k == key).map(|(_, v)| v.clone());
+    let resolve = |path: &str| -> Option<PathBuf> {
+        let dir = if Path::new(path).is_absolute() { PathBuf::from(path) } else { root.join(path) };
+        dir.is_dir().then_some(dir)
+    };
+
+    // An Install section's Default is a path straight to the profile, already
+    // relative to root the same way a [ProfileN] section's Path is.
+    if let Some(install_path) = sections
+        .iter()
+        .find(|(name, _)| name.starts_with("Install"))
+        .and_then(|(_, fields)| get(fields, "Default"))
+    {
+        if let Some(dir) = resolve(&install_path) {
+            return Some(dir);
+        }
+    }
+
     let chosen = sections
         .iter()
+        .map(|(_, fields)| fields.as_slice())
         .find(|s| get(s, "Default").as_deref() == Some("1"))
-        .or_else(|| sections.first())?;
+        .or_else(|| sections.first().map(|(_, fields)| fields.as_slice()))?;
     let path = get(chosen, "Path")?;
-    let is_relative = get(chosen, "IsRelative").as_deref() != Some("0");
-    let dir = if is_relative { root.join(&path) } else { PathBuf::from(&path) };
-    dir.is_dir().then_some(dir)
+    resolve(&path)
 }
 
 fn folders_in(dir: &Path) -> Vec<Folder> {
@@ -139,6 +158,44 @@ mod tests {
         fs::create_dir_all(root.join("abc123.default-release")).unwrap();
         let found = default_profile_dir(&root).unwrap();
         assert_eq!(found, root.join("abc123.default-release"));
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn an_install_sections_default_path_wins_over_a_stale_profile_default_flag() {
+        // Reproduces a real profiles.ini found on a real machine: a modern
+        // Install section points at the profile actually in use, while an
+        // older [ProfileN] section still carries Default=1 from a previous
+        // profile switch, pointing at a different (here: empty) profile.
+        // Before this fix, the stale flag won and the real profile, with all
+        // the mail in it, was never found.
+        let root = fixture_root("install-section-wins");
+        fs::write(
+            root.join("profiles.ini"),
+            "[Install4A6DE1A2C8832F76]\n\
+             Default=Profiles/real.default-release\n\
+             Locked=1\n\
+             \n\
+             [Profile1]\n\
+             Name=default\n\
+             IsRelative=1\n\
+             Path=Profiles/empty.default\n\
+             Default=1\n\
+             \n\
+             [Profile0]\n\
+             Name=default-release\n\
+             IsRelative=1\n\
+             Path=Profiles/real.default-release\n\
+             \n\
+             [General]\n\
+             StartWithLastProfile=1\n\
+             Version=2\n",
+        )
+        .unwrap();
+        fs::create_dir_all(root.join("Profiles").join("real.default-release")).unwrap();
+        fs::create_dir_all(root.join("Profiles").join("empty.default")).unwrap();
+        let found = default_profile_dir(&root).unwrap();
+        assert_eq!(found, root.join("Profiles").join("real.default-release"));
         let _ = fs::remove_dir_all(&root);
     }
 
