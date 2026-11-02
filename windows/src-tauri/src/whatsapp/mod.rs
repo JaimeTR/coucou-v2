@@ -383,7 +383,7 @@ async fn test_connection() -> TestResult {
 }
 
 fn install() {
-    let _ = process::start_gowa();
+    // Wired up to process::Process in a later task (installer download + process start).
 }
 
 pub fn on_message(app: &AppHandle) {
