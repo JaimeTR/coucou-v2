@@ -45,6 +45,26 @@ pub struct Settings {
     /// until the person picks one in Settings — nothing is read before that.
     #[serde(default)]
     pub mail_watched_accounts: Vec<String>,
+    /// WhatsApp (GOWA gateway): on/off. URL and credential are secrets (see secrets.rs).
+    #[serde(default)]
+    pub whatsapp_enabled: bool,
+    /// Local webhook listener port.
+    #[serde(default = "default_whatsapp_port")]
+    pub whatsapp_port: u16,
+    #[serde(default = "default_true")]
+    pub whatsapp_mute_groups: bool,
+    #[serde(default = "default_true")]
+    pub whatsapp_mark_read_on_open: bool,
+    /// Start GOWA automatically when Coucou does (only when it's installed and the
+    /// configured URL is loopback).
+    #[serde(default)]
+    pub whatsapp_auto_start: bool,
+    /// Path to the GOWA binary Coucou installed, or one the user pointed at.
+    #[serde(default)]
+    pub whatsapp_gowa_path: String,
+    /// Conversation ids (JIDs) hidden from the island.
+    #[serde(default)]
+    pub whatsapp_ignored: Vec<String>,
     /// Dictation anywhere: hold the key, speak, let go, the words are pasted.
     #[serde(default)]
     pub dictation: bool,
@@ -201,6 +221,10 @@ pub struct Settings {
 
 fn default_true() -> bool {
     true
+}
+
+fn default_whatsapp_port() -> u16 {
+    47823
 }
 
 fn default_greeting_template() -> String {
@@ -472,6 +496,13 @@ impl Default for Settings {
             language: default_greeting_language(),
             custom_pills: Vec::new(),
             mail_watched_accounts: Vec::new(),
+            whatsapp_enabled: false,
+            whatsapp_port: default_whatsapp_port(),
+            whatsapp_mute_groups: true,
+            whatsapp_mark_read_on_open: true,
+            whatsapp_auto_start: false,
+            whatsapp_gowa_path: String::new(),
+            whatsapp_ignored: Vec::new(),
             dictation: false,
             dictation_key: default_dictation_key(),
             voice_greeting: false,
@@ -611,6 +642,37 @@ mod tests {
         let json = serde_json::to_string(&s).unwrap();
         let back: Settings = serde_json::from_str(&json).unwrap();
         assert!(back.mail_watched_accounts.is_empty());
+    }
+
+    #[test]
+    fn whatsapp_fields_default_and_round_trip() {
+        let s = Settings::default();
+        assert_eq!(s.whatsapp_enabled, false);
+        assert_eq!(s.whatsapp_port, 47823);
+        assert_eq!(s.whatsapp_mute_groups, true);
+        assert_eq!(s.whatsapp_mark_read_on_open, true);
+        assert_eq!(s.whatsapp_auto_start, false);
+        assert_eq!(s.whatsapp_gowa_path, "");
+        assert!(s.whatsapp_ignored.is_empty());
+
+        let mut s2 = s.clone();
+        s2.whatsapp_enabled = true;
+        s2.whatsapp_port = 9000;
+        s2.whatsapp_ignored = vec!["33612345678@s.whatsapp.net".to_string()];
+        let json = serde_json::to_string(&s2).unwrap();
+        let back: Settings = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.whatsapp_enabled, true);
+        assert_eq!(back.whatsapp_port, 9000);
+        assert_eq!(back.whatsapp_ignored, vec!["33612345678@s.whatsapp.net".to_string()]);
+    }
+
+    #[test]
+    fn settings_json_missing_whatsapp_fields_still_loads() {
+        // An older settings.json, written before this field existed.
+        let json = r#"{"soundEnabled":true,"soundVolume":1.0,"autoCloseInterval":5.0,"absenceInterval":60.0,"activeIntegrations":[],"screen":"primary","autostart":false,"hooksInstalled":false}"#;
+        let s: Settings = serde_json::from_str(json).unwrap();
+        assert_eq!(s.whatsapp_port, 47823);
+        assert_eq!(s.whatsapp_mute_groups, true);
     }
 }
 
