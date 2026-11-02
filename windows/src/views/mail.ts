@@ -6,7 +6,8 @@ import { h, svg, clear } from "./dom.js";
 import { ICONS } from "./icons.js";
 import { Bridge, onEvent } from "../core/bridge.js";
 import { t } from "../core/i18n.js";
-import type { MailMessageInfo } from "../core/mail";
+import { State } from "../core/state.js";
+import type { MailAccountInfo, MailMessageInfo } from "../core/mail";
 
 export interface MailCardHost {
   openSettings(): void;
@@ -65,6 +66,26 @@ export function highlightCode(text: string): string {
   return escaped;
 }
 
+/** The (account, folder) pairs the default list shows: INBOX of watched accounts only. */
+export function inboxFolders(accounts: MailAccountInfo[], watched: string[]): [string, string][] {
+  return accounts
+    .filter((a) => watched.includes(a.id))
+    .flatMap((a) => a.folders.filter((f) => f.toUpperCase() === "INBOX").map((f): [string, string] => [a.id, f]));
+}
+
+/** Newest first by the instant itself (string order breaks across UTC offsets); undated last. */
+export function newestFirst(messages: MailMessageInfo[]): MailMessageInfo[] {
+  const at = (m: MailMessageInfo) => Date.parse(m.dateRfc3339) || 0;
+  return [...messages].sort((x, y) => at(y) - at(x));
+}
+
+/** Rows shown at most, merged across inboxes (each mail_list is already capped in Rust). */
+const MAX_ROWS = 200;
+
+// The card is rebuilt whenever renderIntegrationCard runs again: only the
+// latest one may listen, or every rebuild adds one more full reload per event.
+let unlistenMail: Promise<() => void> | null = null;
+
 export function buildMailCard(host: MailCardHost): MailCard {
   let openMessage: MailMessageInfo | null = null;
   let query = "";
@@ -120,28 +141,39 @@ export function buildMailCard(host: MailCardHost): MailCard {
     return r;
   }
 
+  let reloadSeq = 0;
   async function reload() {
-    clear(listBody);
+    // A mail event can land while a search is still in flight: only the latest
+    // reload may write rows, an older one that finishes late is dropped.
+    const seq = ++reloadSeq;
+    const stale = () => seq !== reloadSeq;
     try {
       if (query.trim()) {
         const messages = (await Bridge.mailSearch(query.trim())) ?? [];
+        if (stale()) return;
+        clear(listBody);
         showMessages(messages, t("No hay resultados"));
         return;
       }
       const accounts = (await Bridge.mailAccounts()) ?? [];
-      if (accounts.length === 0) {
+      if (stale()) return;
+      const watched = State.settings.mailWatchedAccounts;
+      if (accounts.length === 0 || !accounts.some((a) => watched.includes(a.id))) {
+        clear(listBody);
         listBody.append(
-          h("div", { class: "int-status" }, h("span", { class: "mail-status-text", text: t("Sin cuentas configuradas") })),
+          h("div", { class: "int-status" }, h("span", { class: "mail-status-text", text: accounts.length === 0 ? t("Sin cuentas configuradas") : t("Elige qué cuentas leer en Ajustes") })),
           h("div", { class: "int-actions" }, h("button", { class: "link-btn mail-settings", text: t("Ajustes…"), onclick: () => host.openSettings() })),
         );
         return;
       }
       const all: MailMessageInfo[] = [];
-      for (const a of accounts) {
-        for (const f of a.folders) all.push(...((await Bridge.mailList(a.id, f)) ?? []));
-      }
-      showMessages(all.sort((x, y) => y.dateRfc3339.localeCompare(x.dateRfc3339)), t("No hay correo"));
+      for (const [account, folder] of inboxFolders(accounts, watched)) all.push(...((await Bridge.mailList(account, folder)) ?? []));
+      if (stale()) return;
+      clear(listBody);
+      showMessages(newestFirst(all).slice(0, MAX_ROWS), t("No hay correo"));
     } catch (err) {
+      if (stale()) return;
+      clear(listBody);
       listBody.append(h("div", { class: "notice err", text: String(err).replace(/^Error:\s*/, "") }));
     }
   }
@@ -167,7 +199,8 @@ export function buildMailCard(host: MailCardHost): MailCard {
   }
   render();
 
-  onEvent("mail", () => void reload());
+  if (unlistenMail) void unlistenMail.then((off) => off());
+  unlistenMail = onEvent("mail", () => void reload());
   void reload();
 
   return { el, sync: render };

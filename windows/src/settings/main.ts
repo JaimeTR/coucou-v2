@@ -1767,19 +1767,13 @@ function mailSection(): HTMLElement {
       }
       for (const a of accounts) {
         const checked = settings.mailWatchedAccounts.includes(a.id);
-        const box = toggle(checked, async (on) => {
-          const next = on
+        // Persisted by save() like every other Settings toggle (save_settings
+        // also tells the island, whose inbox filters on this list).
+        const box = toggle(checked, (on) => {
+          settings.mailWatchedAccounts = on
             ? [...settings.mailWatchedAccounts, a.id]
             : settings.mailWatchedAccounts.filter((id) => id !== a.id);
-          try {
-            await Bridge.mailSetWatched(next);
-            settings.mailWatchedAccounts = next;
-            await save();
-          } catch (err) {
-            box.classList.toggle("on", !on);
-            box.setAttribute("aria-pressed", String(!on));
-            note.textContent = String(err).replace(/^Error:\s*/, "");
-          }
+          void save();
         });
         list.append(field(a.label, a.folders.length === 1 ? "1 carpeta" : `${a.folders.length} carpetas`, box));
       }

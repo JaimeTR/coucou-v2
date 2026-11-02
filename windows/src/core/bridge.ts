@@ -305,8 +305,7 @@ export const Bridge = {
   mailAccounts: () => call<MailAccountInfo[]>("mail_accounts"),
   mailList: (account: string, folder: string) => call<MailMessageInfo[]>("mail_list", { account, folder }),
   mailSearch: (query: string) => call<MailMessageInfo[]>("mail_search", { query }),
-  mailRead: (account: string, folder: string, offset: number, len: number) => call<string>("mail_read", { account, folder, offset, len }),
-  mailSetWatched: (accounts: string[]) => call<void>("mail_set_watched", { accounts }),
+  mailRead: (account: string, folder: string, offset: number, len: number) => callOrThrow<string>("mail_read", { account, folder, offset, len }),
 
 
   // ── Desktop (Mochi) window ─────────────────────────────────────────────────

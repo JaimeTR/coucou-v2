@@ -46,3 +46,22 @@ test("codeForDisplay groups digits in pairs for easier reading", () => {
   assert.equal(codeForDisplay("90214"), "90 21 4");
   assert.equal(codeForDisplay(""), "");
 });
+
+import { inboxFolders, newestFirst } from "../.test-build/views/mail.js";
+
+test("the default list reads only the INBOX of watched accounts", () => {
+  const accounts = [
+    { id: "a", label: "a", folders: ["INBOX", "Sent", "Trash"] },
+    { id: "b", label: "b", folders: ["Inbox", "Archive"] },
+    { id: "c", label: "c", folders: ["INBOX"] },
+  ];
+  assert.deepEqual(inboxFolders(accounts, ["a", "b"]), [["a", "INBOX"], ["b", "Inbox"]]);
+  assert.deepEqual(inboxFolders(accounts, []), []);
+});
+
+test("newestFirst sorts by the instant, not the string, across UTC offsets", () => {
+  const m = (id, dateRfc3339) => ({ account: "a", folder: "INBOX", offset: id, len: 1, subject: String(id), from: "", dateRfc3339 });
+  // 10:00+05:00 is 05:00Z, earlier than 06:00Z, though it sorts later as a string.
+  const sorted = newestFirst([m(1, "2026-10-27T10:00:00+05:00"), m(2, "2026-10-27T06:00:00Z"), m(3, "")]);
+  assert.deepEqual(sorted.map((x) => x.offset), [2, 1, 3]);
+});
