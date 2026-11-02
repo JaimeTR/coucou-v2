@@ -346,7 +346,7 @@ export const DEFAULT_SETTINGS: Settings = {
   soundVolume: 0.12,
   autoCloseInterval: 15,
   absenceInterval: 180,
-  activeIntegrations: ["agent_claude-desktop", "integration_spotify", "integration_whatsapp", "integration_mail_thunderbird"],
+  activeIntegrations: ["agent_claude-desktop", "integration_spotify", "integration_mail_thunderbird"],
   mailWatchedAccounts: [],
   whatsappEnabled: false,
   whatsappPort: 47823,
@@ -601,7 +601,8 @@ class AppState {
   /** loadIntegrationTasks() — every pill (Claude Code included) is opt-in, up to MAX_ACTIVE_PILLS. */
   loadIntegrationTasks() {
     for (const proto of INTEGRATION_AGENTS) {
-      const shouldLoad = this.settings.activeIntegrations.includes(proto.id);
+      // WhatsApp is parked: its pill is never loaded (the code stays for later).
+      const shouldLoad = proto.id !== "integration_whatsapp" && this.settings.activeIntegrations.includes(proto.id);
       const idx = this.tasks.findIndex((t) => t.id === proto.id);
       const color = this.settings.pillColors?.[proto.id] ?? proto.color;
       if (idx >= 0) this.tasks[idx].color = color;

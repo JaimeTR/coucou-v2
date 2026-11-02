@@ -340,6 +340,7 @@ pub(crate) fn apply_settings(app: &AppHandle, mut settings: Settings) {
     settings.pet_phrases = settings::sanitize_phrases(std::mem::take(&mut settings.pet_phrases));
     settings.pet_friend = settings.pet_friend.trim().chars().take(24).collect();
     settings.game_programs = settings::sanitize_programs(std::mem::take(&mut settings.game_programs));
+    settings.active_integrations.retain(|x| x != whatsapp::PILL_ID); // parked
     settings.pill_colors = settings::sanitize_pill_colors(std::mem::take(&mut settings.pill_colors));
     if !["auto", "work", "game", "meeting", "video"].contains(&settings.work_mode.as_str()) {
         settings.work_mode = "auto".into();
@@ -1269,7 +1270,9 @@ fn open_settings_window(app: AppHandle) {
 
 pub fn run() {
     platform::prepare_environment();
-    let loaded = settings::load();
+    let mut loaded = settings::load();
+    // WhatsApp is parked (see windows/MEJORAS.md): its pill never loads, even from an older settings file.
+    loaded.active_integrations.retain(|x| x != whatsapp::PILL_ID);
     let gate = Arc::new(PollGate::new());
 
     tauri::Builder::default()

@@ -578,15 +578,14 @@ body {
 
 .pill .lbl {
   position: absolute;
-  left: 0;
-  right: 0;
-  text-align: center;
+  left: 38px;
+  right: 6px;
+  text-align: left;
   font: 600 10px var(--font);
   color: var(--dim-3);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  padding: 0 6px;
   pointer-events: none;
 }
 

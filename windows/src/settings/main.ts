@@ -1641,7 +1641,6 @@ const INTEGRATIONS: IntegrationDef[] = [
   { id: "integration_calcom", name: "Cal.com", color: "#C9956A",
     fields: [{ key: "calcom-api-key", label: "Clave API", placeholder: "cal_…", secret: true }] },
   { id: "integration_mail_thunderbird", name: "Mail", color: "#1B6FC9", fields: [] },
-  { id: "integration_whatsapp", name: "WhatsApp", color: "#25D366", fields: [] },
 ];
 
 const MAX_ACTIVE = MAX_ACTIVE_PILLS;
@@ -1871,14 +1870,43 @@ function whatsappSection(): HTMLElement {
       : `Error: ${result.failed.detail}`;
   } });
 
-  const qrImg = h("img", { class: "wa-qr", style: "display:none;max-width:220px;border-radius:10px" }) as HTMLImageElement;
+  const statusBadge = h("div", { class: "notice" });
+  const qrGroup = group("Código QR", field("", "Escanéalo con WhatsApp en tu teléfono (Dispositivos vinculados).",
+    h("img", { class: "wa-qr", style: "max-width:220px;border-radius:10px" }) as HTMLImageElement));
+  const qrImg = qrGroup.querySelector("img") as HTMLImageElement;
+  qrGroup.style.display = "none";
+
   void onEvent<WhatsAppIslandView>("whatsapp", (v) => {
     const state = v.link.state;
+    statusBadge.className = "notice";
     if (typeof state === "object" && "needsQr" in state) {
       qrImg.src = `data:image/png;base64,${state.needsQr.pngBase64}`;
-      qrImg.style.display = "";
-    } else {
-      qrImg.style.display = "none";
+      qrGroup.style.display = "";
+      statusBadge.classList.add("warn");
+      statusBadge.textContent = "Falta vincular: escaneá el código QR de abajo.";
+      return;
+    }
+    qrGroup.style.display = "none";
+    if (state === "connected") {
+      statusBadge.classList.add("ok");
+      statusBadge.textContent = "Conectado.";
+    } else if (state === "connecting") {
+      statusBadge.classList.add("warn");
+      statusBadge.textContent = "Conectando…";
+    } else if (state === "off") {
+      statusBadge.textContent = "Desactivado.";
+    } else if (state === "unreachable") {
+      statusBadge.classList.add("err");
+      statusBadge.textContent = "No se pudo llegar a GOWA — revisá la URL y que esté corriendo.";
+    } else if (state === "unauthorized") {
+      statusBadge.classList.add("err");
+      statusBadge.textContent = "Clave API rechazada.";
+    } else if (state === "badUrl") {
+      statusBadge.classList.add("err");
+      statusBadge.textContent = "URL inválida.";
+    } else if (typeof state === "object" && "failed" in state) {
+      statusBadge.classList.add("err");
+      statusBadge.textContent = `Error: ${state.failed.detail}`;
     }
   });
   void onEvent<WhatsAppSettingsView>("whatsapp-settings", (v) => {
@@ -1889,6 +1917,7 @@ function whatsappSection(): HTMLElement {
     "section",
     { class: "plain" },
     h("p", { class: "lead", text: "Lee y responde WhatsApp desde Mochi, vía GOWA (un gateway local, sin salir de tu PC)." }),
+    statusBadge,
     group("General",
       field("Activado", "Enciende el pill de WhatsApp en la isla.", enabled),
       field("Silenciar grupos", "No avisa cuando llega un mensaje de un grupo.", muteGroups),
@@ -1900,11 +1929,10 @@ function whatsappSection(): HTMLElement {
       field("Puerto del webhook", "Puerto local donde Coucou escucha los mensajes entrantes.", portInput),
       field("Ruta del binario", "Déjalo vacío para usar el que instala el botón de abajo.", gowaPathInput),
       field("Iniciar GOWA con Coucou", "Solo si está instalado y la URL es local.", autoStart),
-      field("", "", saveBtn, gatewayNote),
-      field("", "", installBtn, installNote),
-      field("", "", testBtn, testNote),
+      h("div", { class: "row" }, saveBtn, installBtn, testBtn),
+      h("div", { class: "row" }, gatewayNote, installNote, testNote),
     ),
-    group("Código QR", field("", "Escanéalo con WhatsApp en tu teléfono (Dispositivos vinculados).", qrImg)),
+    qrGroup,
   );
 }
 
@@ -2404,6 +2432,7 @@ async function main() {
 
   // One category at a time, picked in the sidebar. Every section is built once
   // and only moved in and out, so a half-typed field survives a switch.
+  void whatsappSection; // parked: WhatsApp is not offered for now (windows/MEJORAS.md)
   const groups: { id: string; label: string; icon: string; sections: HTMLElement[] }[] = [
     { id: "start", label: "Inicio", icon: ICONS.house, sections: [setupSection(status, present, hasProviderKey, tools, detectedName, agents)] },
     { id: "personal", label: "Personalización", icon: ICONS.star, sections: [personalSection(detectedName)] },
@@ -2414,7 +2443,6 @@ async function main() {
     { id: "chat", label: "Chat e IA", icon: ICONS.bubble, sections: [providerSection(present), apiSection(hasKey)] },
     { id: "integrations", label: "Integraciones", icon: ICONS.arrowUpRight, sections: [integrationsSection(present), customSection()] },
     { id: "mail", label: "Correo", icon: ICONS.doc, sections: [mailSection()] },
-    { id: "whatsapp", label: "WhatsApp", icon: ICONS.bubble, sections: [whatsappSection()] },
     { id: "sync", label: "Sincronización", icon: SYNC_ICON, sections: [syncSection()] },
     { id: "devices", label: "Dispositivos", icon: DEVICES_ICON, sections: [devicesSection()] },
     { id: "general", label: "General", icon: ICONS.gear, sections: [generalSection()] },
