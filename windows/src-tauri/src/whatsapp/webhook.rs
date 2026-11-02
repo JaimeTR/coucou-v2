@@ -21,11 +21,15 @@ pub struct Request {
 
 pub struct Listener {
     stop_tx: Option<tokio::sync::oneshot::Sender<()>>,
+    // The accept loop's own task: kept so `stop_and_wait` can block until the task has actually
+    // exited and dropped its `TcpListener` — `stop()` alone only *signals* it to stop, and a
+    // rebind attempted right after on the same port can otherwise race the old socket's release.
+    join: Option<tokio::task::JoinHandle<()>>,
 }
 
 impl Listener {
     pub fn new() -> Self {
-        Self { stop_tx: None }
+        Self { stop_tx: None, join: None }
     }
 
     pub async fn start<F>(&mut self, port: u16, on_request: F) -> bool
@@ -43,7 +47,7 @@ impl Listener {
         let (stop_tx, mut stop_rx) = tokio::sync::oneshot::channel();
         self.stop_tx = Some(stop_tx);
         let handler = Arc::new(on_request);
-        tokio::spawn(async move {
+        self.join = Some(tokio::spawn(async move {
             loop {
                 tokio::select! {
                     _ = &mut stop_rx => break,
@@ -59,13 +63,29 @@ impl Listener {
                     }
                 }
             }
-        });
+            // Dropping `listener` here (end of scope) releases the bound socket — `stop_and_wait`
+            // relies on this happening before it returns.
+        }));
         true
     }
 
+    /// Fire-and-forget: signals the accept loop to stop, but doesn't wait for it to actually
+    /// exit (and so doesn't guarantee the port is free yet). Fine when nothing is about to
+    /// rebind the same port right away.
     pub fn stop(&mut self) {
         if let Some(tx) = self.stop_tx.take() {
             let _ = tx.send(());
+        }
+    }
+
+    /// Like `stop()`, but waits for the accept loop's task to actually finish (and so for its
+    /// `TcpListener` to be dropped) before returning. Idempotent: safe to call even after a
+    /// plain `stop()` already fired the signal — it just awaits the still-pending join handle.
+    /// Use this before rebinding the same port (see `whatsapp::start_listener`).
+    pub async fn stop_and_wait(&mut self) {
+        self.stop();
+        if let Some(handle) = self.join.take() {
+            let _ = handle.await;
         }
     }
 }

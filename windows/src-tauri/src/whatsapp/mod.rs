@@ -45,8 +45,16 @@ const TICK_EVERY: Duration = Duration::from_secs(5);
 /// No webhook delivery for this long: the fallback poll takes over (Mac's `webhookAlive`).
 const WEBHOOK_ALIVE_WINDOW: Duration = Duration::from_secs(300);
 
+// LinkState/WebhookState/SendError/TestResult/InstallStep are externally tagged
+// (`{needsQr:{pngBase64}}`, plain `"off"` for unit variants), matching the TS side
+// (windows/src/core/whatsapp.ts) exactly — NOT internally tagged with a `state`/`code`/`result`
+// key, which would nest a second copy of the tag inside `LinkView`/`WebhookView`'s own `state`
+// field (`{"state":{"state":"needsQr", ...}}`). `rename_all_fields` renames each struct
+// variant's fields (e.g. `png_base64` -> `pngBase64`); `rename_all` renames the variant tags
+// themselves (e.g. `PortBusy` -> `portBusy`).
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
-#[serde(tag = "state", rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", rename_all_fields = "camelCase")]
 pub enum LinkState {
     Off,
     BadUrl,
@@ -59,7 +67,7 @@ pub enum LinkState {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
-#[serde(tag = "state", rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", rename_all_fields = "camelCase")]
 pub enum WebhookState {
     Off,
     Listening,
@@ -69,7 +77,7 @@ pub enum WebhookState {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
-#[serde(tag = "code", rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", rename_all_fields = "camelCase")]
 pub enum SendError {
     TooLong,
     TooFast,
@@ -132,7 +140,7 @@ pub struct InstallView {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
-#[serde(tag = "step", rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", rename_all_fields = "camelCase")]
 pub enum InstallStep {
     Idle,
     Checking,
@@ -144,7 +152,7 @@ pub enum InstallStep {
 }
 
 #[derive(Clone, Debug, Serialize)]
-#[serde(tag = "result", rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", rename_all_fields = "camelCase")]
 pub enum TestResult {
     Connected { who: String },
     Failed { detail: String },
@@ -166,6 +174,10 @@ struct Control {
     tick: u32,
     generation: u64,
     install_step: InstallStep,
+    /// The last QR fetched while `NeedsQr`, and when it expires (GOWA's own reported validity
+    /// window from `qr_code()` — see provider.rs) — refetching it every 5 s tick would restart
+    /// pairing on GOWA's side each time (mirrors the Mac's `qrExpiry`).
+    qr_cache: Option<(String, Instant)>,
 }
 
 static CTL: LazyLock<Mutex<Control>> = LazyLock::new(|| {
@@ -184,6 +196,7 @@ static CTL: LazyLock<Mutex<Control>> = LazyLock::new(|| {
         tick: 0,
         generation: 0,
         install_step: InstallStep::Idle,
+        qr_cache: None,
     })
 });
 
@@ -228,9 +241,12 @@ fn persist_prefs(app: &AppHandle) {
 }
 
 pub fn start(app: &AppHandle, active_integrations: &[String]) {
-    if !active_integrations.contains(&PILL_ID.to_string()) {
-        return;
-    }
+    // Load prefs/url/credential-flag/secret unconditionally, even if the pill isn't active —
+    // otherwise `Control` keeps `Prefs::default()` (port 0, empty paths/ignored list), and the
+    // first `whatsapp_set_options`/`whatsapp_ignore`/`whatsapp_unignore` call's `persist_prefs`
+    // would overwrite the user's real saved settings with those defaults. Only `begin()` (the
+    // actual network/process/listener activity) is gated on the pill being active.
+    //
     // Shared.settings is already `.manage()`d with the settings loaded at launch by the time
     // `setup()` calls this (see lib.rs) — reuse that copy instead of reading the file twice.
     let settings = app
@@ -245,7 +261,8 @@ pub fn start(app: &AppHandle, active_integrations: &[String]) {
         c.webhook_secret = webhook_secret();
         c.prefs.enabled
     };
-    if !enabled {
+    let pill_active = active_integrations.contains(&PILL_ID.to_string());
+    if !enabled || !pill_active {
         return;
     }
     begin(app);
@@ -318,16 +335,28 @@ impl Control {
 // ── Lifecycle (ports WhatsAppController.swift's begin/stop/onTick/refresh/register) ────────
 
 fn begin(app: &AppHandle) {
+    // Stop whatever is currently running first — same order as the Mac's settingsChanged()
+    // (`stop(forget:)` then `update()`). Without this: (a) an old listener task can still own
+    // the bound port when `start_listener` below tries to rebind it, and (b) a `BadUrl` bail-out
+    // would otherwise leave a previous generation's provider/tick-loop/listener alive forever.
+    // GOWA's own process is left running — `Process::sync` below restarts/adjusts it in place
+    // rather than stopping and relaunching it on every settings tweak.
+    {
+        let mut c = ctl();
+        c.generation += 1;
+        c.listener.stop();
+        c.provider = None;
+    }
     let (url_ok, url, has_cred, generation) = {
         let mut c = ctl();
         let ok = url::Url::parse(&c.url).is_ok();
-        if !ok {
-            c.link = LinkState::BadUrl;
-        } else {
-            c.generation += 1;
+        if ok {
             c.link = LinkState::Connecting;
             c.tick = 0;
             c.last_webhook = None;
+            c.qr_cache = None;
+        } else {
+            c.link = LinkState::BadUrl;
         }
         (ok, c.url.clone(), c.has_credential, c.generation)
     };
@@ -342,10 +371,18 @@ fn begin(app: &AppHandle) {
     }
     start_listener(app, generation);
     {
-        let mut c = ctl();
-        if c.prefs.auto_start {
-            let gowa_path = c.prefs.gowa_path.clone();
-            c.process.sync(&gowa_path, &url, credential.as_deref());
+        let auto_start = ctl().prefs.auto_start;
+        if auto_start {
+            let gowa_path = ctl().prefs.gowa_path.clone();
+            let url = url.clone();
+            // `tokio::process::Command::spawn` needs an active Tokio runtime handle on the
+            // calling thread (registers the child's exit-wait machinery through it on every
+            // platform, not just Unix's SIGCHLD path) — `begin()` can run from a synchronous
+            // Tauri command on the main thread, which has no such handle entered. Running it
+            // inside a task on Tauri's own async runtime guarantees one.
+            tauri::async_runtime::spawn(async move {
+                ctl().process.sync(&gowa_path, &url, credential.as_deref());
+            });
         }
     }
     changed(app);
@@ -365,6 +402,7 @@ fn stop(app: &AppHandle, forget: bool) {
         c.webhook = WebhookState::Off;
         c.last_webhook = None;
         c.tick = 0;
+        c.qr_cache = None;
         if forget {
             c.inbox = Inbox::new();
         }
@@ -398,8 +436,14 @@ fn on_tick(app: &AppHandle, generation: u64) {
             return;
         }
         c.tick += 1;
-        let webhook_alive = c.last_webhook.map(|t| t.elapsed() < WEBHOOK_ALIVE_WINDOW).unwrap_or(false);
-        (c.tick % 12 == 0, c.tick % 4 == 0 && !webhook_alive)
+        if c.link != LinkState::Connected {
+            // Still linking (gateway coming up, QR waiting to be scanned): check every 5 s
+            // tick, not every 60 s — the Mac does the same while not yet connected.
+            (true, false)
+        } else {
+            let webhook_alive = c.last_webhook.map(|t| t.elapsed() < WEBHOOK_ALIVE_WINDOW).unwrap_or(false);
+            (c.tick % 12 == 0, c.tick % 4 == 0 && !webhook_alive)
+        }
     };
     if should_refresh {
         refresh(app, generation);
@@ -428,6 +472,7 @@ fn refresh(app: &AppHandle, generation: u64) {
                         return;
                     }
                     c.link = LinkState::Connected;
+                    c.qr_cache = None;
                     c.webhook == WebhookState::Listening
                 };
                 if should_register {
@@ -436,13 +481,37 @@ fn refresh(app: &AppHandle, generation: u64) {
                 changed(&app);
             }
             Ok(WaLink::NeedsQr) => {
+                // Refetching the QR every 5 s tick would restart pairing on GOWA's side each
+                // time (its login call always does); reuse the last one until it expires
+                // (mirrors the Mac's `qrExpiry`, using GOWA's own reported validity window).
+                let cached = {
+                    let c = ctl();
+                    if c.generation != generation {
+                        return;
+                    }
+                    c.qr_cache.clone().filter(|(_, expires)| Instant::now() < *expires)
+                };
+                if let Some((png_base64, _)) = cached {
+                    let mut c = ctl();
+                    if c.generation != generation {
+                        return;
+                    }
+                    c.link = LinkState::NeedsQr { png_base64 };
+                    drop(c);
+                    changed(&app);
+                    return;
+                }
                 let qr = provider.qr_code().await;
                 let mut c = ctl();
                 if c.generation != generation {
                     return;
                 }
                 c.link = match qr {
-                    Ok(Some((png, _seconds))) => LinkState::NeedsQr { png_base64: B64.encode(&png) },
+                    Ok(Some((png, seconds))) => {
+                        let png_base64 = B64.encode(&png);
+                        c.qr_cache = Some((png_base64.clone(), Instant::now() + Duration::from_secs(seconds as u64)));
+                        LinkState::NeedsQr { png_base64 }
+                    }
                     // ALREADY_LOGGED_IN raced our own status() call — the next tick's status()
                     // will report Connected once GOWA catches up.
                     Ok(None) => LinkState::Connecting,
@@ -502,10 +571,15 @@ fn apply_error(app: &AppHandle, generation: u64, error: WaError) {
     };
     changed(app);
     // GOWA was started by Coucou and seems to have gone (crash, killed): started again, but
-    // `Process::sync` itself refuses to retry more than once a minute.
+    // `Process::sync` itself refuses to retry more than once a minute. Spawned on Tauri's async
+    // runtime for the same reason as `begin()`'s own `process.sync` call — it needs a Tokio
+    // runtime handle on the calling thread, which `apply_error`'s caller (a tick-loop task,
+    // itself already on that runtime, or a refresh task) may or may not have entered directly.
     if restart_process {
-        let credential = has_cred.then(|| crate::secrets::get(CREDENTIAL_KEY)).flatten();
-        ctl().process.sync(&gowa_path, &url, credential.as_deref());
+        tauri::async_runtime::spawn(async move {
+            let credential = has_cred.then(|| crate::secrets::get(CREDENTIAL_KEY)).flatten();
+            ctl().process.sync(&gowa_path, &url, credential.as_deref());
+        });
     }
 }
 
@@ -520,19 +594,35 @@ fn start_listener(app: &AppHandle, generation: u64) {
     let port = ctl().prefs.port;
     let app2 = app.clone();
     tauri::async_runtime::spawn(async move {
-        // `Listener::start` only needs `&mut self` to set up the bind + spawn the accept loop;
-        // the guard must not be held across its `.await` (MutexGuard isn't Send), so take the
-        // listener out, start it unlocked, then put it back.
+        // `Listener::start`/`stop_and_wait` only need `&mut self`; the guard must not be held
+        // across their `.await` (MutexGuard isn't Send), so take the listener out, operate on
+        // it unlocked, then put it back.
         let mut listener = std::mem::replace(&mut ctl().listener, webhook::Listener::new());
+        // `begin()` already called `listener.stop()` (fire-and-forget) before spawning this
+        // task, but that only *signals* the old accept loop — without waiting here for it to
+        // actually release the port, this rebind can race that old task and lose, coming back
+        // `PortBusy` on a port nothing is really listening on anymore.
+        listener.stop_and_wait().await;
         let app3 = app2.clone();
         let started = listener.start(port, move |req| handle_webhook_request(&app3, generation, req)).await;
-        ctl().listener = listener;
         let mut c = ctl();
-        if c.generation == generation {
-            c.webhook = if started { WebhookState::Listening } else { WebhookState::PortBusy { port } };
+        if c.generation != generation {
+            // `stop()` (or another `begin()`) moved on while we were (re)binding: don't
+            // resurrect a listener for a dead generation into `CTL` — leave the fresh one
+            // `begin()`/`stop()` already put there alone, and shut this one back down.
+            drop(c);
+            listener.stop();
+            return;
         }
+        c.listener = listener;
+        c.webhook = if started { WebhookState::Listening } else { WebhookState::PortBusy { port } };
         drop(c);
         settings_changed(&app2);
+        if started {
+            // The Mac calls refresh() as soon as the listener comes up (so registering the
+            // webhook, and showing Connected, doesn't wait for the next periodic tick).
+            refresh(&app2, generation);
+        }
     });
 }
 
@@ -544,6 +634,7 @@ fn handle_webhook_request(app: &AppHandle, generation: u64, req: webhook::Reques
     if !verify_webhook(&req, &secret) {
         return 401;
     }
+    let message = parse_gowa_webhook(&req.body);
     let mut c = ctl();
     if c.generation != generation {
         return 200;
@@ -553,8 +644,143 @@ fn handle_webhook_request(app: &AppHandle, generation: u64, req: webhook::Reques
         c.webhook = WebhookState::Registered;
     }
     drop(c);
-    on_message(app);
+    match message {
+        Some(msg) => received(app, msg),
+        // A validly-signed delivery Coucou has no use for (a receipt, a reaction, a test
+        // ping…): still acked 200, just nothing to show for it.
+        None => {}
+    }
     200
+}
+
+/// One incoming message, stripped down to exactly what `Inbox`/`ConversationView` need —
+/// no text, no media, no message id kept anywhere: the island only ever shows who, how many
+/// unread, and when, never the content (see this file's own top-of-file note).
+struct IncomingMessage {
+    chat_id: String,
+    name: Option<String>,
+    from_me: bool,
+    timestamp_ms: u64,
+}
+
+/// `{"event":"message","device_id":"<own JID>","payload":{id, chat_id, from, from_name,
+/// sender_display_name, timestamp (RFC3339), is_from_me, body, image|video|audio|…}}` — ground
+/// truth is `WAWebhook.parseGOWA` in the Mac's WhatsAppGateway.swift. Anything that isn't a
+/// `"message"` event, or is missing `payload.id`/`payload.chat_id`, is ignored (returns None).
+fn parse_gowa_webhook(body: &[u8]) -> Option<IncomingMessage> {
+    let json: serde_json::Value = serde_json::from_slice(body).ok()?;
+    if json.get("event").and_then(|v| v.as_str()) != Some("message") {
+        return None;
+    }
+    let payload = json.get("payload")?;
+    let has_id = payload.get("id").and_then(|v| v.as_str()).is_some_and(|s| !s.is_empty());
+    let chat_id = payload.get("chat_id").and_then(|v| v.as_str()).filter(|s| !s.is_empty())?.to_string();
+    if !has_id {
+        return None;
+    }
+    let name = payload
+        .get("sender_display_name")
+        .and_then(|v| v.as_str())
+        .or_else(|| payload.get("from_name").and_then(|v| v.as_str()))
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string());
+    let from_me = payload.get("is_from_me").and_then(|v| v.as_bool()).unwrap_or(false);
+    let timestamp_ms = payload
+        .get("timestamp")
+        .and_then(|v| v.as_str())
+        .and_then(parse_rfc3339_millis)
+        .unwrap_or_else(now_ms);
+    Some(IncomingMessage { chat_id, name, from_me, timestamp_ms })
+}
+
+/// Finds or creates the conversation and updates it — never stores message text/media, only
+/// the name, unread count and last-activity time `ConversationView` already exposes.
+fn received(app: &AppHandle, msg: IncomingMessage) {
+    ingest(msg);
+    on_message(app);
+}
+
+/// `received`'s `Inbox` mutation, split out from the `on_message`/`AppHandle` side so it can be
+/// unit-tested without a running Tauri app.
+fn ingest(msg: IncomingMessage) {
+    let mut c = ctl();
+    let ignored = c.prefs.ignored.contains(&msg.chat_id);
+    match c.inbox.conversations.iter_mut().find(|conv| conv.id == msg.chat_id) {
+        Some(conv) => {
+            if let Some(name) = msg.name {
+                conv.name = name;
+            }
+            if !msg.from_me && !ignored {
+                conv.unread += 1;
+            }
+            conv.last_activity = msg.timestamp_ms;
+        }
+        None => {
+            c.inbox.conversations.push(model::Conversation {
+                id: msg.chat_id.clone(),
+                name: msg.name.unwrap_or(msg.chat_id),
+                unread: if msg.from_me { 0 } else { 1 },
+                last_activity: msg.timestamp_ms,
+            });
+        }
+    }
+}
+
+fn now_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0)
+}
+
+/// Minimal RFC3339 → epoch-milliseconds parser for GOWA's `timestamp` field
+/// ("2024-05-01T12:34:56Z", sometimes with fractional seconds or a numeric offset instead of
+/// "Z"). No new date/time dependency: GOWA's own shape is narrow enough that civil-to-days
+/// arithmetic (`days_from_civil`, below) plus a manual offset strip covers it.
+fn parse_rfc3339_millis(s: &str) -> Option<u64> {
+    let (date, rest) = s.split_once('T')?;
+    let mut ymd = date.split('-');
+    let year: i64 = ymd.next()?.parse().ok()?;
+    let month: u32 = ymd.next()?.parse().ok()?;
+    let day: u32 = ymd.next()?.parse().ok()?;
+
+    let (time_part, offset_secs): (&str, i64) = if let Some(t) = rest.strip_suffix('Z') {
+        (t, 0)
+    } else if let Some(pos) = rest.rfind(['+', '-']).filter(|&p| p > 0) {
+        let (t, off) = rest.split_at(pos);
+        let sign: i64 = if off.starts_with('-') { -1 } else { 1 };
+        let mut parts = off[1..].split(':');
+        let oh: i64 = parts.next().and_then(|v| v.parse().ok()).unwrap_or(0);
+        let om: i64 = parts.next().and_then(|v| v.parse().ok()).unwrap_or(0);
+        (t, sign * (oh * 3600 + om * 60))
+    } else {
+        (rest, 0)
+    };
+
+    let mut hms = time_part.split(':');
+    let hour: i64 = hms.next()?.parse().ok()?;
+    let minute: i64 = hms.next()?.parse().ok()?;
+    let sec_field = hms.next()?;
+    let (sec_str, frac) = sec_field.split_once('.').unwrap_or((sec_field, ""));
+    let second: i64 = sec_str.parse().ok()?;
+    let millis: i64 = format!("{:0<3}", &frac[..frac.len().min(3)]).parse().unwrap_or(0);
+
+    let days = days_from_civil(year, month, day);
+    let epoch_secs = days * 86_400 + hour * 3600 + minute * 60 + second - offset_secs;
+    let epoch_millis = epoch_secs * 1000 + millis;
+    (epoch_millis >= 0).then_some(epoch_millis as u64)
+}
+
+/// Howard Hinnant's `days_from_civil` (public-domain, the same algorithm libc++ and most date
+/// libraries use): days since 1970-01-01 for a proleptic-Gregorian calendar date.
+fn days_from_civil(y: i64, m: u32, d: u32) -> i64 {
+    let y = if m <= 2 { y - 1 } else { y };
+    let era = if y >= 0 { y } else { y - 399 } / 400;
+    let yoe = y - era * 400; // [0, 399]
+    let mp = (m as i64 + 9) % 12; // [0, 11]
+    let doy = (153 * mp + 2) / 5 + d as i64 - 1; // [0, 365]
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy; // [0, 146096]
+    era * 146_097 + doe - 719_468
 }
 
 /// GOWA signs its webhook deliveries with `x-hub-signature-256: sha256=<hex HMAC-SHA256 of
@@ -830,5 +1056,72 @@ mod tests {
         };
         assert!(!verify_webhook(&no_header, secret));
         assert!(!verify_webhook(&good, ""));
+    }
+
+    #[test]
+    fn link_state_serializes_externally_tagged_matching_the_ts_side() {
+        assert_eq!(serde_json::to_string(&LinkState::Connected).unwrap(), "\"connected\"");
+        assert_eq!(
+            serde_json::to_string(&LinkState::NeedsQr { png_base64: "abc".into() }).unwrap(),
+            r#"{"needsQr":{"pngBase64":"abc"}}"#
+        );
+        assert_eq!(
+            serde_json::to_value(&LinkView { state: LinkState::Connecting }).unwrap(),
+            serde_json::json!({ "state": "connecting" })
+        );
+    }
+
+    #[test]
+    fn parse_rfc3339_millis_handles_z_and_an_offset() {
+        assert_eq!(parse_rfc3339_millis("2024-05-01T12:34:56Z"), Some(1_714_566_896_000));
+        assert_eq!(parse_rfc3339_millis("2024-05-01T12:34:56.500Z"), Some(1_714_566_896_500));
+        // Same instant, expressed with a +02:00 offset instead of Z.
+        assert_eq!(parse_rfc3339_millis("2024-05-01T14:34:56+02:00"), Some(1_714_566_896_000));
+        assert_eq!(parse_rfc3339_millis("garbage"), None);
+    }
+
+    #[test]
+    fn parse_gowa_webhook_ignores_non_message_events_and_missing_ids() {
+        assert!(parse_gowa_webhook(br#"{"event":"receipt"}"#).is_none());
+        assert!(parse_gowa_webhook(br#"{"event":"message","payload":{"chat_id":"x@s.whatsapp.net"}}"#).is_none());
+        assert!(parse_gowa_webhook(br#"{"event":"message","payload":{"id":"1"}}"#).is_none());
+        assert!(parse_gowa_webhook(b"not json").is_none());
+    }
+
+    #[test]
+    fn parse_gowa_webhook_extracts_a_valid_message() {
+        let body = br#"{"event":"message","payload":{
+            "id":"1","chat_id":"33612345678@s.whatsapp.net","from_name":"Alex",
+            "is_from_me":false,"timestamp":"2024-05-01T12:34:56Z","body":"hi"
+        }}"#;
+        let msg = parse_gowa_webhook(body).unwrap();
+        assert_eq!(msg.chat_id, "33612345678@s.whatsapp.net");
+        assert_eq!(msg.name, Some("Alex".to_string()));
+        assert!(!msg.from_me);
+        assert_eq!(msg.timestamp_ms, 1_714_566_896_000);
+    }
+
+    #[test]
+    fn ingest_creates_then_updates_a_conversation_without_storing_text() {
+        // `ingest` is `received`'s Inbox-mutation half (split out so it's testable without a
+        // running Tauri `AppHandle`). This mutates the process-global CTL; reset what it
+        // touched at the end so other tests in this binary aren't affected.
+        ingest(IncomingMessage { chat_id: "x@s.whatsapp.net".into(), name: Some("Alex".into()), from_me: false, timestamp_ms: 100 });
+        {
+            let c = ctl();
+            let conv = c.inbox.conversations.iter().find(|c| c.id == "x@s.whatsapp.net").unwrap();
+            assert_eq!(conv.name, "Alex");
+            assert_eq!(conv.unread, 1);
+            assert_eq!(conv.last_activity, 100);
+        }
+        ingest(IncomingMessage { chat_id: "x@s.whatsapp.net".into(), name: None, from_me: true, timestamp_ms: 200 });
+        let mut c = ctl();
+        let conv = c.inbox.conversations.iter().find(|c| c.id == "x@s.whatsapp.net").unwrap();
+        // from_me: unread doesn't bump; name carries over when the new delivery has none.
+        assert_eq!(conv.unread, 1);
+        assert_eq!(conv.name, "Alex");
+        assert_eq!(conv.last_activity, 200);
+        // Leave CTL as this test found it for any test that runs after.
+        c.inbox = Inbox::new();
     }
 }
