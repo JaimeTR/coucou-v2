@@ -9,8 +9,11 @@ pub mod profile;
 pub mod watch;
 
 use serde::Serialize;
+use std::collections::HashMap;
 use std::sync::Mutex;
+use tauri::Manager;
 
+use mbox::MessageHeaders;
 use profile::Account;
 
 #[derive(Serialize, Clone, Debug, PartialEq, Eq)]
@@ -63,14 +66,62 @@ mod tests {
         assert!(require_watched(&watched, "imap:b").is_err());
         assert!(require_watched(&[], "imap:a").is_err());
     }
+
+    fn msg(day: u32, subject: &str) -> Vec<u8> {
+        format!("From x Mon Oct {day:02} 09:00:00 2026\r\nSubject: {subject}\r\nDate: {day:02} Oct 2026 09:00:00 +0000\r\n\r\nbody\r\n").into_bytes()
+    }
+
+    fn indexed(messages: &[Vec<u8>]) -> index::FolderIndex {
+        let mut idx = index::FolderIndex::new();
+        index::rescan(&mut idx, &messages.concat());
+        idx
+    }
+
+    #[test]
+    fn list_is_newest_first_and_capped() {
+        let mut indexes = Indexes::new();
+        let many: Vec<_> = (0..MAX_RESULTS + 50).map(|i| msg(1 + (i % 28) as u32, &format!("m{i}"))).collect();
+        indexes.insert(("a".into(), "INBOX".into()), indexed(&many));
+        let out = list(&indexes, "a", "INBOX");
+        assert_eq!(out.len(), MAX_RESULTS);
+        assert_eq!(out[0].subject, format!("m{}", MAX_RESULTS + 49));
+        assert!(list(&indexes, "a", "Never scanned").is_empty());
+    }
+
+    #[test]
+    fn search_covers_only_watched_accounts_newest_date_first() {
+        let mut indexes = Indexes::new();
+        indexes.insert(("a".into(), "INBOX".into()), indexed(&[msg(3, "pago old")]));
+        indexes.insert(("a".into(), "Archive".into()), indexed(&[msg(20, "pago new")]));
+        indexes.insert(("b".into(), "INBOX".into()), indexed(&[msg(25, "pago other account")]));
+        let out = search(&indexes, &["a".to_string()], "pago");
+        let subjects: Vec<_> = out.iter().map(|m| m.subject.as_str()).collect();
+        assert_eq!(subjects, vec!["pago new", "pago old"]);
+    }
+
+    #[test]
+    fn read_range_reads_just_the_slice() {
+        let path = std::env::temp_dir().join(format!("coucou-mail-range-{}", std::process::id()));
+        std::fs::write(&path, b"0123456789").unwrap();
+        assert_eq!(read_range(&path, 3, 4).unwrap(), b"3456");
+        assert_eq!(read_range(&path, 8, 10).unwrap(), b"89");
+        let _ = std::fs::remove_file(&path);
+    }
 }
 
 /// One `FolderIndex` per (account id, folder name), kept for the life of the
 /// app. Rebuilt from nothing at launch — see the privacy section of the spec.
+/// Only the watcher (watch.rs) writes it; the commands below only read it.
 #[derive(Default)]
 pub struct MailState {
-    indexes: Mutex<std::collections::HashMap<(String, String), index::FolderIndex>>,
+    indexes: Mutex<Indexes>,
 }
+
+type Indexes = HashMap<(String, String), index::FolderIndex>;
+
+/// Newest this many messages per list or search: the reader builds one row
+/// per message, a 40 000-message INBOX must not reach it whole.
+const MAX_RESULTS: usize = 200;
 
 fn profile_dir() -> Result<std::path::PathBuf, String> {
     let root = profile::thunderbird_root();
@@ -96,79 +147,97 @@ fn require_watched(watched: &[String], account: &str) -> Result<(), String> {
     }
 }
 
+/// `len` bytes of `path` from `offset` on, without reading the rest of the
+/// file (fewer when the file is shorter).
+pub(crate) fn read_range(path: &std::path::Path, offset: usize, len: usize) -> std::io::Result<Vec<u8>> {
+    use std::io::{Read, Seek, SeekFrom};
+    let mut file = std::fs::File::open(path)?;
+    file.seek(SeekFrom::Start(offset as u64))?;
+    let mut out = Vec::with_capacity(len);
+    file.take(len as u64).read_to_end(&mut out)?;
+    Ok(out)
+}
+
+fn info(account: &str, folder: &str, h: &MessageHeaders) -> MessageInfo {
+    MessageInfo {
+        account: account.to_string(),
+        folder: folder.to_string(),
+        offset: h.offset,
+        len: h.len,
+        subject: h.subject.clone(),
+        from: h.from.clone(),
+        date_rfc3339: h.date_rfc3339.clone(),
+    }
+}
+
+fn list(indexes: &Indexes, account: &str, folder: &str) -> Vec<MessageInfo> {
+    let key = (account.to_string(), folder.to_string());
+    indexes.get(&key).map(|idx| idx.messages().iter().take(MAX_RESULTS).map(|h| info(account, folder, h)).collect()).unwrap_or_default()
+}
+
+fn search(indexes: &Indexes, watched: &[String], query: &str) -> Vec<MessageInfo> {
+    let mut hits: Vec<(&(String, String), &MessageHeaders)> = indexes
+        .iter()
+        .filter(|((account, _), _)| watched.contains(account))
+        .flat_map(|(key, idx)| idx.search(query).into_iter().map(move |h| (key, h)))
+        .collect();
+    hits.sort_by(|a, b| b.1.timestamp.cmp(&a.1.timestamp));
+    hits.into_iter().take(MAX_RESULTS).map(|((account, folder), h)| info(account, folder, h)).collect()
+}
+
+fn watched_accounts(app: &tauri::AppHandle) -> Vec<String> {
+    app.state::<crate::Shared>().settings.lock().unwrap().mail_watched_accounts.clone()
+}
+
+/// Runs `f` on the blocking pool (same as lib.rs's now_playing/spotify):
+/// these commands take the index lock, which the watcher can hold while it
+/// indexes a big folder, and never on the main thread.
+async fn off_main<T: Send + 'static>(f: impl FnOnce() -> Result<T, String> + Send + 'static) -> Result<T, String> {
+    tauri::async_runtime::spawn_blocking(f).await.map_err(|e| e.to_string())?
+}
+
 #[tauri::command]
 pub fn mail_accounts() -> Result<Vec<AccountInfo>, String> {
     let dir = profile_dir()?;
     Ok(profile::accounts(&dir).iter().map(to_account_info).collect())
 }
 
+/// Read-only over what the watcher has already indexed: no file read here,
+/// so a message mid-write is never cached truncated and a new message is
+/// never "seen" before the watcher can alert on it. A folder the watcher
+/// hasn't scanned yet (an account ticked in Settings a moment ago) lists
+/// empty until its first stable poll, ~16 s later.
 #[tauri::command]
-pub fn mail_list(
-    state: tauri::State<MailState>,
-    shared: tauri::State<crate::Shared>,
-    account: String,
-    folder: String,
-) -> Result<Vec<MessageInfo>, String> {
-    let watched = shared.settings.lock().unwrap().mail_watched_accounts.clone();
-    require_watched(&watched, &account)?;
-    let f = find_folder(&account, &folder)?;
-    let bytes = std::fs::read(&f.mbox_path).map_err(|e| e.to_string())?;
-    let mut indexes = state.indexes.lock().unwrap();
-    let idx = indexes.entry((account.clone(), folder.clone())).or_insert_with(index::FolderIndex::new);
-    index::rescan(idx, &bytes);
-    Ok(idx
-        .messages()
-        .iter()
-        .map(|h| MessageInfo {
-            account: account.clone(),
-            folder: folder.clone(),
-            offset: h.offset,
-            len: h.len,
-            subject: h.subject.clone(),
-            from: h.from.clone(),
-            date_rfc3339: h.date_rfc3339.clone(),
-        })
-        .collect())
+pub async fn mail_list(app: tauri::AppHandle, account: String, folder: String) -> Result<Vec<MessageInfo>, String> {
+    off_main(move || {
+        require_watched(&watched_accounts(&app), &account)?;
+        Ok(list(&app.state::<MailState>().indexes.lock().unwrap(), &account, &folder))
+    })
+    .await
+}
+
+/// Same read-only rule as `mail_list`, across every watched folder.
+#[tauri::command]
+pub async fn mail_search(app: tauri::AppHandle, query: String) -> Result<Vec<MessageInfo>, String> {
+    off_main(move || {
+        let watched = watched_accounts(&app);
+        Ok(search(&app.state::<MailState>().indexes.lock().unwrap(), &watched, &query))
+    })
+    .await
 }
 
 #[tauri::command]
-pub fn mail_search(state: tauri::State<MailState>, settings: tauri::State<crate::Shared>, query: String) -> Result<Vec<MessageInfo>, String> {
-    let watched = settings.settings.lock().unwrap().mail_watched_accounts.clone();
-    let dir = profile_dir()?;
-    let mut out = Vec::new();
-    let mut indexes = state.indexes.lock().unwrap();
-    for account in profile::accounts(&dir).into_iter().filter(|a| watched.contains(&a.id)) {
-        for folder in &account.folders {
-            let Ok(bytes) = std::fs::read(&folder.mbox_path) else { continue };
-            let idx = indexes.entry((account.id.clone(), folder.name.clone())).or_insert_with(index::FolderIndex::new);
-            index::rescan(idx, &bytes);
-            for h in idx.search(&query) {
-                out.push(MessageInfo {
-                    account: account.id.clone(),
-                    folder: folder.name.clone(),
-                    offset: h.offset,
-                    len: h.len,
-                    subject: h.subject.clone(),
-                    from: h.from.clone(),
-                    date_rfc3339: h.date_rfc3339.clone(),
-                });
-            }
+pub async fn mail_read(app: tauri::AppHandle, account: String, folder: String, offset: usize, len: usize) -> Result<String, String> {
+    off_main(move || {
+        require_watched(&watched_accounts(&app), &account)?;
+        let moved = || "Ese mensaje ya no está donde se esperaba.".to_string();
+        offset.checked_add(len).ok_or_else(moved)?;
+        let f = find_folder(&account, &folder)?;
+        let raw = read_range(&f.mbox_path, offset, len).map_err(|e| e.to_string())?;
+        if raw.len() != len {
+            return Err(moved());
         }
-    }
-    Ok(out)
-}
-
-#[tauri::command]
-pub fn mail_read(account: String, folder: String, offset: usize, len: usize) -> Result<String, String> {
-    let f = find_folder(&account, &folder)?;
-    let bytes = std::fs::read(&f.mbox_path).map_err(|e| e.to_string())?;
-    let raw = bytes.get(offset..offset + len).ok_or("Ese mensaje ya no está donde se esperaba.")?;
-    mbox::parse_body(raw).ok_or_else(|| "No se pudo leer este mensaje.".to_string())
-}
-
-#[tauri::command]
-pub fn mail_set_watched(shared: tauri::State<crate::Shared>, accounts: Vec<String>) -> Result<(), String> {
-    let mut s = shared.settings.lock().unwrap();
-    s.mail_watched_accounts = accounts;
-    crate::settings::save(&s).map_err(|e| e.to_string())
+        mbox::parse_body(&raw).ok_or_else(|| "No se pudo leer este mensaje.".to_string())
+    })
+    .await
 }

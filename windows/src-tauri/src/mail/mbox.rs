@@ -15,6 +15,11 @@ pub struct MessageHeaders {
     pub from: String,
     pub date_rfc3339: String,
     pub message_id: String,
+    /// Seconds since the epoch from the Date header (0 when missing), for sorting.
+    pub timestamp: i64,
+    /// Thunderbird deleted or moved this message (`X-Mozilla-Status` bit
+    /// 0x0008): its bytes stay in the file until the folder is compacted.
+    pub expunged: bool,
 }
 
 /// Byte ranges of each raw RFC 822 message in an mbox file, in file order. A
@@ -57,12 +62,17 @@ fn display_mailbox(m: Option<mail_parser::Mailbox>) -> String {
     }
 }
 
-/// Headers only — cheap even though it goes through the same parser as the
-/// body, since `mail-parser` decodes the body lazily on `.body_text()`.
+/// Headers only: `parse_headers` stops at the header block, so the MIME tree
+/// (attachments included) is never parsed for the list view.
 pub fn parse_headers(raw: &[u8], offset: usize, len: usize) -> MessageHeaders {
-    let Some(message) = MessageParser::new().parse(raw) else {
-        return MessageHeaders { offset, len, subject: String::new(), from: String::new(), date_rfc3339: String::new(), message_id: String::new() };
+    let Some(message) = MessageParser::new().parse_headers(raw) else {
+        return MessageHeaders { offset, len, subject: String::new(), from: String::new(), date_rfc3339: String::new(), message_id: String::new(), timestamp: 0, expunged: false };
     };
+    let status = message
+        .headers()
+        .get("X-Mozilla-Status")
+        .and_then(|h| std::str::from_utf8(h.raw_value()).ok().and_then(|v| u32::from_str_radix(v.trim(), 16).ok()))
+        .unwrap_or(0);
     MessageHeaders {
         offset,
         len,
@@ -70,6 +80,8 @@ pub fn parse_headers(raw: &[u8], offset: usize, len: usize) -> MessageHeaders {
         from: display_mailbox(message.from().and_then(|l| l.first())),
         date_rfc3339: message.date().map(|d| d.to_rfc3339()).unwrap_or_default(),
         message_id: message.message_id().unwrap_or_default().to_string(),
+        timestamp: message.date().map(|d| d.to_timestamp()).unwrap_or(0),
+        expunged: status & 0x0008 != 0,
     }
 }
 
@@ -134,6 +146,16 @@ Code=3A 4821\r\n";
         let raw = &TWO_MESSAGES[offset..offset + len];
         let body = parse_body(raw).unwrap();
         assert!(body.contains("Code: 4821"), "got: {body:?}");
+    }
+
+    #[test]
+    fn x_mozilla_status_bit_0008_marks_a_message_expunged() {
+        let live = parse_headers(b"X-Mozilla-Status: 0001\r\nSubject: a\r\n\r\nbody\r\n", 0, 0);
+        assert!(!live.expunged);
+        let gone = parse_headers(b"X-Mozilla-Status: 0009\r\nSubject: a\r\n\r\nbody\r\n", 0, 0);
+        assert!(gone.expunged);
+        assert_eq!(gone.subject, "a");
+        assert!(!parse_headers(b"Subject: no status\r\n\r\nbody\r\n", 0, 0).expunged);
     }
 
     #[test]

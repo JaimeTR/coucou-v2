@@ -51,7 +51,7 @@ use desktop::{create, home, hide, is_visible, move_to, position, show};
 use files::DroppedFile;
 use hooks::{HookPreview, HookStatus};
 use island::{PollGate, ScreenInfo};
-use mail::{mail_accounts, mail_list, mail_read, mail_search, mail_set_watched, MailState};
+use mail::{mail_accounts, mail_list, mail_read, mail_search, MailState};
 use pipe::Pending;
 use settings::Settings;
 use whatsapp::{whatsapp_ignore, whatsapp_install, whatsapp_save_gateway, whatsapp_send, whatsapp_set_options, whatsapp_settings, whatsapp_test, whatsapp_unignore};
@@ -1397,7 +1397,6 @@ pub fn run() {
             mail_list,
             mail_search,
             mail_read,
-            mail_set_watched,
             shortcuts_plan,
             desktop_create,
             desktop_show,

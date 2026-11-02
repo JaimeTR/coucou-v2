@@ -18,6 +18,11 @@ impl FolderIndex {
         Self::default()
     }
 
+    /// How many bytes of the folder's file are already indexed.
+    pub fn scanned_len(&self) -> usize {
+        self.last_scanned_len
+    }
+
     /// Newest message first.
     pub fn messages(&self) -> &[MessageHeaders] {
         &self.messages
@@ -39,27 +44,30 @@ impl FolderIndex {
 /// Returns only the messages that are new since the last call: empty when
 /// nothing grew, everything when the file shrank (Thunderbird compacted it)
 /// or this is the very first scan after a `FolderIndex::new()`.
+#[cfg(test)] // the watcher reads only the new tail and calls `append`
 pub fn rescan(index: &mut FolderIndex, mbox_bytes: &[u8]) -> Vec<MessageHeaders> {
     if mbox_bytes.len() < index.last_scanned_len {
         // Shrank: the old offsets are meaningless. Start over.
-        index.messages.clear();
-        index.last_scanned_len = 0;
+        *index = FolderIndex::new();
     }
+    append(index, &mbox_bytes[index.last_scanned_len..])
+}
+
+/// Indexes `tail`, the folder's bytes from `index.scanned_len()` on, so a
+/// caller can read just the new end of a big file. Same return as `rescan`.
+/// Expunged messages (deleted or moved, awaiting compaction) are skipped, so
+/// nothing downstream (list, search, code alerts) ever sees them.
+pub fn append(index: &mut FolderIndex, tail: &[u8]) -> Vec<MessageHeaders> {
     let from_offset = index.last_scanned_len;
-    let new_bytes = &mbox_bytes[from_offset..];
-    let ranges = mbox::split(new_bytes);
-    let mut added = Vec::with_capacity(ranges.len());
-    for (offset, len) in ranges {
-        let raw = &new_bytes[offset..offset + len];
-        let headers = mbox::parse_headers(raw, from_offset + offset, len);
-        added.push(headers);
-    }
-    index.last_scanned_len = mbox_bytes.len();
+    let added: Vec<MessageHeaders> = mbox::split(tail)
+        .into_iter()
+        .map(|(offset, len)| mbox::parse_headers(&tail[offset..offset + len], from_offset + offset, len))
+        .filter(|h| !h.expunged)
+        .collect();
+    index.last_scanned_len = from_offset + tail.len();
     // Newest first in the stored list: new messages (append-only in the
-    // file) go to the front.
-    for h in added.iter() {
-        index.messages.insert(0, h.clone());
-    }
+    // file) go to the front, in one O(n) splice.
+    index.messages.splice(0..0, added.iter().rev().cloned());
     added
 }
 
@@ -111,6 +119,30 @@ mod tests {
         let new = rescan(&mut idx, FIRST);
         assert_eq!(new.len(), 1);
         assert_eq!(idx.messages().len(), 1);
+    }
+
+    #[test]
+    fn an_expunged_message_is_never_indexed() {
+        let mut idx = FolderIndex::new();
+        let mut bytes = FIRST.to_vec();
+        bytes.extend_from_slice(b"From c Wed Oct 28 10:00:00 2026\r\nX-Mozilla-Status: 0008\r\nSubject: Gone\r\n\r\nbye\r\n");
+        let new = rescan(&mut idx, &bytes);
+        assert_eq!(new.len(), 1);
+        assert_eq!(idx.messages().len(), 1);
+        assert_eq!(idx.messages()[0].subject, "One");
+        assert_eq!(idx.scanned_len(), bytes.len());
+    }
+
+    #[test]
+    fn appending_two_messages_at_once_keeps_newest_first() {
+        let mut idx = FolderIndex::new();
+        let mut grown = FIRST.to_vec();
+        grown.extend_from_slice(SECOND);
+        grown.extend_from_slice(b"From c Wed Oct 28 10:00:00 2026\r\nSubject: Three\r\n\r\nyo\r\n");
+        rescan(&mut idx, FIRST);
+        rescan(&mut idx, &grown);
+        let subjects: Vec<_> = idx.messages().iter().map(|m| m.subject.as_str()).collect();
+        assert_eq!(subjects, vec!["Three", "Two", "One"]);
     }
 
     #[test]
