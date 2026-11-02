@@ -5,7 +5,7 @@ export type WhatsAppLinkState =
   | "off"
   | "badUrl"
   | "connecting"
-  | "needsQr"
+  | { needsQr: { pngBase64: string } }
   | "connected"
   | "unreachable"
   | "unauthorized"

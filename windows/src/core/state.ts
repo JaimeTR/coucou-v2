@@ -223,6 +223,16 @@ export interface Settings {
   activeIntegrations: string[];
   /** Thunderbird account ids (profile::Account.id) the Mail pill watches. */
   mailWatchedAccounts: string[];
+  /** WhatsApp (GOWA gateway): on/off. URL and credential are secrets, not here. */
+  whatsappEnabled: boolean;
+  /** Local webhook listener port. */
+  whatsappPort: number;
+  whatsappMuteGroups: boolean;
+  whatsappMarkReadOnOpen: boolean;
+  /** Start GOWA automatically when Coucou does. */
+  whatsappAutoStart: boolean;
+  /** Path to the GOWA binary Coucou installed, or one the user pointed at. */
+  whatsappGowaPath: string;
   screen: "primary" | "cursor";
   autostart: boolean;
   hooksInstalled: boolean;
@@ -334,6 +344,12 @@ export const DEFAULT_SETTINGS: Settings = {
   absenceInterval: 180,
   activeIntegrations: ["integration_github"],
   mailWatchedAccounts: [],
+  whatsappEnabled: false,
+  whatsappPort: 47823,
+  whatsappMuteGroups: true,
+  whatsappMarkReadOnOpen: true,
+  whatsappAutoStart: false,
+  whatsappGowaPath: "",
   screen: "primary",
   autostart: false,
   hooksInstalled: false,

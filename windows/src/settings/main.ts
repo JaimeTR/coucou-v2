@@ -17,6 +17,7 @@ import { pairingQr } from "./qr";
 import { isOutfit, OUTFIT_NAMES, OUTFITS } from "../mochi/outfits";
 import { TOPIC_NAMES, TOPICS } from "../pet/phrases";
 import { MODE_CHOICES, MODE_NAMES } from "../core/modes";
+import type { WhatsAppInstallStep, WhatsAppIslandView, WhatsAppSettingsView } from "../core/whatsapp";
 
 /** A paw: the pet. */
 const PET_ICON = "M12 12.5c-2.6 0-5.2 1.7-5.2 4.2 0 1.6 1.2 2.7 2.7 2.7 1 0 1.6-.5 2.5-.5s1.5.5 2.5.5c1.5 0 2.7-1.1 2.7-2.7 0-2.5-2.600-4.200-5.200-4.200zM5.800 6.800a1.800 2.300 0 1 0 0 4.600 1.800 2.300 0 1 0 0-4.600zM9.600 3.600a1.800 2.400 0 1 0 0 4.800 1.800 2.400 0 1 0 0-4.800zM14.400 3.600a1.800 2.400 0 1 0 0 4.800 1.800 2.400 0 1 0 0-4.800zM18.200 6.800a1.800 2.300 0 1 0 0 4.600 1.800 2.300 0 1 0 0-4.600z";
@@ -1638,6 +1639,7 @@ const INTEGRATIONS: IntegrationDef[] = [
   { id: "integration_calcom", name: "Cal.com", color: "#C9956A",
     fields: [{ key: "calcom-api-key", label: "Clave API", placeholder: "cal_…", secret: true }] },
   { id: "integration_mail_thunderbird", name: "Mail", color: "#1B6FC9", fields: [] },
+  { id: "integration_whatsapp", name: "WhatsApp", color: "#25D366", fields: [] },
 ];
 
 const MAX_ACTIVE = 4;
@@ -1789,6 +1791,122 @@ function mailSection(): HTMLElement {
     { class: "plain" },
     h("p", { class: "lead", text: "Lee tu correo de Thunderbird en este PC, sin conexión. Gmail u Outlook solo en el navegador no aparecen aquí a menos que los agregues a Thunderbird." }),
     group("Cuentas", list, note),
+  );
+}
+
+function installStepText(step: WhatsAppInstallStep): string {
+  if (step === "idle") return "";
+  if (step === "checking") return "Comprobando…";
+  if (step === "verifying") return "Verificando…";
+  if (step === "installing") return "Instalando…";
+  if ("downloading" in step) return `Descargando… ${step.downloading.megabytes} MB`;
+  if ("done" in step) return `Instalado (${step.done.version}).`;
+  return `Error: ${step.failed.reason}`;
+}
+
+function whatsappSection(): HTMLElement {
+  const enabled = toggle(settings.whatsappEnabled, (on) => {
+    settings.whatsappEnabled = on;
+    void Bridge.whatsappSetOptions(settings.whatsappEnabled, settings.whatsappMuteGroups, settings.whatsappMarkReadOnOpen);
+  });
+  const muteGroups = toggle(settings.whatsappMuteGroups, (on) => {
+    settings.whatsappMuteGroups = on;
+    void Bridge.whatsappSetOptions(settings.whatsappEnabled, settings.whatsappMuteGroups, settings.whatsappMarkReadOnOpen);
+  });
+  const markReadOnOpen = toggle(settings.whatsappMarkReadOnOpen, (on) => {
+    settings.whatsappMarkReadOnOpen = on;
+    void Bridge.whatsappSetOptions(settings.whatsappEnabled, settings.whatsappMuteGroups, settings.whatsappMarkReadOnOpen);
+  });
+
+  const urlInput = h("input", {
+    type: "text", placeholder: "http://127.0.0.1:3000", autocomplete: "off", spellcheck: "false",
+  }) as HTMLInputElement;
+  const credInput = h("input", {
+    type: "password", placeholder: "Clave API de GOWA (opcional)", autocomplete: "off", spellcheck: "false",
+  }) as HTMLInputElement;
+  const portInput = h("input", {
+    type: "number", min: "1024", max: "65535", value: String(settings.whatsappPort), style: "width:80px",
+  }) as HTMLInputElement;
+  const gowaPathInput = h("input", {
+    type: "text", placeholder: "(el que instaló Coucou)", value: settings.whatsappGowaPath, autocomplete: "off", spellcheck: "false",
+  }) as HTMLInputElement;
+  const autoStart = toggle(settings.whatsappAutoStart, (on) => { settings.whatsappAutoStart = on; });
+
+  const gatewayNote = h("div", { class: "hint" });
+  const saveBtn = h("button", { class: "primary", text: "Guardar", onclick: async () => {
+    clear(gatewayNote);
+    const port = Number(portInput.value) || settings.whatsappPort;
+    const result = await Bridge.whatsappSaveGateway(
+      "gowa",
+      urlInput.value.trim(),
+      credInput.value.trim() ? credInput.value.trim() : null,
+      port,
+      settings.whatsappAutoStart,
+      gowaPathInput.value.trim(),
+    );
+    settings.whatsappPort = port;
+    credInput.value = "";
+    gatewayNote.append(h("div", {
+      class: `notice ${result === null ? "err" : "ok"}`,
+      text: result === null ? "No se pudo guardar." : "Guardado.",
+    }));
+  } });
+
+  const installNote = h("div", { class: "hint" });
+  const installBtn = h("button", { text: "Instalar GOWA", onclick: async () => {
+    installNote.textContent = "Comprobando…";
+    await Bridge.whatsappInstall();
+  } });
+
+  const testNote = h("div", { class: "hint" });
+  const testBtn = h("button", { text: "Probar conexión", onclick: async () => {
+    testNote.textContent = "Probando…";
+    const result = await Bridge.whatsappTest();
+    if (!result) { testNote.textContent = "No se pudo probar."; return; }
+    testNote.textContent = "connected" in result
+      ? `Conectado como ${result.connected.who}.`
+      : `Error: ${result.failed.detail}`;
+  } });
+
+  const defaultUrlNote = h("div", { class: "hint" });
+  void Bridge.whatsappSettings().then((v) => {
+    if (v) defaultUrlNote.textContent = `GOWA debe enviar sus webhooks a: ${v.defaultUrl}`;
+  });
+
+  const qrImg = h("img", { class: "wa-qr", style: "display:none;max-width:220px;border-radius:10px" }) as HTMLImageElement;
+  void onEvent<WhatsAppIslandView>("whatsapp", (v) => {
+    const state = v.link.state;
+    if (typeof state === "object" && "needsQr" in state) {
+      qrImg.src = `data:image/png;base64,${state.needsQr.pngBase64}`;
+      qrImg.style.display = "";
+    } else {
+      qrImg.style.display = "none";
+    }
+  });
+  void onEvent<WhatsAppSettingsView>("whatsapp-settings", (v) => {
+    installNote.textContent = installStepText(v.install.step);
+  });
+
+  return h(
+    "section",
+    { class: "plain" },
+    h("p", { class: "lead", text: "Lee y responde WhatsApp desde Mochi, vía GOWA (un gateway local, sin salir de tu PC)." }),
+    group("General",
+      field("Activado", "Enciende el pill de WhatsApp en la isla.", enabled),
+      field("Silenciar grupos", "No avisa cuando llega un mensaje de un grupo.", muteGroups),
+      field("Marcar leído al abrir", "Marca la conversación como leída al abrirla en la isla.", markReadOnOpen),
+    ),
+    group("Conexión a GOWA",
+      field("URL", "Dirección del servidor GOWA, p. ej. http://127.0.0.1:3000.", urlInput),
+      field("Clave API", "Se guarda en el Administrador de credenciales de Windows.", credInput),
+      field("Puerto del webhook", "Puerto local donde Coucou escucha los mensajes entrantes.", portInput),
+      field("Ruta del binario", "Déjalo vacío para usar el que instala el botón de abajo.", gowaPathInput),
+      field("Iniciar GOWA con Coucou", "Solo si está instalado y la URL es local.", autoStart),
+      field("", "", saveBtn, gatewayNote),
+      field("", defaultUrlNote, installBtn, installNote),
+      field("", "", testBtn, testNote),
+    ),
+    group("Código QR", field("", "Escanéalo con WhatsApp en tu teléfono (Dispositivos vinculados).", qrImg)),
   );
 }
 
@@ -2298,6 +2416,7 @@ async function main() {
     { id: "chat", label: "Chat e IA", icon: ICONS.bubble, sections: [providerSection(present), apiSection(hasKey)] },
     { id: "integrations", label: "Integraciones", icon: ICONS.arrowUpRight, sections: [integrationsSection(present), customSection()] },
     { id: "mail", label: "Correo", icon: ICONS.doc, sections: [mailSection()] },
+    { id: "whatsapp", label: "WhatsApp", icon: ICONS.bubble, sections: [whatsappSection()] },
     { id: "sync", label: "Sincronización", icon: SYNC_ICON, sections: [syncSection()] },
     { id: "devices", label: "Dispositivos", icon: DEVICES_ICON, sections: [devicesSection()] },
     { id: "general", label: "General", icon: ICONS.gear, sections: [generalSection()] },
