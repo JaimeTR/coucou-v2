@@ -26,7 +26,7 @@ pub const CODE_KEY: &str = "sync-code";
 /// Settings that describe this machine, not the person: they never travel.
 const PER_DEVICE: &[&str] = &[
     "screen", "islandPosition", "islandOffset", "autostart", "hooksInstalled",
-    "syncUrl", "syncRev", "syncDevice",
+    "syncUrl", "syncRev", "syncDevice", "mailWatchedAccounts",
 ];
 
 pub struct Keys {
@@ -539,6 +539,15 @@ mod tests {
         assert_eq!(next.user_name, "Jaime");
         assert_eq!(next.screen, "cursor");
         assert!(next.autostart);
+    }
+
+    #[test]
+    fn watched_mail_accounts_stay_on_this_pc() {
+        let mut local = settings::Settings::default();
+        local.mail_watched_accounts = vec!["imap:a".into()];
+        assert!(shared_part(&local).get("mailWatchedAccounts").is_none());
+        let remote = serde_json::json!({ "mailWatchedAccounts": ["imap:other"] });
+        assert_eq!(merged(&local, &remote).unwrap().mail_watched_accounts, vec!["imap:a"]);
     }
 }
 
