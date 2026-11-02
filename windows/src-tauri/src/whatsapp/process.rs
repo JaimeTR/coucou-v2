@@ -19,6 +19,19 @@ pub fn binary_name() -> &'static str {
     "gowa"
 }
 
+/// `rest --host=127.0.0.1 --port=<url's port, default 3000> --auto-download-media=false` —
+/// ground truth: `WhatsAppGateway.launchArguments(for:)` (WhatsAppGateway.swift:186-188).
+/// Without these, GOWA starts with no subcommand and never serves the REST API at all.
+pub fn launch_arguments(url: &str) -> Vec<String> {
+    let port = url::Url::parse(url).ok().and_then(|u| u.port()).unwrap_or(3000);
+    vec![
+        "rest".to_string(),
+        "--host=127.0.0.1".to_string(),
+        format!("--port={port}"),
+        "--auto-download-media=false".to_string(),
+    ]
+}
+
 /// Only ever start a process pointed at this machine: an address elsewhere is someone
 /// else's gateway, never something Coucou should spawn a process to reach.
 pub fn is_loopback_url(url: &str) -> bool {
@@ -75,7 +88,7 @@ impl Process {
             return false;
         }
         let mut cmd = Command::new(binary_path);
-        cmd.current_dir(&dir).env("APP_UI_ENABLED", "false");
+        cmd.args(launch_arguments(url)).current_dir(&dir).env("APP_UI_ENABLED", "false");
         if let Some(cred) = credential {
             if cred.contains(':') {
                 cmd.env("APP_BASIC_AUTH", cred);
@@ -150,6 +163,19 @@ mod tests {
     fn sync_refuses_a_missing_binary() {
         let mut p = Process::new();
         assert!(!p.sync("/nonexistent/gowa", "http://127.0.0.1:3000", None));
+    }
+
+    #[test]
+    fn launch_arguments_builds_the_gowa_rest_command() {
+        assert_eq!(
+            launch_arguments("http://127.0.0.1:4000"),
+            vec!["rest", "--host=127.0.0.1", "--port=4000", "--auto-download-media=false"],
+        );
+    }
+
+    #[test]
+    fn launch_arguments_defaults_the_port_when_the_url_has_none() {
+        assert_eq!(launch_arguments("http://127.0.0.1")[2], "--port=3000");
     }
 
     #[test]

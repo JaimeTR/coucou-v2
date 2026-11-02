@@ -39,7 +39,9 @@ pub const SECRET_KEY: &str = "whatsapp-webhook-secret";
 const ISLAND_EVENT: &str = "whatsapp";
 const PILL_EVENT: &str = "whatsapp-pill";
 const SETTINGS_EVENT: &str = "whatsapp-settings";
-const DEFAULT_PORT: u16 = 3000;
+/// GOWA's own default when Coucou installs/runs it (`process::launch_arguments`'s fallback
+/// port). Ground truth: WhatsAppGOWAInstaller.swift resets the URL to this on a fresh install.
+const DEFAULT_URL: &str = "http://127.0.0.1:3000";
 /// How often `on_tick` runs once the integration is on (mirrors the Mac's 5 s `Timer`).
 const TICK_EVERY: Duration = Duration::from_secs(5);
 /// No webhook delivery for this long: the fallback poll takes over (Mac's `webhookAlive`).
@@ -130,7 +132,6 @@ pub struct ConversationView {
 pub struct SettingsView {
     pub webhook: WebhookView,
     pub install: InstallView,
-    pub default_url: String,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -271,7 +272,7 @@ pub fn start(app: &AppHandle, active_integrations: &[String]) {
     let enabled = {
         let mut c = ctl();
         c.prefs = Prefs::from_settings(&settings);
-        c.url = crate::secrets::get(URL_KEY).unwrap_or_default();
+        c.url = crate::secrets::get(URL_KEY).filter(|u| !u.trim().is_empty()).unwrap_or_else(|| DEFAULT_URL.to_string());
         c.has_credential = crate::secrets::get(CREDENTIAL_KEY).map(|v| !v.trim().is_empty()).unwrap_or(false);
         c.webhook_secret = webhook_secret();
         c.prefs.enabled
@@ -342,14 +343,22 @@ impl Control {
         SettingsView {
             webhook: WebhookView { state: self.webhook.clone() },
             install: InstallView { step: self.install_step.clone() },
-            default_url: format!("http://127.0.0.1:{}{}", DEFAULT_PORT, WEBHOOK_PATH),
         }
     }
 }
 
 // ── Lifecycle (ports WhatsAppController.swift's begin/stop/onTick/refresh/register) ────────
 
-fn begin(app: &AppHandle) {
+/// True while both sides of the module's own doc-comment contract hold: the integration is on
+/// AND its pill is active. `begin()` below re-checks this itself (not just its callers) so
+/// nothing can start the lifecycle while either is false.
+fn pill_active(app: &AppHandle) -> bool {
+    app.try_state::<crate::Shared>()
+        .map(|s| s.settings.lock().unwrap().active_integrations.iter().any(|x| x == PILL_ID))
+        .unwrap_or(false)
+}
+
+pub(crate) fn begin(app: &AppHandle) {
     // Stop whatever is currently running first — same order as the Mac's settingsChanged()
     // (`stop(forget:)` then `update()`). Without this: (a) an old listener task can still own
     // the bound port when `start_listener` below tries to rebind it, and (b) a `BadUrl` bail-out
@@ -370,6 +379,15 @@ fn begin(app: &AppHandle) {
         c.qr_cache = None;
         c.refreshing = false;
         c.webhook = WebhookState::Off;
+    }
+    // Gate on both halves of the contract this module's own doc comment states: "runs only
+    // while the integration is on and its pill is active". Without this, e.g.
+    // `whatsapp_set_options(enabled=true)` started the lifecycle even with the pill removed
+    // from `active_integrations`.
+    if !ctl().prefs.enabled || !pill_active(app) {
+        ctl().link = LinkState::Off;
+        changed(app);
+        return;
     }
     let (url_ok, url, has_cred, generation) = {
         let mut c = ctl();
@@ -784,10 +802,11 @@ fn received(app: &AppHandle, msg: IncomingMessage) {
     on_message(app);
 }
 
-/// `received`'s `Inbox` mutation, split out from the `on_message`/`AppHandle` side so it can be
-/// unit-tested without a running Tauri app. Ground truth: `WAInbox.add`
-/// (`WhatsAppModels.swift:134-175`).
-fn ingest(msg: IncomingMessage) {
+/// `received`'s `Inbox` mutation. Pure (no global state) so it can be unit-tested with a local
+/// `Inbox` instead of the shared `CTL` — several tests sharing that global's inbox used to race
+/// under parallel test execution (one test's `clear_inbox()` could wipe another's state mid-
+/// assertion). Ground truth: `WAInbox.add` (`WhatsAppModels.swift:134-175`).
+fn ingest_into(inbox: &mut Inbox, ignored: &[String], msg: IncomingMessage) {
     // `WAJID.isConversation` (WhatsAppModels.swift:79, referencing issue #901): a status
     // broadcast or a newsletter channel isn't a chat at all — never becomes a conversation,
     // never counts unread.
@@ -800,9 +819,8 @@ fn ingest(msg: IncomingMessage) {
     // replying from the phone never renames a private chat to your own name.
     let person_name = if is_group || msg.from_me { None } else { msg.name };
 
-    let mut c = ctl();
-    let ignored = c.prefs.ignored.contains(&msg.chat_id);
-    match c.inbox.conversations.iter_mut().find(|conv| conv.id == msg.chat_id) {
+    let is_ignored = ignored.iter().any(|x| x == &msg.chat_id);
+    match inbox.conversations.iter_mut().find(|conv| conv.id == msg.chat_id) {
         Some(conv) => {
             if let Some(name) = person_name {
                 conv.name = name;
@@ -810,21 +828,28 @@ fn ingest(msg: IncomingMessage) {
             if msg.from_me {
                 // "You answered from the phone: it is read there." (WhatsAppModels.swift:165-168)
                 conv.unread = 0;
-            } else if !ignored {
+            } else if !is_ignored {
                 conv.unread += 1;
             }
             // A late/out-of-order delivery shouldn't move the timestamp backward.
             conv.last_activity = conv.last_activity.max(msg.timestamp_ms);
         }
         None => {
-            c.inbox.conversations.push(model::Conversation {
+            inbox.conversations.push(model::Conversation {
                 id: msg.chat_id.clone(),
                 name: person_name.unwrap_or(msg.chat_id),
-                unread: if msg.from_me || ignored { 0 } else { 1 },
+                unread: if msg.from_me || is_ignored { 0 } else { 1 },
                 last_activity: msg.timestamp_ms,
             });
         }
     }
+}
+
+/// The real caller: locks `CTL`, extracts what the pure function needs, writes the result back.
+fn ingest(msg: IncomingMessage) {
+    let mut c = ctl();
+    let ignored = c.prefs.ignored.clone();
+    ingest_into(&mut c.inbox, &ignored, msg);
 }
 
 fn now_ms() -> u64 {
@@ -1077,7 +1102,7 @@ fn start_install(app: AppHandle) {
             settings_changed(&progress_app);
         })
         .await;
-        {
+        let should_begin = {
             let mut c = ctl();
             c.install_step = match &result {
                 Ok(version) => InstallStep::Done { version: version.clone() },
@@ -1086,10 +1111,23 @@ fn start_install(app: AppHandle) {
             if result.is_ok() {
                 c.prefs.gowa_path =
                     process::working_dir().join(process::binary_name()).to_string_lossy().to_string();
+                // Ground truth: WhatsAppGOWAInstaller.swift on success — resets the URL to
+                // GOWA's default, turns auto-start on, and restarts the lifecycle so the QR
+                // follows right away instead of leaving a fresh install sitting at BadUrl.
+                c.prefs.auto_start = true;
+                if c.url.trim().is_empty() {
+                    c.url = DEFAULT_URL.to_string();
+                    let _ = crate::secrets::set_internal(URL_KEY, &c.url);
+                }
+                c.process.stop_now(); // an older one gives way
             }
-        }
+            result.is_ok() && c.prefs.enabled
+        };
         persist_prefs(&app);
         settings_changed(&app);
+        if should_begin {
+            begin(&app);
+        }
     });
 }
 
@@ -1208,62 +1246,55 @@ mod tests {
         assert_eq!(msg.name, Some("Alex".to_string()));
     }
 
-    /// Resets the process-global `CTL.inbox` after a test that called `ingest`, so other tests
-    /// in this binary aren't affected by it.
-    fn clear_inbox() {
-        ctl().inbox = Inbox::new();
-    }
-
     #[test]
     fn ingest_creates_then_updates_a_conversation_without_storing_text() {
-        ingest(IncomingMessage { chat_id: "x@s.whatsapp.net".into(), name: Some("Alex".into()), from_me: false, timestamp_ms: 100 });
+        let mut inbox = Inbox::new();
+        ingest_into(&mut inbox, &[], IncomingMessage { chat_id: "x@s.whatsapp.net".into(), name: Some("Alex".into()), from_me: false, timestamp_ms: 100 });
         {
-            let c = ctl();
-            let conv = c.inbox.conversations.iter().find(|c| c.id == "x@s.whatsapp.net").unwrap();
+            let conv = inbox.conversations.iter().find(|c| c.id == "x@s.whatsapp.net").unwrap();
             assert_eq!(conv.name, "Alex");
             assert_eq!(conv.unread, 1);
             assert_eq!(conv.last_activity, 100);
         }
         // from_me, ground truth WAInbox.add: "you answered from the phone, it is read there" —
         // unread clears to 0, not just "doesn't bump".
-        ingest(IncomingMessage { chat_id: "x@s.whatsapp.net".into(), name: None, from_me: true, timestamp_ms: 200 });
+        ingest_into(&mut inbox, &[], IncomingMessage { chat_id: "x@s.whatsapp.net".into(), name: None, from_me: true, timestamp_ms: 200 });
         {
-            let c = ctl();
-            let conv = c.inbox.conversations.iter().find(|c| c.id == "x@s.whatsapp.net").unwrap();
+            let conv = inbox.conversations.iter().find(|c| c.id == "x@s.whatsapp.net").unwrap();
             assert_eq!(conv.unread, 0);
             assert_eq!(conv.name, "Alex"); // name carries over when the new delivery has none
             assert_eq!(conv.last_activity, 200);
         }
-        clear_inbox();
     }
 
     #[test]
     fn ingest_never_takes_the_name_from_a_group_or_from_your_own_message() {
         // Group: the last sender never renames the group chat.
-        ingest(IncomingMessage { chat_id: "120363@g.us".into(), name: Some("Alex".into()), from_me: false, timestamp_ms: 1 });
-        assert_eq!(ctl().inbox.conversations.iter().find(|c| c.id == "120363@g.us").unwrap().name, "120363@g.us");
-        clear_inbox();
+        let mut inbox = Inbox::new();
+        ingest_into(&mut inbox, &[], IncomingMessage { chat_id: "120363@g.us".into(), name: Some("Alex".into()), from_me: false, timestamp_ms: 1 });
+        assert_eq!(inbox.conversations.iter().find(|c| c.id == "120363@g.us").unwrap().name, "120363@g.us");
 
         // Own message: replying from the phone never renames a private chat to your own name.
-        ingest(IncomingMessage { chat_id: "x@s.whatsapp.net".into(), name: Some("Alex".into()), from_me: false, timestamp_ms: 1 });
-        ingest(IncomingMessage { chat_id: "x@s.whatsapp.net".into(), name: Some("Me".into()), from_me: true, timestamp_ms: 2 });
-        assert_eq!(ctl().inbox.conversations.iter().find(|c| c.id == "x@s.whatsapp.net").unwrap().name, "Alex");
-        clear_inbox();
+        let mut inbox2 = Inbox::new();
+        ingest_into(&mut inbox2, &[], IncomingMessage { chat_id: "x@s.whatsapp.net".into(), name: Some("Alex".into()), from_me: false, timestamp_ms: 1 });
+        ingest_into(&mut inbox2, &[], IncomingMessage { chat_id: "x@s.whatsapp.net".into(), name: Some("Me".into()), from_me: true, timestamp_ms: 2 });
+        assert_eq!(inbox2.conversations.iter().find(|c| c.id == "x@s.whatsapp.net").unwrap().name, "Alex");
     }
 
     #[test]
     fn ingest_ignores_broadcast_and_newsletter_jids() {
-        ingest(IncomingMessage { chat_id: "status@broadcast".into(), name: None, from_me: false, timestamp_ms: 1 });
-        ingest(IncomingMessage { chat_id: "123@newsletter".into(), name: None, from_me: false, timestamp_ms: 1 });
-        assert!(ctl().inbox.conversations.is_empty());
+        let mut inbox = Inbox::new();
+        ingest_into(&mut inbox, &[], IncomingMessage { chat_id: "status@broadcast".into(), name: None, from_me: false, timestamp_ms: 1 });
+        ingest_into(&mut inbox, &[], IncomingMessage { chat_id: "123@newsletter".into(), name: None, from_me: false, timestamp_ms: 1 });
+        assert!(inbox.conversations.is_empty());
     }
 
     #[test]
     fn ingest_never_moves_last_activity_backward() {
-        ingest(IncomingMessage { chat_id: "x@s.whatsapp.net".into(), name: Some("Alex".into()), from_me: false, timestamp_ms: 200 });
+        let mut inbox = Inbox::new();
+        ingest_into(&mut inbox, &[], IncomingMessage { chat_id: "x@s.whatsapp.net".into(), name: Some("Alex".into()), from_me: false, timestamp_ms: 200 });
         // An out-of-order/late delivery with an earlier timestamp shouldn't rewind the clock.
-        ingest(IncomingMessage { chat_id: "x@s.whatsapp.net".into(), name: None, from_me: false, timestamp_ms: 100 });
-        assert_eq!(ctl().inbox.conversations.iter().find(|c| c.id == "x@s.whatsapp.net").unwrap().last_activity, 200);
-        clear_inbox();
+        ingest_into(&mut inbox, &[], IncomingMessage { chat_id: "x@s.whatsapp.net".into(), name: None, from_me: false, timestamp_ms: 100 });
+        assert_eq!(inbox.conversations.iter().find(|c| c.id == "x@s.whatsapp.net").unwrap().last_activity, 200);
     }
 }

@@ -1868,11 +1868,6 @@ function whatsappSection(): HTMLElement {
       : `Error: ${result.failed.detail}`;
   } });
 
-  const defaultUrlNote = h("div", { class: "hint" });
-  void Bridge.whatsappSettings().then((v) => {
-    if (v) defaultUrlNote.textContent = `GOWA debe enviar sus webhooks a: ${v.defaultUrl}`;
-  });
-
   const qrImg = h("img", { class: "wa-qr", style: "display:none;max-width:220px;border-radius:10px" }) as HTMLImageElement;
   void onEvent<WhatsAppIslandView>("whatsapp", (v) => {
     const state = v.link.state;
@@ -1903,7 +1898,7 @@ function whatsappSection(): HTMLElement {
       field("Ruta del binario", "Déjalo vacío para usar el que instala el botón de abajo.", gowaPathInput),
       field("Iniciar GOWA con Coucou", "Solo si está instalado y la URL es local.", autoStart),
       field("", "", saveBtn, gatewayNote),
-      field("", defaultUrlNote, installBtn, installNote),
+      field("", "", installBtn, installNote),
       field("", "", testBtn, testNote),
     ),
     group("Código QR", field("", "Escanéalo con WhatsApp en tu teléfono (Dispositivos vinculados).", qrImg)),

@@ -72,6 +72,18 @@ pub fn platform_suffix() -> &'static str {
     { "darwin_amd64.zip" } // not shipped on this platform, kept for completeness
 }
 
+/// The binary's name *inside* GOWA's release zip — GoReleaser names it `{os}-{arch}` (`.exe`
+/// suffix on Windows), NOT `gowa`/`gowa.exe` (`process::binary_name()`), which is only what
+/// Coucou renames the extracted file TO on disk once it's unpacked.
+fn gowa_release_entry_name() -> &'static str {
+    #[cfg(windows)]
+    { "windows-amd64.exe" }
+    #[cfg(all(unix, not(target_os = "macos")))]
+    { "linux-amd64" }
+    #[cfg(target_os = "macos")]
+    { "darwin-amd64" }
+}
+
 pub fn pick_asset(assets: &[ReleaseAsset]) -> Option<&ReleaseAsset> {
     assets.iter().find(|a| a.name.ends_with(platform_suffix()))
 }
@@ -162,7 +174,7 @@ pub async fn install(
     }
 
     progress(crate::whatsapp::InstallStep::Installing);
-    let binary_bytes = archive::extract(&zip_bytes, super::process::binary_name())
+    let binary_bytes = archive::extract(&zip_bytes, gowa_release_entry_name())
         .ok_or(InstallError::UnpackFailed)?;
     let dir = super::process::working_dir();
     std::fs::create_dir_all(&dir).map_err(|_| InstallError::UnpackFailed)?;
@@ -216,6 +228,17 @@ mod tests {
     fn checksum_lines_may_have_a_leading_binary_marker_asterisk() {
         let checksums = "aabbcc *whatsapp_9.8.0_windows_amd64.zip\n";
         assert_eq!(expected_sha256("whatsapp_9.8.0_windows_amd64.zip", checksums), Some("aabbcc".to_string()));
+    }
+
+    #[test]
+    fn gowa_release_entry_name_is_not_the_renamed_destination() {
+        // The zip's own entry name must never collapse onto `process::binary_name()` — that
+        // name only exists after Coucou renames the extracted file on disk.
+        assert_ne!(gowa_release_entry_name(), super::super::process::binary_name());
+        #[cfg(windows)]
+        assert_eq!(gowa_release_entry_name(), "windows-amd64.exe");
+        #[cfg(all(unix, not(target_os = "macos")))]
+        assert_eq!(gowa_release_entry_name(), "linux-amd64");
     }
 
     #[test]

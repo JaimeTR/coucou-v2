@@ -15,6 +15,7 @@ import { MODE_CHOICES, MODE_COLORS, MODE_NAMES, modeLabel } from "../core/modes"
 import { clock, positionAt, type SpotifyAction } from "../core/spotify";
 import { refreshSpotify } from "../island/spotify";
 import { buildMailCard } from "./mail";
+import { buildWhatsAppCard } from "./whatsapp";
 
 /** Same shape as the Swift `timeAgo` computed properties. */
 export function timeAgo(value: unknown): string {
@@ -932,7 +933,11 @@ export function renderIntegrationCard(task: AgentTask, hooks: IntegrationCardHoo
   // Claude Code and VS Code each have a card of their own, whatever their state.
   if (task.id === "integration_claude") return claudeCard(task, hooks.openSettings);
   if (task.id === "agent_vscode") return vscodeCard(task, hooks.openSettings);
-  if (task.id === "integration_whatsapp") return whatsappCard(task, hooks.openSettings);
+  if (task.id === "integration_whatsapp") {
+    // keyboard/holdOpen have no island-wide equivalent yet (no other card asks to suspend
+    // auto-close while typing) → skipped, add when the island grows that mechanism.
+    return buildWhatsAppCard({ openSettings: hooks.openSettings, keyboard: () => {}, holdOpen: () => {} }).el;
+  }
   if (task.id === "integration_mail_thunderbird") return buildMailCard({ openSettings: hooks.openSettings }).el;
   if (task.id === "agent_claude-desktop") return claudeDesktopCard(task, hooks.openSettings);
   if (task.id === "agent_codex") return codexCard(task, hooks.openSettings);
@@ -958,21 +963,6 @@ export function renderIntegrationCard(task: AgentTask, hooks: IntegrationCardHoo
     default:
       return idleCard(task, hooks.openSettings);
   }
-}
-
-function whatsappCard(task: AgentTask, openSettings: () => void): HTMLElement {
-  const connected = State.integrations[task.id]?.configured ?? false;
-  const card = h("div", { class: "int-card" }, header(task.color, task.name, connected ? "Conectado" : "Sin conectar"));
-  card.append(
-    h("div", { class: "int-sub", text: connected
-      ? "Tus mensajes de WhatsApp llegan aquí. Responde desde la isla."
-      : "Conecta WhatsApp para ver aquí tus mensajes." }),
-  );
-  const actions = h("div", { class: "int-actions" },
-    h("button", { class: "link-btn", style: `color:${task.color}d9`, text: "Ajustes…", onclick: openSettings }),
-  );
-  card.append(actions);
-  return card;
 }
 
 export { clear };

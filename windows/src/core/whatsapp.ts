@@ -57,7 +57,6 @@ export type WhatsAppIslandView = {
 export type WhatsAppSettingsView = {
   webhook: WhatsAppWebhookView;
   install: { step: WhatsAppInstallStep };
-  defaultUrl: string;
 };
 
 export const WHATSAPP_ID = "integration_whatsapp";

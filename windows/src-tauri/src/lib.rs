@@ -310,6 +310,16 @@ fn save_settings(app: AppHandle, mut settings: Settings) {
         settings.sync_url = current.sync_url.clone();
         settings.sync_rev = current.sync_rev;
         settings.sync_device = current.sync_device.clone();
+        // Same reasoning: the WhatsApp lifecycle (whatsapp.rs) owns these, keeping its own
+        // in-memory copy in step via its own commands — an unrelated save from the Settings
+        // window (volume, a toggle) must not clobber them with its possibly-stale copy.
+        settings.whatsapp_enabled = current.whatsapp_enabled;
+        settings.whatsapp_port = current.whatsapp_port;
+        settings.whatsapp_mute_groups = current.whatsapp_mute_groups;
+        settings.whatsapp_mark_read_on_open = current.whatsapp_mark_read_on_open;
+        settings.whatsapp_auto_start = current.whatsapp_auto_start;
+        settings.whatsapp_gowa_path = current.whatsapp_gowa_path.clone();
+        settings.whatsapp_ignored = current.whatsapp_ignored.clone();
     }
     apply_settings(&app, settings);
     // Made here: the other computers get it.
@@ -339,13 +349,15 @@ pub(crate) fn apply_settings(app: &AppHandle, mut settings: Settings) {
         let current = shared.settings.lock().unwrap();
         current.dictation != settings.dictation || current.dictation_key != settings.dictation_key
     };
-    let (screen_changed, autostart_changed, shortcuts_changed) = {
+    let (screen_changed, autostart_changed, shortcuts_changed, whatsapp_pill_changed) = {
         let mut current = shared.settings.lock().unwrap();
         let screen_changed = current.screen != settings.screen || current.island_position != settings.island_position;
         let autostart_changed = current.autostart != settings.autostart;
         let shortcuts_changed = current.global_shortcuts != settings.global_shortcuts;
+        let has_pill = |s: &Settings| s.active_integrations.iter().any(|x| x == whatsapp::PILL_ID);
+        let whatsapp_pill_changed = has_pill(&current) != has_pill(&settings);
         *current = settings.clone();
-        (screen_changed, autostart_changed, shortcuts_changed)
+        (screen_changed, autostart_changed, shortcuts_changed, whatsapp_pill_changed)
     };
     if shortcuts_changed {
         apply_shortcut_setting(&app, settings.global_shortcuts);
@@ -369,6 +381,11 @@ pub(crate) fn apply_settings(app: &AppHandle, mut settings: Settings) {
     if screen_changed {
         let collapsed = shared.gate.collapsed.load(Ordering::Relaxed);
         island::apply_geometry(&app, &settings.screen, collapsed);
+    }
+    if whatsapp_pill_changed {
+        // Live, not "takes effect after a restart": `begin()` re-checks both halves of its own
+        // gate (enabled AND pill active) and either starts the lifecycle or shuts it down.
+        whatsapp::begin(&app);
     }
     // Keep the other window in step (island ⇄ settings window).
     let _ = app.emit("settings-changed", settings);

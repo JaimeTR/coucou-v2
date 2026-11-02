@@ -164,11 +164,17 @@ impl Provider {
             return Ok(None);
         }
         Self::check(status, &body)?;
-        let Some(qr_path) = body.get("results").and_then(|r| r.get("qr_link")).and_then(|v| v.as_str()) else {
+        let Some(qr_link) = body.get("results").and_then(|r| r.get("qr_link")).and_then(|v| v.as_str()) else {
             return Ok(None);
         };
+        // `qr_link` is a FULL URL (e.g. "http://127.0.0.1:3000/statics/qrcode/scan-xyz.png"),
+        // never a bare path — take only its path, never the scheme/host/port the gateway's
+        // response names, and always hit our own configured `base_url` with it (ground truth:
+        // WhatsAppGateway.swift:177-181, "never from another host the link may name").
+        let Ok(parsed) = url::Url::parse(qr_link) else { return Ok(None) };
+        let qr_path = parsed.path().to_string();
         let seconds = body.get("results").and_then(|r| r.get("qr_duration")).and_then(|v| v.as_u64()).unwrap_or(30) as u32;
-        let (png_status, png) = self.call_raw(reqwest::Method::GET, qr_path).await?;
+        let (png_status, png) = self.call_raw(reqwest::Method::GET, &qr_path).await?;
         if png_status != 200 || !png.starts_with(&[0x89, 0x50, 0x4E, 0x47]) {
             return Ok(None);
         }
@@ -266,6 +272,53 @@ mod tests {
         let base = fixture(401, r#"{"code":"AUTHENTICATION_ERROR"}"#).await;
         let p = Provider::new(base, None);
         assert_eq!(p.status().await.unwrap_err(), WaError::NotLinked);
+    }
+
+    #[tokio::test]
+    async fn qr_code_uses_only_the_qr_links_path_against_our_own_base_url() {
+        use std::sync::Arc;
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let captured: Arc<std::sync::Mutex<Option<String>>> = Arc::new(std::sync::Mutex::new(None));
+        let captured2 = captured.clone();
+        tokio::spawn(async move {
+            // 1) GET /devices -> an existing (not-yet-linked) device.
+            if let Ok((mut stream, _)) = listener.accept().await {
+                let mut buf = [0u8; 4096];
+                let _ = stream.read(&mut buf).await;
+                let body = r#"{"results":[{"id":"coucou","state":"connecting"}]}"#;
+                let resp = format!("HTTP/1.1 200 X\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}", body.len(), body);
+                let _ = stream.write_all(resp.as_bytes()).await;
+            }
+            // 2) GET /devices/coucou/login -> qr_link is a FULL url on a different host.
+            if let Ok((mut stream, _)) = listener.accept().await {
+                let mut buf = [0u8; 4096];
+                let _ = stream.read(&mut buf).await;
+                let body = r#"{"results":{"device_id":"coucou","qr_link":"http://evil.example.com:9999/statics/qrcode/scan-xyz.png","qr_duration":30}}"#;
+                let resp = format!("HTTP/1.1 200 X\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}", body.len(), body);
+                let _ = stream.write_all(resp.as_bytes()).await;
+            }
+            // 3) The PNG fetch itself: must land on OUR listener (our base_url), path-only.
+            if let Ok((mut stream, _)) = listener.accept().await {
+                let mut buf = [0u8; 4096];
+                let n = stream.read(&mut buf).await.unwrap_or(0);
+                *captured2.lock().unwrap() = Some(String::from_utf8_lossy(&buf[..n]).to_string());
+                let png: &[u8] = &[0x89, 0x50, 0x4E, 0x47, 0, 0, 0, 0];
+                let head = format!("HTTP/1.1 200 X\r\nContent-Type: image/png\r\nContent-Length: {}\r\n\r\n", png.len());
+                let _ = stream.write_all(head.as_bytes()).await;
+                let _ = stream.write_all(png).await;
+            }
+        });
+
+        let base = format!("http://127.0.0.1:{port}");
+        let p = Provider::new(base, None);
+        let result = p.qr_code().await.unwrap();
+        assert!(result.is_some());
+
+        let request = captured.lock().unwrap().clone().unwrap();
+        assert!(request.starts_with("GET /statics/qrcode/scan-xyz.png"), "request line was: {request}");
+        assert!(!request.contains("evil.example.com"));
     }
 
     #[tokio::test]
