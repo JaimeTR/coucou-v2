@@ -11,6 +11,10 @@ import type { Rule, RuleDraft } from "../island/rules";
 
 const MAX_DIFFS = 50;
 
+/** How many pills can show next to Mochi at once. Single source of truth — the
+ *  Settings pickers, the compact strip and the island's pill grid all read this. */
+export const MAX_ACTIVE_PILLS = 6;
+
 export type AgentSource = "claudeCode" | "n8n" | "agent";
 export type PillBadge = "approval" | "finished" | "error";
 
@@ -168,7 +172,7 @@ export const INTEGRATION_AGENTS: AgentTask[] = [
 ];
 
 export const TOGGLEABLE_INTEGRATION_IDS = [
-  "integration_resend", "integration_vercel", "integration_github",
+  "integration_claude", "integration_resend", "integration_vercel", "integration_github",
   "integration_notion", "integration_calcom", "integration_stripe",
   "agent_gemini", "agent_opencode", "agent_copilot", "agent_muse", "agent_codex", "agent_cursor", "agent_amp", "agent_hermes",
   "agent_claude-desktop", "agent_vscode", "integration_system", "integration_spotify",
@@ -342,7 +346,7 @@ export const DEFAULT_SETTINGS: Settings = {
   soundVolume: 0.12,
   autoCloseInterval: 15,
   absenceInterval: 180,
-  activeIntegrations: ["integration_github"],
+  activeIntegrations: ["agent_claude-desktop", "integration_spotify", "integration_whatsapp", "integration_mail_thunderbird"],
   mailWatchedAccounts: [],
   whatsappEnabled: false,
   whatsappPort: 47823,
@@ -355,7 +359,7 @@ export const DEFAULT_SETTINGS: Settings = {
   hooksInstalled: false,
   model: "claude-opus-5",
   userName: "",
-  startPill: "integration_claude",
+  startPill: "agent_claude-desktop",
   greetingPicker: true,
   greetingEnabled: true,
   greetingTemplate: "Hola {name}",
@@ -594,19 +598,18 @@ class AppState {
     this.notify();
   }
 
-  /** loadIntegrationTasks() — VS Code always on, the rest opt-in (max 4). */
+  /** loadIntegrationTasks() — every pill (Claude Code included) is opt-in, up to MAX_ACTIVE_PILLS. */
   loadIntegrationTasks() {
     for (const proto of INTEGRATION_AGENTS) {
-      const shouldLoad =
-        proto.id === "integration_claude" || this.settings.activeIntegrations.includes(proto.id);
+      const shouldLoad = this.settings.activeIntegrations.includes(proto.id);
       const idx = this.tasks.findIndex((t) => t.id === proto.id);
       const color = this.settings.pillColors?.[proto.id] ?? proto.color;
       if (idx >= 0) this.tasks[idx].color = color;
       if (shouldLoad && idx < 0) this.tasks.push({ ...proto, color, steps: [] });
       if (!shouldLoad && idx >= 0) this.tasks.splice(idx, 1);
     }
-    // Order: integration_claude first, then agent_* pills (visible in slice(0,4)),
-    // then other integrations in declaration order.
+    // Order: integration_claude first when active, then agent_* pills (visible in
+    // slice(0, MAX_ACTIVE_PILLS)), then other integrations in declaration order.
     const order = INTEGRATION_AGENTS.map((t) => t.id);
     this.tasks.sort((a, b) => {
       const isAgentA = a.id.startsWith("agent_");
@@ -622,7 +625,7 @@ class AppState {
       return order.indexOf(a.id) - order.indexOf(b.id);
     });
     this.loadCustomTasks();
-    if (!this.focusId) this.focusId = "integration_claude";
+    if (!this.focusId) this.focusId = this.tasks[0]?.id ?? null;
     this.notify();
   }
 
@@ -670,7 +673,7 @@ class AppState {
   }
 
   /** Creates a dynamic agent_ pill on first event; no-ops if it already exists.
-   *  Inserted right after integration_claude so it appears in the visible slice(0,4). */
+   *  Inserted right after integration_claude so it appears in the visible slice(0, MAX_ACTIVE_PILLS). */
   upsertExternalAgent(id: string, name: string, color: string) {
     if (this.tasks.some((t) => t.id === id)) return;
     // An agent Coucou knows has its own name and colour (a session of "claude-desktop" is "Claude Desktop").
@@ -690,13 +693,12 @@ class AppState {
   }
 
   toggleIntegration(id: string) {
-    if (id === "integration_claude") return;
     const active = this.settings.activeIntegrations;
     if (active.includes(id)) {
       this.settings.activeIntegrations = active.filter((x) => x !== id);
-      if (this.focusId === id) this.focusId = "integration_claude";
+      if (this.focusId === id) this.focusId = this.tasks.find((t) => t.id !== id)?.id ?? null;
     } else {
-      if (active.length >= 4) return;
+      if (active.length >= MAX_ACTIVE_PILLS) return;
       this.settings.activeIntegrations = [...active, id];
     }
     this.loadIntegrationTasks();

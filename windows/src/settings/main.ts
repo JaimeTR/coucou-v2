@@ -10,7 +10,7 @@ import { speak, stopSpeaking } from "../core/voice";
 import { State } from "../core/state";
 import { captureAccelerator } from "../core/accelerator";
 import { greetingLines } from "../island/greetingText";
-import { CUSTOM_PILL_LIMIT, DEFAULT_SETTINGS, WEBHOOK_PORT, type CustomPill, type Settings } from "../core/state";
+import { CUSTOM_PILL_LIMIT, DEFAULT_SETTINGS, MAX_ACTIVE_PILLS, WEBHOOK_PORT, type CustomPill, type Settings } from "../core/state";
 import { h, clear, svg } from "../views/dom";
 import { ICONS } from "../views/icons";
 import { pairingQr } from "./qr";
@@ -1624,6 +1624,8 @@ interface IntegrationDef {
 }
 
 const INTEGRATIONS: IntegrationDef[] = [
+  { id: "integration_claude", name: "Claude Code", color: "#D97757", fields: [] },
+  { id: "agent_claude-desktop", name: "Claude Desktop", color: "#D97757", fields: [] },
   { id: "integration_system", name: "Modo", color: "#A78BFA", fields: [] },
   { id: "integration_spotify", name: "Spotify", color: "#1DB954", fields: [] },
   { id: "integration_stripe", name: "Stripe", color: "#0570DE",
@@ -1642,7 +1644,7 @@ const INTEGRATIONS: IntegrationDef[] = [
   { id: "integration_whatsapp", name: "WhatsApp", color: "#25D366", fields: [] },
 ];
 
-const MAX_ACTIVE = 4;
+const MAX_ACTIVE = MAX_ACTIVE_PILLS;
 
 function integrationsSection(present: Record<string, boolean>): HTMLElement {
   const note = h("p", { class: "lead" });
@@ -1836,20 +1838,21 @@ function whatsappSection(): HTMLElement {
   const saveBtn = h("button", { class: "primary", text: "Guardar", onclick: async () => {
     clear(gatewayNote);
     const port = Number(portInput.value) || settings.whatsappPort;
-    const result = await Bridge.whatsappSaveGateway(
-      "gowa",
-      urlInput.value.trim(),
-      credInput.value.trim() ? credInput.value.trim() : null,
-      port,
-      settings.whatsappAutoStart,
-      gowaPathInput.value.trim(),
-    );
-    settings.whatsappPort = port;
-    credInput.value = "";
-    gatewayNote.append(h("div", {
-      class: `notice ${result === null ? "err" : "ok"}`,
-      text: result === null ? "No se pudo guardar." : "Guardado.",
-    }));
+    try {
+      await Bridge.whatsappSaveGateway(
+        "gowa",
+        urlInput.value.trim(),
+        credInput.value.trim() ? credInput.value.trim() : null,
+        port,
+        settings.whatsappAutoStart,
+        gowaPathInput.value.trim(),
+      );
+      settings.whatsappPort = port;
+      credInput.value = "";
+      gatewayNote.append(h("div", { class: "notice ok", text: "Guardado." }));
+    } catch (err) {
+      gatewayNote.append(h("div", { class: "notice err", text: `No se pudo guardar: ${String(err)}` }));
+    }
   } });
 
   const installNote = h("div", { class: "hint" });

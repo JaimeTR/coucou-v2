@@ -51,7 +51,7 @@ fn is_custom_key(key: &str) -> bool {
 }
 
 fn entry(key: &str) -> Option<Entry> {
-    if !KNOWN_KEYS.contains(&key) && !is_custom_key(key) {
+    if !KNOWN_KEYS.contains(&key) && !INTERNAL_KEYS.contains(&key) && !is_custom_key(key) {
         return None;
     }
     Entry::new(SERVICE, key).ok()

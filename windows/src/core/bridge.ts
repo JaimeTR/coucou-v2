@@ -278,8 +278,12 @@ export const Bridge = {
 
   // ── WhatsApp ─────────────────────────────────────────────────────────────
   whatsappSettings: () => call<WhatsAppSettingsView>("whatsapp_settings"),
+  // `void`-returning commands resolve to `null` on success too (Rust's `()` serializes
+  // as JSON null) — `call()`'s catch-to-null makes success and failure indistinguishable
+  // for these two, so they use `callOrThrow` instead; the caller tells them apart by
+  // whether the promise resolves or rejects, not by its resolved value.
   whatsappSetOptions: (enabled: boolean, muteGroups: boolean, markReadOnOpen: boolean) =>
-    call<void>("whatsapp_set_options", { enabled, muteGroups, markReadOnOpen }),
+    callOrThrow<void>("whatsapp_set_options", { enabled, muteGroups, markReadOnOpen }),
   whatsappSaveGateway: (
     gateway: string,
     url: string,
@@ -288,7 +292,7 @@ export const Bridge = {
     autoStart: boolean,
     gowaPath: string,
   ) =>
-    call<void>("whatsapp_save_gateway", {
+    callOrThrow<void>("whatsapp_save_gateway", {
       gateway,
       url,
       credential,

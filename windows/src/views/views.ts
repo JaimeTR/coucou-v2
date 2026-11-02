@@ -5,7 +5,7 @@
 import { h, svg, clear, dot } from "./dom";
 import { ICONS } from "./icons";
 import { Ticker } from "./ticker";
-import { State, type AgentTask } from "../core/state";
+import { State, MAX_ACTIVE_PILLS, type AgentTask } from "../core/state";
 import { washRGBA, type IslandViewName, type Wash } from "../core/layout";
 import { createMiniBot, pruneMiniBots } from "../mochi/minibots";
 import { buildPrompt } from "./chat";
@@ -310,7 +310,7 @@ function buildOverview(actions: ViewActions): ViewHost {
   };
 
   function syncPills() {
-    const others = State.otherTasks.slice(0, 4);
+    const others = State.otherTasks.slice(0, MAX_ACTIVE_PILLS);
     const pillKey = others.map((t) => `${t.id}:${t.pillBadge ?? ""}`).join("|");
     if (pillKey !== pillIds) {
       pillIds = pillKey;
