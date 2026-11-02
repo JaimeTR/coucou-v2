@@ -23,7 +23,7 @@ use tauri::{AppHandle, Emitter, Manager, WebviewWindow};
 
 use model::Inbox;
 use prefs::Prefs;
-use provider::Provider;
+use provider::{Provider, WaLink};
 
 pub const PILL_ID: &str = "integration_whatsapp";
 const WEBHOOK_PATH: &str = "/whatsapp";
@@ -376,7 +376,8 @@ async fn test_connection() -> TestResult {
         None => return TestResult::Failed { detail: "not configured".into() },
     };
     match provider.status().await {
-        Ok(who) => TestResult::Connected { who },
+        Ok(WaLink::Connected { who }) => TestResult::Connected { who },
+        Ok(WaLink::NeedsQr) => TestResult::Failed { detail: "needs qr".into() },
         Err(e) => TestResult::Failed { detail: e.to_string() },
     }
 }
