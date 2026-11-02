@@ -178,6 +178,11 @@ struct Control {
     /// window from `qr_code()` — see provider.rs) — refetching it every 5 s tick would restart
     /// pairing on GOWA's side each time (mirrors the Mac's `qrExpiry`).
     qr_cache: Option<(String, Instant)>,
+    /// True while a `refresh()` is in flight — mirrors the Mac's `!refreshing` guard
+    /// (`WhatsAppController.swift:273`). Without it, `begin()`'s own `refresh()` and
+    /// `start_listener`'s "refresh once bound" can run concurrently, both see `NeedsQr` with no
+    /// cached QR yet, and both call GOWA's login endpoint — which restarts pairing each time.
+    refreshing: bool,
 }
 
 static CTL: LazyLock<Mutex<Control>> = LazyLock::new(|| {
@@ -197,8 +202,18 @@ static CTL: LazyLock<Mutex<Control>> = LazyLock::new(|| {
         generation: 0,
         install_step: InstallStep::Idle,
         qr_cache: None,
+        refreshing: false,
     })
 });
+
+/// Serializes `start_listener`'s bind/rebind sequence (mem::replace → stop_and_wait → bind →
+/// put-back). Without this, two `begin()`s in quick succession (e.g. two rapid settings saves)
+/// can each spawn a `start_listener` task; the second one's `mem::replace` can grab the first
+/// task's just-created placeholder `Listener` (whose `stop_and_wait` is then a no-op) and race
+/// it to bind the same port. A `tokio::sync::Mutex` (not `CTL`'s std one — this is held across
+/// `.await`) held for a start_listener task's whole body makes the sequence atomic relative to
+/// other start_listener tasks.
+static LISTENER_GATE: LazyLock<tokio::sync::Mutex<()>> = LazyLock::new(|| tokio::sync::Mutex::new(()));
 
 fn ctl() -> std::sync::MutexGuard<'static, Control> {
     CTL.lock().unwrap()
@@ -346,18 +361,20 @@ fn begin(app: &AppHandle) {
         c.generation += 1;
         c.listener.stop();
         c.provider = None;
+        // Generation-independent resets: whether the URL turns out to be valid or not, nothing
+        // from the previous generation should linger (a `BadUrl` bail-out below otherwise left
+        // `webhook`/`last_webhook`/`tick`/`qr_cache`/`refreshing` stale from whatever was
+        // running before).
+        c.tick = 0;
+        c.last_webhook = None;
+        c.qr_cache = None;
+        c.refreshing = false;
+        c.webhook = WebhookState::Off;
     }
     let (url_ok, url, has_cred, generation) = {
         let mut c = ctl();
         let ok = url::Url::parse(&c.url).is_ok();
-        if ok {
-            c.link = LinkState::Connecting;
-            c.tick = 0;
-            c.last_webhook = None;
-            c.qr_cache = None;
-        } else {
-            c.link = LinkState::BadUrl;
-        }
+        c.link = if ok { LinkState::Connecting } else { LinkState::BadUrl };
         (ok, c.url.clone(), c.has_credential, c.generation)
     };
     if !url_ok {
@@ -380,8 +397,20 @@ fn begin(app: &AppHandle) {
             // platform, not just Unix's SIGCHLD path) — `begin()` can run from a synchronous
             // Tauri command on the main thread, which has no such handle entered. Running it
             // inside a task on Tauri's own async runtime guarantees one.
+            //
+            // The generation/enabled check inside the task (not just at spawn time) matters:
+            // turn WhatsApp on then quickly off and `stop()` runs `stop_now()` synchronously
+            // before this already-queued task gets to run — without re-checking here, it would
+            // relaunch GOWA right after `stop()` just killed it, orphaning a process that holds
+            // the port and the login session behind the disabled integration's back.
             tauri::async_runtime::spawn(async move {
-                ctl().process.sync(&gowa_path, &url, credential.as_deref());
+                let should_run = {
+                    let c = ctl();
+                    c.generation == generation && c.prefs.enabled
+                };
+                if should_run {
+                    ctl().process.sync(&gowa_path, &url, credential.as_deref());
+                }
             });
         }
     }
@@ -403,6 +432,7 @@ fn stop(app: &AppHandle, forget: bool) {
         c.last_webhook = None;
         c.tick = 0;
         c.qr_cache = None;
+        c.refreshing = false;
         if forget {
             c.inbox = Inbox::new();
         }
@@ -453,76 +483,111 @@ fn on_tick(app: &AppHandle, generation: u64) {
     }
 }
 
+/// Minimum time between two QR-fetch *attempts*, success or not — set before the fetch, not
+/// only after one succeeds, so a failing/empty GOWA login still gets throttled instead of
+/// retried on every 5 s tick (mirrors the Mac bumping `qrExpiry` before the call, not after).
+const QR_ATTEMPT_THROTTLE: Duration = Duration::from_secs(15);
+
 fn refresh(app: &AppHandle, generation: u64) {
     let provider = {
-        let c = ctl();
-        if c.generation != generation {
+        let mut c = ctl();
+        // `!refreshing` guard (mirrors WhatsAppController.swift:273): `begin()`'s own refresh
+        // and `start_listener`'s "refresh once bound" can otherwise land moments apart and run
+        // concurrently, both see `NeedsQr` with no cache yet, and both hit GOWA's login
+        // endpoint — which restarts pairing each time.
+        if c.generation != generation || c.refreshing {
             return;
         }
+        c.refreshing = true;
         c.provider.clone()
     };
-    let Some(provider) = provider else { return };
+    let Some(provider) = provider else {
+        let mut c = ctl();
+        if c.generation == generation {
+            c.refreshing = false;
+        }
+        return;
+    };
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
-        match provider.status().await {
-            Ok(WaLink::Connected { .. }) => {
-                let should_register = {
-                    let mut c = ctl();
-                    if c.generation != generation {
-                        return;
-                    }
-                    c.link = LinkState::Connected;
-                    c.qr_cache = None;
-                    c.webhook == WebhookState::Listening
-                };
-                if should_register {
-                    register(&app, &provider, generation).await;
-                }
-                changed(&app);
-            }
-            Ok(WaLink::NeedsQr) => {
-                // Refetching the QR every 5 s tick would restart pairing on GOWA's side each
-                // time (its login call always does); reuse the last one until it expires
-                // (mirrors the Mac's `qrExpiry`, using GOWA's own reported validity window).
-                let cached = {
-                    let c = ctl();
-                    if c.generation != generation {
-                        return;
-                    }
-                    c.qr_cache.clone().filter(|(_, expires)| Instant::now() < *expires)
-                };
-                if let Some((png_base64, _)) = cached {
-                    let mut c = ctl();
-                    if c.generation != generation {
-                        return;
-                    }
-                    c.link = LinkState::NeedsQr { png_base64 };
-                    drop(c);
-                    changed(&app);
-                    return;
-                }
-                let qr = provider.qr_code().await;
+        refresh_body(&app, &provider, generation).await;
+        let mut c = ctl();
+        if c.generation == generation {
+            c.refreshing = false;
+        }
+    });
+}
+
+async fn refresh_body(app: &AppHandle, provider: &Provider, generation: u64) {
+    match provider.status().await {
+        Ok(WaLink::Connected { .. }) => {
+            let should_register = {
                 let mut c = ctl();
                 if c.generation != generation {
                     return;
                 }
-                c.link = match qr {
-                    Ok(Some((png, seconds))) => {
-                        let png_base64 = B64.encode(&png);
-                        c.qr_cache = Some((png_base64.clone(), Instant::now() + Duration::from_secs(seconds as u64)));
-                        LinkState::NeedsQr { png_base64 }
-                    }
-                    // ALREADY_LOGGED_IN raced our own status() call — the next tick's status()
-                    // will report Connected once GOWA catches up.
-                    Ok(None) => LinkState::Connecting,
-                    Err(_) => LinkState::NeedsQr { png_base64: String::new() },
-                };
-                drop(c);
-                changed(&app);
+                c.link = LinkState::Connected;
+                c.qr_cache = None;
+                c.webhook == WebhookState::Listening
+            };
+            if should_register {
+                register(app, provider, generation).await;
             }
-            Err(e) => apply_error(&app, generation, e),
+            changed(app);
         }
-    });
+        Ok(WaLink::NeedsQr) => {
+            // Refetching the QR every 5 s tick would restart pairing on GOWA's side each
+            // time (its login call always does); reuse the last one until it expires
+            // (mirrors the Mac's `qrExpiry`, using GOWA's own reported validity window).
+            let cached = {
+                let c = ctl();
+                if c.generation != generation {
+                    return;
+                }
+                c.qr_cache.clone().filter(|(_, expires)| Instant::now() < *expires)
+            };
+            if let Some((png_base64, _)) = cached {
+                let mut c = ctl();
+                if c.generation != generation {
+                    return;
+                }
+                c.link = LinkState::NeedsQr { png_base64 };
+                drop(c);
+                changed(app);
+                return;
+            }
+            {
+                let mut c = ctl();
+                if c.generation != generation {
+                    return;
+                }
+                c.qr_cache = Some((String::new(), Instant::now() + QR_ATTEMPT_THROTTLE));
+            }
+            let qr = provider.qr_code().await;
+            let mut c = ctl();
+            if c.generation != generation {
+                return;
+            }
+            c.link = match qr {
+                Ok(Some((png, seconds))) => {
+                    let png_base64 = B64.encode(&png);
+                    c.qr_cache = Some((png_base64.clone(), Instant::now() + Duration::from_secs(seconds as u64)));
+                    LinkState::NeedsQr { png_base64 }
+                }
+                // ALREADY_LOGGED_IN raced our own status() call — the next tick's status()
+                // will report Connected once GOWA catches up.
+                Ok(None) => {
+                    c.qr_cache = None;
+                    LinkState::Connecting
+                }
+                // The 15 s throttle set above still stands — nothing to retry until it expires.
+                Err(_) => LinkState::NeedsQr { png_base64: String::new() },
+            };
+            drop(c);
+            changed(app);
+        }
+        Err(e) => apply_error(app, generation, e),
+    }
 }
 
 async fn register(app: &AppHandle, provider: &Provider, generation: u64) {
@@ -575,10 +640,22 @@ fn apply_error(app: &AppHandle, generation: u64, error: WaError) {
     // runtime for the same reason as `begin()`'s own `process.sync` call — it needs a Tokio
     // runtime handle on the calling thread, which `apply_error`'s caller (a tick-loop task,
     // itself already on that runtime, or a refresh task) may or may not have entered directly.
+    //
+    // Re-checks generation/enabled inside the task, not just at spawn time: by the time this
+    // already-queued task actually runs, the user may have already turned WhatsApp off (`stop()`
+    // runs `stop_now()` synchronously) — without the check, this would relaunch GOWA right after
+    // `stop()` just killed it, orphaning a process that holds the port behind a disabled
+    // integration's back.
     if restart_process {
         tauri::async_runtime::spawn(async move {
-            let credential = has_cred.then(|| crate::secrets::get(CREDENTIAL_KEY)).flatten();
-            ctl().process.sync(&gowa_path, &url, credential.as_deref());
+            let should_run = {
+                let c = ctl();
+                c.generation == generation && c.prefs.enabled
+            };
+            if should_run {
+                let credential = has_cred.then(|| crate::secrets::get(CREDENTIAL_KEY)).flatten();
+                ctl().process.sync(&gowa_path, &url, credential.as_deref());
+            }
         });
     }
 }
@@ -594,6 +671,10 @@ fn start_listener(app: &AppHandle, generation: u64) {
     let port = ctl().prefs.port;
     let app2 = app.clone();
     tauri::async_runtime::spawn(async move {
+        // Serializes this whole take/stop/bind/put-back sequence against any other
+        // `start_listener` task — see `LISTENER_GATE`'s own doc comment for the race this
+        // closes (two `begin()`s in quick succession racing to bind the same port).
+        let _gate = LISTENER_GATE.lock().await;
         // `Listener::start`/`stop_and_wait` only need `&mut self`; the guard must not be held
         // across their `.await` (MutexGuard isn't Send), so take the listener out, operate on
         // it unlocked, then put it back.
@@ -678,11 +759,14 @@ fn parse_gowa_webhook(body: &[u8]) -> Option<IncomingMessage> {
     if !has_id {
         return None;
     }
-    let name = payload
-        .get("sender_display_name")
-        .and_then(|v| v.as_str())
-        .or_else(|| payload.get("from_name").and_then(|v| v.as_str()))
-        .filter(|s| !s.is_empty())
+    // `nonEmpty(a) ?? nonEmpty(b)`, not `(a ?? b).filter(nonEmpty)` — an empty
+    // `sender_display_name` (present but `""`) must still fall through to `from_name`, not
+    // suppress it (ground truth: `nonEmpty` in WhatsAppModels.swift).
+    fn non_empty(v: Option<&str>) -> Option<&str> {
+        v.filter(|s| !s.is_empty())
+    }
+    let name = non_empty(payload.get("sender_display_name").and_then(|v| v.as_str()))
+        .or_else(|| non_empty(payload.get("from_name").and_then(|v| v.as_str())))
         .map(|s| s.to_string());
     let from_me = payload.get("is_from_me").and_then(|v| v.as_bool()).unwrap_or(false);
     let timestamp_ms = payload
@@ -701,25 +785,42 @@ fn received(app: &AppHandle, msg: IncomingMessage) {
 }
 
 /// `received`'s `Inbox` mutation, split out from the `on_message`/`AppHandle` side so it can be
-/// unit-tested without a running Tauri app.
+/// unit-tested without a running Tauri app. Ground truth: `WAInbox.add`
+/// (`WhatsAppModels.swift:134-175`).
 fn ingest(msg: IncomingMessage) {
+    // `WAJID.isConversation` (WhatsAppModels.swift:79, referencing issue #901): a status
+    // broadcast or a newsletter channel isn't a chat at all — never becomes a conversation,
+    // never counts unread.
+    if msg.chat_id.ends_with("@broadcast") || msg.chat_id.ends_with("@newsletter") {
+        return;
+    }
+    let is_group = msg.chat_id.ends_with("@g.us");
+    // "In a private chat the other person names it: never your own name on your own message."
+    // (WhatsAppModels.swift:148-149) — a group's last sender never renames the group, and
+    // replying from the phone never renames a private chat to your own name.
+    let person_name = if is_group || msg.from_me { None } else { msg.name };
+
     let mut c = ctl();
     let ignored = c.prefs.ignored.contains(&msg.chat_id);
     match c.inbox.conversations.iter_mut().find(|conv| conv.id == msg.chat_id) {
         Some(conv) => {
-            if let Some(name) = msg.name {
+            if let Some(name) = person_name {
                 conv.name = name;
             }
-            if !msg.from_me && !ignored {
+            if msg.from_me {
+                // "You answered from the phone: it is read there." (WhatsAppModels.swift:165-168)
+                conv.unread = 0;
+            } else if !ignored {
                 conv.unread += 1;
             }
-            conv.last_activity = msg.timestamp_ms;
+            // A late/out-of-order delivery shouldn't move the timestamp backward.
+            conv.last_activity = conv.last_activity.max(msg.timestamp_ms);
         }
         None => {
             c.inbox.conversations.push(model::Conversation {
                 id: msg.chat_id.clone(),
-                name: msg.name.unwrap_or(msg.chat_id),
-                unread: if msg.from_me { 0 } else { 1 },
+                name: person_name.unwrap_or(msg.chat_id),
+                unread: if msg.from_me || ignored { 0 } else { 1 },
                 last_activity: msg.timestamp_ms,
             });
         }
@@ -763,7 +864,10 @@ fn parse_rfc3339_millis(s: &str) -> Option<u64> {
     let sec_field = hms.next()?;
     let (sec_str, frac) = sec_field.split_once('.').unwrap_or((sec_field, ""));
     let second: i64 = sec_str.parse().ok()?;
-    let millis: i64 = format!("{:0<3}", &frac[..frac.len().min(3)]).parse().unwrap_or(0);
+    // `frac` is expected to be ASCII digits, but byte-slicing it (`&frac[..n]`) would panic if
+    // it ever wasn't and the cut landed mid-codepoint — take by `char` instead, which can't.
+    let frac3: String = frac.chars().take(3).collect();
+    let millis: i64 = format!("{frac3:0<3}").parse().unwrap_or(0);
 
     let days = days_from_civil(year, month, day);
     let epoch_secs = days * 86_400 + hour * 3600 + minute * 60 + second - offset_secs;
@@ -1102,10 +1206,23 @@ mod tests {
     }
 
     #[test]
+    fn parse_gowa_webhook_falls_back_to_from_name_when_sender_display_name_is_present_but_empty() {
+        let body = br#"{"event":"message","payload":{
+            "id":"1","chat_id":"x@s.whatsapp.net","sender_display_name":"","from_name":"Alex",
+            "is_from_me":false,"timestamp":"2024-05-01T12:34:56Z"
+        }}"#;
+        let msg = parse_gowa_webhook(body).unwrap();
+        assert_eq!(msg.name, Some("Alex".to_string()));
+    }
+
+    /// Resets the process-global `CTL.inbox` after a test that called `ingest`, so other tests
+    /// in this binary aren't affected by it.
+    fn clear_inbox() {
+        ctl().inbox = Inbox::new();
+    }
+
+    #[test]
     fn ingest_creates_then_updates_a_conversation_without_storing_text() {
-        // `ingest` is `received`'s Inbox-mutation half (split out so it's testable without a
-        // running Tauri `AppHandle`). This mutates the process-global CTL; reset what it
-        // touched at the end so other tests in this binary aren't affected.
         ingest(IncomingMessage { chat_id: "x@s.whatsapp.net".into(), name: Some("Alex".into()), from_me: false, timestamp_ms: 100 });
         {
             let c = ctl();
@@ -1114,14 +1231,46 @@ mod tests {
             assert_eq!(conv.unread, 1);
             assert_eq!(conv.last_activity, 100);
         }
+        // from_me, ground truth WAInbox.add: "you answered from the phone, it is read there" —
+        // unread clears to 0, not just "doesn't bump".
         ingest(IncomingMessage { chat_id: "x@s.whatsapp.net".into(), name: None, from_me: true, timestamp_ms: 200 });
-        let mut c = ctl();
-        let conv = c.inbox.conversations.iter().find(|c| c.id == "x@s.whatsapp.net").unwrap();
-        // from_me: unread doesn't bump; name carries over when the new delivery has none.
-        assert_eq!(conv.unread, 1);
-        assert_eq!(conv.name, "Alex");
-        assert_eq!(conv.last_activity, 200);
-        // Leave CTL as this test found it for any test that runs after.
-        c.inbox = Inbox::new();
+        {
+            let c = ctl();
+            let conv = c.inbox.conversations.iter().find(|c| c.id == "x@s.whatsapp.net").unwrap();
+            assert_eq!(conv.unread, 0);
+            assert_eq!(conv.name, "Alex"); // name carries over when the new delivery has none
+            assert_eq!(conv.last_activity, 200);
+        }
+        clear_inbox();
+    }
+
+    #[test]
+    fn ingest_never_takes_the_name_from_a_group_or_from_your_own_message() {
+        // Group: the last sender never renames the group chat.
+        ingest(IncomingMessage { chat_id: "120363@g.us".into(), name: Some("Alex".into()), from_me: false, timestamp_ms: 1 });
+        assert_eq!(ctl().inbox.conversations.iter().find(|c| c.id == "120363@g.us").unwrap().name, "120363@g.us");
+        clear_inbox();
+
+        // Own message: replying from the phone never renames a private chat to your own name.
+        ingest(IncomingMessage { chat_id: "x@s.whatsapp.net".into(), name: Some("Alex".into()), from_me: false, timestamp_ms: 1 });
+        ingest(IncomingMessage { chat_id: "x@s.whatsapp.net".into(), name: Some("Me".into()), from_me: true, timestamp_ms: 2 });
+        assert_eq!(ctl().inbox.conversations.iter().find(|c| c.id == "x@s.whatsapp.net").unwrap().name, "Alex");
+        clear_inbox();
+    }
+
+    #[test]
+    fn ingest_ignores_broadcast_and_newsletter_jids() {
+        ingest(IncomingMessage { chat_id: "status@broadcast".into(), name: None, from_me: false, timestamp_ms: 1 });
+        ingest(IncomingMessage { chat_id: "123@newsletter".into(), name: None, from_me: false, timestamp_ms: 1 });
+        assert!(ctl().inbox.conversations.is_empty());
+    }
+
+    #[test]
+    fn ingest_never_moves_last_activity_backward() {
+        ingest(IncomingMessage { chat_id: "x@s.whatsapp.net".into(), name: Some("Alex".into()), from_me: false, timestamp_ms: 200 });
+        // An out-of-order/late delivery with an earlier timestamp shouldn't rewind the clock.
+        ingest(IncomingMessage { chat_id: "x@s.whatsapp.net".into(), name: None, from_me: false, timestamp_ms: 100 });
+        assert_eq!(ctl().inbox.conversations.iter().find(|c| c.id == "x@s.whatsapp.net").unwrap().last_activity, 200);
+        clear_inbox();
     }
 }
