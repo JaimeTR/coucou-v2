@@ -10,7 +10,9 @@
 // The island draws what `IslandView` says (src/views/whatsapp.ts); it only ever sees status
 // codes, which the front end translates.
 
+pub mod archive;
 pub mod gateway;
+pub mod install;
 pub mod model;
 pub mod prefs;
 pub mod process;
