@@ -1752,6 +1752,45 @@ function updatesRow(): HTMLElement {
   );
 }
 
+function mailSection(): HTMLElement {
+  const list = h("div", { class: "mail-accounts-list" });
+  const note = h("div", { class: "hint" });
+
+  async function reload() {
+    clear(list);
+    clear(note);
+    try {
+      const accounts = (await Bridge.mailAccounts()) ?? [];
+      if (accounts.length === 0) {
+        note.textContent = "No se encontró un perfil de Thunderbird en este PC.";
+        return;
+      }
+      for (const a of accounts) {
+        const checked = settings.mailWatchedAccounts.includes(a.id);
+        const box = toggle(checked, async (on) => {
+          const next = on
+            ? [...settings.mailWatchedAccounts, a.id]
+            : settings.mailWatchedAccounts.filter((id) => id !== a.id);
+          settings.mailWatchedAccounts = next;
+          await Bridge.mailSetWatched(next);
+          await save();
+        });
+        list.append(field(a.label, `${a.folders.length} carpetas`, box));
+      }
+    } catch (err) {
+      note.textContent = String(err).replace(/^Error:\s*/, "");
+    }
+  }
+  void reload();
+
+  return h(
+    "section",
+    { class: "plain" },
+    h("p", { class: "lead", text: "Lee tu correo de Thunderbird en este PC, sin conexión. Gmail u Outlook solo en el navegador no aparecen aquí a menos que los agregues a Thunderbird." }),
+    group("Cuentas", list, note),
+  );
+}
+
 function generalSection(): HTMLElement {
   const volume = h("input", {
     type: "range", min: "0", max: "0.2", step: "0.005",
@@ -2257,6 +2296,7 @@ async function main() {
     { id: "agents", label: "Agentes", icon: ICONS.stack, sections: [agentsSection(agents)] },
     { id: "chat", label: "Chat e IA", icon: ICONS.bubble, sections: [providerSection(present), apiSection(hasKey)] },
     { id: "integrations", label: "Integraciones", icon: ICONS.arrowUpRight, sections: [integrationsSection(present), customSection()] },
+    { id: "mail", label: "Correo", icon: ICONS.doc, sections: [mailSection()] },
     { id: "sync", label: "Sincronización", icon: SYNC_ICON, sections: [syncSection()] },
     { id: "devices", label: "Dispositivos", icon: DEVICES_ICON, sections: [devicesSection()] },
     { id: "general", label: "General", icon: ICONS.gear, sections: [generalSection()] },
