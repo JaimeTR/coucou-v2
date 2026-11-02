@@ -916,20 +916,17 @@ fn constant_time_eq(a: &str, b: &str) -> bool {
 // ── Tauri commands ──────────────────────────────────────────────────────────
 
 #[tauri::command]
-pub fn whatsapp_settings(window: WebviewWindow, _app: AppHandle) -> Result<SettingsView, String> {
-    only(&window, crate::island::WINDOW_LABEL)?;
+pub fn whatsapp_settings() -> Result<SettingsView, String> {
     Ok(ctl().settings_view())
 }
 
 #[tauri::command]
 pub fn whatsapp_set_options(
-    window: WebviewWindow,
     app: AppHandle,
     enabled: bool,
     mute_groups: bool,
     mark_read_on_open: bool,
 ) -> Result<(), String> {
-    only(&window, crate::island::WINDOW_LABEL)?;
     let restart = {
         let mut c = ctl();
         let restart = c.prefs.enabled != enabled;
@@ -954,7 +951,6 @@ pub fn whatsapp_set_options(
 
 #[tauri::command]
 pub fn whatsapp_save_gateway(
-    window: WebviewWindow,
     app: AppHandle,
     gateway: String,
     url: String,
@@ -963,7 +959,6 @@ pub fn whatsapp_save_gateway(
     auto_start: bool,
     gowa_path: String,
 ) -> Result<(), String> {
-    only(&window, crate::island::WINDOW_LABEL)?;
     // Settings only ever tracks GOWA (see prefs.rs) — `gateway` is accepted and ignored so the
     // TS call's signature doesn't need to change.
     let _ = gateway;
@@ -1001,14 +996,12 @@ pub fn whatsapp_save_gateway(
 }
 
 #[tauri::command]
-pub async fn whatsapp_test(window: WebviewWindow, _app: AppHandle) -> Result<TestResult, String> {
-    only(&window, crate::island::WINDOW_LABEL)?;
+pub async fn whatsapp_test() -> Result<TestResult, String> {
     Ok(test_connection().await)
 }
 
 #[tauri::command]
-pub fn whatsapp_install(window: WebviewWindow, app: AppHandle) -> Result<(), String> {
-    only(&window, crate::island::WINDOW_LABEL)?;
+pub fn whatsapp_install(app: AppHandle) -> Result<(), String> {
     start_install(app);
     Ok(())
 }
