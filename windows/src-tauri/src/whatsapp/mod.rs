@@ -19,13 +19,16 @@ pub mod process;
 pub mod provider;
 pub mod webhook;
 
-use std::sync::{LazyLock, Mutex, OnceLock};
+use std::sync::{LazyLock, Mutex};
+use std::time::{Duration, Instant};
+
+use base64::{engine::general_purpose::STANDARD as B64, Engine};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, WebviewWindow};
 
 use model::Inbox;
 use prefs::Prefs;
-use provider::{Provider, WaLink};
+use provider::{Provider, WaError, WaLink};
 
 pub const PILL_ID: &str = "integration_whatsapp";
 const WEBHOOK_PATH: &str = "/whatsapp";
@@ -37,6 +40,10 @@ const ISLAND_EVENT: &str = "whatsapp";
 const PILL_EVENT: &str = "whatsapp-pill";
 const SETTINGS_EVENT: &str = "whatsapp-settings";
 const DEFAULT_PORT: u16 = 3000;
+/// How often `on_tick` runs once the integration is on (mirrors the Mac's 5 s `Timer`).
+const TICK_EVERY: Duration = Duration::from_secs(5);
+/// No webhook delivery for this long: the fallback poll takes over (Mac's `webhookAlive`).
+const WEBHOOK_ALIVE_WINDOW: Duration = Duration::from_secs(300);
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(tag = "state", rename_all = "camelCase")]
@@ -44,7 +51,7 @@ pub enum LinkState {
     Off,
     BadUrl,
     Connecting,
-    NeedsQr,
+    NeedsQr { png_base64: String },
     Connected,
     Unreachable,
     Unauthorized,
@@ -151,7 +158,14 @@ struct Control {
     has_credential: bool,
     prefs: Prefs,
     inbox: Inbox,
-    provider: OnceLock<Provider>,
+    provider: Option<Provider>,
+    process: process::Process,
+    listener: webhook::Listener,
+    webhook_secret: String,
+    last_webhook: Option<Instant>,
+    tick: u32,
+    generation: u64,
+    install_step: InstallStep,
 }
 
 static CTL: LazyLock<Mutex<Control>> = LazyLock::new(|| {
@@ -162,7 +176,14 @@ static CTL: LazyLock<Mutex<Control>> = LazyLock::new(|| {
         has_credential: false,
         prefs: Prefs::default(),
         inbox: Inbox::new(),
-        provider: OnceLock::new(),
+        provider: None,
+        process: process::Process::new(),
+        listener: webhook::Listener::new(),
+        webhook_secret: String::new(),
+        last_webhook: None,
+        tick: 0,
+        generation: 0,
+        install_step: InstallStep::Idle,
     })
 });
 
@@ -191,26 +212,71 @@ fn pill_event(app: &AppHandle, event: &PillEvent) {
     let _ = app.emit(PILL_EVENT, event);
 }
 
+/// Writes the in-memory prefs into the app's shared `Settings` and persists them to disk —
+/// same path every other non-secret setting takes (see island.rs's drag/dock handlers).
+fn persist_prefs(app: &AppHandle) {
+    let prefs = ctl().prefs.clone();
+    let Some(shared) = app.try_state::<crate::Shared>() else { return };
+    let settings = {
+        let mut s = shared.settings.lock().unwrap();
+        prefs.write_into(&mut s);
+        s.clone()
+    };
+    if let Err(err) = crate::settings::save(&settings) {
+        eprintln!("[coucou] could not save whatsapp settings: {err}");
+    }
+}
+
 pub fn start(app: &AppHandle, active_integrations: &[String]) {
     if !active_integrations.contains(&PILL_ID.to_string()) {
         return;
     }
-    let mut c = ctl();
-    if !c.prefs.enabled {
+    // Shared.settings is already `.manage()`d with the settings loaded at launch by the time
+    // `setup()` calls this (see lib.rs) — reuse that copy instead of reading the file twice.
+    let settings = app
+        .try_state::<crate::Shared>()
+        .map(|s| s.settings.lock().unwrap().clone())
+        .unwrap_or_else(crate::settings::load);
+    let enabled = {
+        let mut c = ctl();
+        c.prefs = Prefs::from_settings(&settings);
+        c.url = crate::secrets::get(URL_KEY).unwrap_or_default();
+        c.has_credential = crate::secrets::get(CREDENTIAL_KEY).map(|v| !v.trim().is_empty()).unwrap_or(false);
+        c.webhook_secret = webhook_secret();
+        c.prefs.enabled
+    };
+    if !enabled {
         return;
     }
-    c.link = LinkState::Connecting;
-    c.webhook = WebhookState::Listening;
-    drop(c);
-    changed(app);
-    settings_changed(app);
+    begin(app);
 }
 
+/// Called once at app exit.
 pub fn shutdown() {
     let mut c = ctl();
+    c.generation += 1;
+    c.listener.stop();
+    c.process.stop_now();
+    c.provider = None;
     c.link = LinkState::Off;
     c.webhook = WebhookState::Off;
-    c.provider = OnceLock::new();
+}
+
+fn webhook_secret() -> String {
+    if let Some(s) = crate::secrets::get(SECRET_KEY) {
+        if s.len() >= 16 {
+            return s;
+        }
+    }
+    // No new RNG dependency: `aes-gcm` (already a dependency, for settings sync) pulls in
+    // `aead`, which re-exports a CSPRNG (`OsRng`) and the `RngCore` trait that gives it
+    // `fill_bytes` — sync.rs already uses the same `OsRng` to generate AES-GCM nonces.
+    use aes_gcm::aead::{rand_core::RngCore, OsRng};
+    let mut bytes = [0u8; 32];
+    OsRng.fill_bytes(&mut bytes);
+    let hex: String = bytes.iter().map(|b| format!("{:02x}", b)).collect();
+    let _ = crate::secrets::set_internal(SECRET_KEY, &hex);
+    hex
 }
 
 impl Control {
@@ -243,16 +309,284 @@ impl Control {
     fn settings_view(&self) -> SettingsView {
         SettingsView {
             webhook: WebhookView { state: self.webhook.clone() },
-            install: InstallView { step: InstallStep::Idle },
-            default_url: format!("http://127.0.0.1:{}/{}", DEFAULT_PORT, WEBHOOK_PATH.trim_start_matches('/')),
+            install: InstallView { step: self.install_step.clone() },
+            default_url: format!("http://127.0.0.1:{}{}", DEFAULT_PORT, WEBHOOK_PATH),
         }
     }
+}
+
+// ── Lifecycle (ports WhatsAppController.swift's begin/stop/onTick/refresh/register) ────────
+
+fn begin(app: &AppHandle) {
+    let (url_ok, url, has_cred, generation) = {
+        let mut c = ctl();
+        let ok = url::Url::parse(&c.url).is_ok();
+        if !ok {
+            c.link = LinkState::BadUrl;
+        } else {
+            c.generation += 1;
+            c.link = LinkState::Connecting;
+            c.tick = 0;
+            c.last_webhook = None;
+        }
+        (ok, c.url.clone(), c.has_credential, c.generation)
+    };
+    if !url_ok {
+        changed(app);
+        return;
+    }
+    let credential = has_cred.then(|| crate::secrets::get(CREDENTIAL_KEY)).flatten();
+    {
+        let mut c = ctl();
+        c.provider = Some(Provider::new(url.clone(), credential.clone()));
+    }
+    start_listener(app, generation);
+    {
+        let mut c = ctl();
+        if c.prefs.auto_start {
+            let gowa_path = c.prefs.gowa_path.clone();
+            c.process.sync(&gowa_path, &url, credential.as_deref());
+        }
+    }
+    changed(app);
+    settings_changed(app);
+    refresh(app, generation);
+    spawn_tick_loop(app, generation);
+}
+
+/// Stops talking to the gateway. `forget`: the conversations go too.
+fn stop(app: &AppHandle, forget: bool) {
+    let stop_process = {
+        let mut c = ctl();
+        c.generation += 1;
+        c.listener.stop();
+        c.provider = None;
+        c.link = LinkState::Off;
+        c.webhook = WebhookState::Off;
+        c.last_webhook = None;
+        c.tick = 0;
+        if forget {
+            c.inbox = Inbox::new();
+        }
+        // Turned off outright: GOWA goes too. A settings change that restarts `begin()`
+        // keeps it running (or `Process::sync` restarts it itself if its own args changed).
+        !c.prefs.enabled
+    };
+    if stop_process {
+        ctl().process.stop_now();
+    }
+    changed(app);
+}
+
+fn spawn_tick_loop(app: &AppHandle, generation: u64) {
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        loop {
+            tokio::time::sleep(TICK_EVERY).await;
+            if ctl().generation != generation {
+                break; // begin()/stop() moved on: this loop has nothing left to do.
+            }
+            on_tick(&app, generation);
+        }
+    });
+}
+
+fn on_tick(app: &AppHandle, generation: u64) {
+    let (should_refresh, should_poll) = {
+        let mut c = ctl();
+        if c.generation != generation || c.provider.is_none() {
+            return;
+        }
+        c.tick += 1;
+        let webhook_alive = c.last_webhook.map(|t| t.elapsed() < WEBHOOK_ALIVE_WINDOW).unwrap_or(false);
+        (c.tick % 12 == 0, c.tick % 4 == 0 && !webhook_alive)
+    };
+    if should_refresh {
+        refresh(app, generation);
+    }
+    if should_poll {
+        poll(app, generation);
+    }
+}
+
+fn refresh(app: &AppHandle, generation: u64) {
+    let provider = {
+        let c = ctl();
+        if c.generation != generation {
+            return;
+        }
+        c.provider.clone()
+    };
+    let Some(provider) = provider else { return };
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        match provider.status().await {
+            Ok(WaLink::Connected { .. }) => {
+                let should_register = {
+                    let mut c = ctl();
+                    if c.generation != generation {
+                        return;
+                    }
+                    c.link = LinkState::Connected;
+                    c.webhook == WebhookState::Listening
+                };
+                if should_register {
+                    register(&app, &provider, generation).await;
+                }
+                changed(&app);
+            }
+            Ok(WaLink::NeedsQr) => {
+                let qr = provider.qr_code().await;
+                let mut c = ctl();
+                if c.generation != generation {
+                    return;
+                }
+                c.link = match qr {
+                    Ok(Some((png, _seconds))) => LinkState::NeedsQr { png_base64: B64.encode(&png) },
+                    // ALREADY_LOGGED_IN raced our own status() call — the next tick's status()
+                    // will report Connected once GOWA catches up.
+                    Ok(None) => LinkState::Connecting,
+                    Err(_) => LinkState::NeedsQr { png_base64: String::new() },
+                };
+                drop(c);
+                changed(&app);
+            }
+            Err(e) => apply_error(&app, generation, e),
+        }
+    });
+}
+
+async fn register(app: &AppHandle, provider: &Provider, generation: u64) {
+    let (port, secret) = {
+        let c = ctl();
+        (c.prefs.port, c.webhook_secret.clone())
+    };
+    let url = format!("http://127.0.0.1:{port}{WEBHOOK_PATH}");
+    match provider.register_webhook(&url, &secret).await {
+        Ok(()) => {
+            let mut c = ctl();
+            if c.generation == generation {
+                c.webhook = WebhookState::Registered;
+            }
+            drop(c);
+            settings_changed(app);
+        }
+        Err(WaError::Refused { detail }) => {
+            let mut c = ctl();
+            if c.generation == generation {
+                c.webhook = WebhookState::Refused { detail };
+            }
+            drop(c);
+            settings_changed(app);
+        }
+        Err(_) => {} // tried again on the next refresh
+    }
+}
+
+fn apply_error(app: &AppHandle, generation: u64, error: WaError) {
+    let restart_process = matches!(error, WaError::Unreachable);
+    let (gowa_path, url, has_cred) = {
+        let mut c = ctl();
+        if c.generation != generation {
+            return;
+        }
+        c.link = match &error {
+            WaError::Unreachable => LinkState::Unreachable,
+            WaError::Unauthorized => LinkState::Unauthorized,
+            WaError::Refused { detail } | WaError::Other { detail } => LinkState::Failed { detail: detail.clone() },
+            WaError::NotLinked | WaError::NeedsQr | WaError::TooLong | WaError::TooFast => {
+                LinkState::NeedsQr { png_base64: String::new() }
+            }
+        };
+        (c.prefs.gowa_path.clone(), c.url.clone(), c.has_credential)
+    };
+    changed(app);
+    // GOWA was started by Coucou and seems to have gone (crash, killed): started again, but
+    // `Process::sync` itself refuses to retry more than once a minute.
+    if restart_process {
+        let credential = has_cred.then(|| crate::secrets::get(CREDENTIAL_KEY)).flatten();
+        ctl().process.sync(&gowa_path, &url, credential.as_deref());
+    }
+}
+
+/// Backfill/poll fallback for when the webhook isn't delivering: deferred. The webhook is the
+/// primary delivery path (registered in `register()` above); this 20 s poll only matters when
+/// GOWA cannot reach Coucou's own webhook at all, which `on_tick`'s `webhook_alive` gate means
+/// is already the uncommon case. Needs `Provider::recent_messages` (not part of Task 3's
+/// interface), so left as a logged no-op for this task — see task-6-report.md.
+fn poll(_app: &AppHandle, _generation: u64) {}
+
+fn start_listener(app: &AppHandle, generation: u64) {
+    let port = ctl().prefs.port;
+    let app2 = app.clone();
+    tauri::async_runtime::spawn(async move {
+        // `Listener::start` only needs `&mut self` to set up the bind + spawn the accept loop;
+        // the guard must not be held across its `.await` (MutexGuard isn't Send), so take the
+        // listener out, start it unlocked, then put it back.
+        let mut listener = std::mem::replace(&mut ctl().listener, webhook::Listener::new());
+        let app3 = app2.clone();
+        let started = listener.start(port, move |req| handle_webhook_request(&app3, generation, req)).await;
+        ctl().listener = listener;
+        let mut c = ctl();
+        if c.generation == generation {
+            c.webhook = if started { WebhookState::Listening } else { WebhookState::PortBusy { port } };
+        }
+        drop(c);
+        settings_changed(&app2);
+    });
+}
+
+fn handle_webhook_request(app: &AppHandle, generation: u64, req: webhook::Request) -> u16 {
+    if req.method != "POST" || !req.path.starts_with(WEBHOOK_PATH) {
+        return 404;
+    }
+    let secret = ctl().webhook_secret.clone();
+    if !verify_webhook(&req, &secret) {
+        return 401;
+    }
+    let mut c = ctl();
+    if c.generation != generation {
+        return 200;
+    }
+    c.last_webhook = Some(Instant::now());
+    if c.webhook != WebhookState::Registered {
+        c.webhook = WebhookState::Registered;
+    }
+    drop(c);
+    on_message(app);
+    200
+}
+
+/// GOWA signs its webhook deliveries with `x-hub-signature-256: sha256=<hex HMAC-SHA256 of
+/// the raw body, keyed by the webhook secret>` — ground truth is `WAWebhook.verify` /
+/// `WAGatewayKind.signatureHeader` in the Mac's WhatsAppGateway.swift (GOWA case). This has
+/// not been exercised against a real GOWA instance (none available in this environment) —
+/// verify it against a captured payload before shipping; see task-6-report.md.
+fn verify_webhook(req: &webhook::Request, secret: &str) -> bool {
+    use hmac::{Hmac, Mac};
+    use sha2::Sha256;
+    if secret.is_empty() {
+        return false;
+    }
+    let Some(sent) = req.headers.get("x-hub-signature-256") else { return false };
+    let Some(sent_hex) = sent.strip_prefix("sha256=") else { return false };
+    let Ok(mut mac) = Hmac::<Sha256>::new_from_slice(secret.as_bytes()) else { return false };
+    mac.update(&req.body);
+    let expected: String = mac.finalize().into_bytes().iter().map(|b| format!("{b:02x}")).collect();
+    constant_time_eq(sent_hex, &expected)
+}
+
+fn constant_time_eq(a: &str, b: &str) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    a.bytes().zip(b.bytes()).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
 }
 
 // ── Tauri commands ──────────────────────────────────────────────────────────
 
 #[tauri::command]
-pub fn whatsapp_settings(window: WebviewWindow, app: AppHandle) -> Result<SettingsView, String> {
+pub fn whatsapp_settings(window: WebviewWindow, _app: AppHandle) -> Result<SettingsView, String> {
     only(&window, crate::island::WINDOW_LABEL)?;
     Ok(ctl().settings_view())
 }
@@ -272,14 +606,19 @@ pub fn whatsapp_set_options(
         c.prefs.enabled = enabled;
         c.prefs.mute_groups = mute_groups;
         c.prefs.mark_read_on_open = mark_read_on_open;
-        prefs::save(&c.prefs);
         restart
     };
+    persist_prefs(&app);
     if restart {
-        settings_changed(&app);
+        if enabled {
+            begin(&app);
+        } else {
+            stop(&app, true);
+        }
     } else {
         changed(&app);
     }
+    settings_changed(&app);
     Ok(())
 }
 
@@ -295,6 +634,9 @@ pub fn whatsapp_save_gateway(
     gowa_path: String,
 ) -> Result<(), String> {
     only(&window, crate::island::WINDOW_LABEL)?;
+    // Settings only ever tracks GOWA (see prefs.rs) — `gateway` is accepted and ignored so the
+    // TS call's signature doesn't need to change.
+    let _ = gateway;
     let url = url.trim().to_string();
     if url.len() > 512 || credential.as_ref().is_some_and(|c| c.len() > 1024) {
         return Err("too long".into());
@@ -303,28 +645,33 @@ pub fn whatsapp_save_gateway(
     if let Some(credential) = &credential {
         crate::secrets::set_internal(CREDENTIAL_KEY, credential.trim())?;
     }
-    {
+    let enabled = {
         let mut c = ctl();
         c.url = url;
         if let Some(credential) = credential {
             c.has_credential = !credential.trim().is_empty();
         }
         let mut next = c.prefs.clone();
-        next.gateway = gateway;
         if (1024..=65535).contains(&port) {
             next.port = port;
         }
         next.auto_start = auto_start;
         next.gowa_path = gowa_path;
         c.prefs = next.cleaned();
-        prefs::save(&c.prefs);
+        c.prefs.enabled
+    };
+    persist_prefs(&app);
+    if enabled {
+        // URL/port/credential/gowa_path changed while on: start over, same as the Mac's
+        // settingsChanged() (stop, then begin again with the new values).
+        begin(&app);
     }
     settings_changed(&app);
     Ok(())
 }
 
 #[tauri::command]
-pub async fn whatsapp_test(window: WebviewWindow, app: AppHandle) -> Result<TestResult, String> {
+pub async fn whatsapp_test(window: WebviewWindow, _app: AppHandle) -> Result<TestResult, String> {
     only(&window, crate::island::WINDOW_LABEL)?;
     Ok(test_connection().await)
 }
@@ -332,7 +679,7 @@ pub async fn whatsapp_test(window: WebviewWindow, app: AppHandle) -> Result<Test
 #[tauri::command]
 pub fn whatsapp_install(window: WebviewWindow, app: AppHandle) -> Result<(), String> {
     only(&window, crate::island::WINDOW_LABEL)?;
-    install();
+    start_install(app);
     Ok(())
 }
 
@@ -342,7 +689,7 @@ pub fn whatsapp_send(window: WebviewWindow, chat: String, text: String) -> Resul
         only(&window, crate::island::WINDOW_LABEL)?;
     }
     let chat = model::chat_from_entry(&chat).ok_or("not a chat")?;
-    let provider = ctl().provider.get().ok_or("not connected")?.clone();
+    let provider = ctl().provider.as_ref().cloned().ok_or("not connected")?;
     tauri::async_runtime::spawn(async move {
         let _ = provider.send(&chat, &text).await;
     });
@@ -356,7 +703,16 @@ pub fn whatsapp_ignore(window: WebviewWindow, chat: String) -> Result<(), String
     }
     let chat = model::chat_from_entry(&chat).ok_or("not a chat")?;
     model::ignore(&chat);
-    changed(&window.app_handle());
+    let app = window.app_handle().clone();
+    {
+        let mut c = ctl();
+        if !c.prefs.ignored.iter().any(|x| x == &chat) {
+            c.prefs.ignored.push(chat);
+            c.prefs = std::mem::take(&mut c.prefs).cleaned();
+        }
+    }
+    persist_prefs(&app);
+    changed(&app);
     Ok(())
 }
 
@@ -366,15 +722,16 @@ pub fn whatsapp_unignore(window: WebviewWindow, chat: String) -> Result<(), Stri
     {
         let mut c = ctl();
         c.prefs.ignored.retain(|x| x != &chat);
-        prefs::save(&c.prefs);
     }
-    changed(&window.app_handle());
+    let app = window.app_handle().clone();
+    persist_prefs(&app);
+    changed(&app);
     Ok(())
 }
 
 async fn test_connection() -> TestResult {
-    let provider = match ctl().provider.get() {
-        Some(p) => p.clone(),
+    let provider = match ctl().provider.as_ref().cloned() {
+        Some(p) => p,
         None => return TestResult::Failed { detail: "not configured".into() },
     };
     match provider.status().await {
@@ -384,8 +741,33 @@ async fn test_connection() -> TestResult {
     }
 }
 
-fn install() {
-    // Wired up to process::Process in a later task (installer download + process start).
+fn start_install(app: AppHandle) {
+    {
+        let mut c = ctl();
+        c.install_step = InstallStep::Checking;
+    }
+    settings_changed(&app);
+    tauri::async_runtime::spawn(async move {
+        let progress_app = app.clone();
+        let result = install::install(move |step| {
+            ctl().install_step = step;
+            settings_changed(&progress_app);
+        })
+        .await;
+        {
+            let mut c = ctl();
+            c.install_step = match &result {
+                Ok(version) => InstallStep::Done { version: version.clone() },
+                Err(e) => InstallStep::Failed { reason: e.to_string() },
+            };
+            if result.is_ok() {
+                c.prefs.gowa_path =
+                    process::working_dir().join(process::binary_name()).to_string_lossy().to_string();
+            }
+        }
+        persist_prefs(&app);
+        settings_changed(&app);
+    });
 }
 
 pub fn on_message(app: &AppHandle) {
@@ -410,5 +792,43 @@ mod tests {
     #[test]
     fn pill_id_is_whatsapp() {
         assert_eq!(PILL_ID, "integration_whatsapp");
+    }
+
+    #[test]
+    fn webhook_secret_persists_across_calls() {
+        // secrets.rs has no test seam here; check the length/format invariant only.
+        let a = super::webhook_secret();
+        assert_eq!(a.len(), 64); // 32 bytes, hex
+        assert!(a.chars().all(|c| c.is_ascii_hexdigit()));
+    }
+
+    #[test]
+    fn verify_webhook_accepts_a_matching_signature_and_rejects_everything_else() {
+        use hmac::{Hmac, Mac};
+        use sha2::Sha256;
+        let secret = "s3cret";
+        let body = b"{\"event\":\"message\"}".to_vec();
+        let mut mac = Hmac::<Sha256>::new_from_slice(secret.as_bytes()).unwrap();
+        mac.update(&body);
+        let sig: String = mac.finalize().into_bytes().iter().map(|b| format!("{b:02x}")).collect();
+
+        let mut headers = std::collections::HashMap::new();
+        headers.insert("x-hub-signature-256".to_string(), format!("sha256={sig}"));
+        let good = webhook::Request { method: "POST".into(), path: "/whatsapp".into(), headers: headers.clone(), body: body.clone() };
+        assert!(verify_webhook(&good, secret));
+
+        let mut wrong_headers = headers.clone();
+        wrong_headers.insert("x-hub-signature-256".to_string(), "sha256=deadbeef".to_string());
+        let bad = webhook::Request { method: "POST".into(), path: "/whatsapp".into(), headers: wrong_headers, body: body.clone() };
+        assert!(!verify_webhook(&bad, secret));
+
+        let no_header = webhook::Request {
+            method: "POST".into(),
+            path: "/whatsapp".into(),
+            headers: std::collections::HashMap::new(),
+            body,
+        };
+        assert!(!verify_webhook(&no_header, secret));
+        assert!(!verify_webhook(&good, ""));
     }
 }

@@ -30,6 +30,9 @@ url = "2"
 # Sync: settings are encrypted on this PC before they reach the sync server.
 aes-gcm = "0.10"
 sha2 = "0.10"
+# WhatsApp webhook signature verification (HMAC-SHA256 of the body, matching GOWA's
+# x-hub-signature-256 header) — already resolved transitively, pinned here directly.
+hmac = "0.12"
 base64 = "0.22"
 mail-parser = "1.0.0"
 zip = { version = "2", default-features = false, features = ["deflate"] }

@@ -702,6 +702,7 @@ dependencies = [
  "base64 0.22.1",
  "core-graphics 0.24.0",
  "gtk",
+ "hmac",
  "keyring",
  "libc",
  "mail-parser",
