@@ -4,6 +4,9 @@
 
 Coucou v2 is [JaimeTR](https://github.com/JaimeTR)'s fork of [Coucou by Louis Raillé](https://github.com/Louis-CFM/coucou) (MIT). The macOS release notes stay in the root [CHANGELOG.md](../CHANGELOG.md).
 
+## Unreleased
+- **Mail (Thunderbird)**: a new pill reads your Thunderbird mail on this PC — inbox, search, reading a message — with no network call and no credentials; pick which accounts in Settings → Correo. When a verification code arrives, a card shows it big with a copy button.
+
 ## 1.5.2 — November 1, 2026
 - **Fixed: ElevenLabs stayed silent for everyone who never picked their own voice.** ElevenLabs retired the premade "Rachel" voice into its paid-only shared library; the API has been answering 402 (payment required) to the id Coucou shipped as default, and the failure was swallowed without a word. The default is now "Sarah" (free plan, every account's own voice), and anyone with the old id saved gets moved over automatically.
 - **ElevenLabs failures are no longer silent.** The first time ElevenLabs cannot speak in a session (bad key, no credit, a retired voice), a Windows toast says so and names the reason; Mochi still falls back to the free system voice right away, as before.
