@@ -1771,11 +1771,17 @@ function mailSection(): HTMLElement {
           const next = on
             ? [...settings.mailWatchedAccounts, a.id]
             : settings.mailWatchedAccounts.filter((id) => id !== a.id);
-          settings.mailWatchedAccounts = next;
-          await Bridge.mailSetWatched(next);
-          await save();
+          try {
+            await Bridge.mailSetWatched(next);
+            settings.mailWatchedAccounts = next;
+            await save();
+          } catch (err) {
+            box.classList.toggle("on", !on);
+            box.setAttribute("aria-pressed", String(!on));
+            note.textContent = String(err).replace(/^Error:\s*/, "");
+          }
         });
-        list.append(field(a.label, `${a.folders.length} carpetas`, box));
+        list.append(field(a.label, a.folders.length === 1 ? "1 carpeta" : `${a.folders.length} carpetas`, box));
       }
     } catch (err) {
       note.textContent = String(err).replace(/^Error:\s*/, "");
