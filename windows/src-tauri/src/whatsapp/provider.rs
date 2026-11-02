@@ -103,9 +103,9 @@ impl Provider {
     fn check(status: u16, body: &Value) -> Result<(), WaError> {
         if status == 401 {
             if Self::error_code(body).as_deref() == Some("AUTHENTICATION_ERROR") {
-                return Err(WaError::Unauthorized);
+                return Err(WaError::NotLinked);
             }
-            return Err(WaError::NotLinked);
+            return Err(WaError::Unauthorized);
         }
         if !(200..300).contains(&status) {
             return Err(WaError::Refused { detail: Self::error_code(body).unwrap_or_else(|| format!("HTTP {status}")) });
@@ -255,17 +255,17 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_401_with_a_non_auth_code_means_not_linked() {
+    async fn a_401_with_a_non_auth_code_means_unauthorized() {
         let base = fixture(401, r#"{"code":"SOMETHING_ELSE"}"#).await;
         let p = Provider::new(base, None);
-        assert_eq!(p.status().await.unwrap_err(), WaError::NotLinked);
+        assert_eq!(p.status().await.unwrap_err(), WaError::Unauthorized);
     }
 
     #[tokio::test]
-    async fn a_401_with_the_auth_code_means_unauthorized() {
+    async fn a_401_with_the_auth_code_means_not_linked() {
         let base = fixture(401, r#"{"code":"AUTHENTICATION_ERROR"}"#).await;
         let p = Provider::new(base, None);
-        assert_eq!(p.status().await.unwrap_err(), WaError::Unauthorized);
+        assert_eq!(p.status().await.unwrap_err(), WaError::NotLinked);
     }
 
     #[tokio::test]
