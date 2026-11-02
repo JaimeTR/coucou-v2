@@ -1247,6 +1247,12 @@ input[type="range"]::-webkit-slider-thumb {
   flex-direction: column;
 }
 
+.mailcode-card { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 18px; }
+.mailcode-digits { font: 700 34px var(--font); letter-spacing: 4px; font-variant-numeric: tabular-nums; }
+.mailcode-subject { font-size: 12px; color: var(--dim-2); text-align: center; }
+.mailcode-actions { display: flex; align-items: center; gap: 8px; }
+.mailcode-status { font-size: 11px; color: var(--dim-2); }
+
 .int-head {
   display: flex;
   align-items: center;

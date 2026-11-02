@@ -38,3 +38,11 @@ test("highlightCode wraps a code near a trigger word in <mark>, leaves the rest 
 test("highlightCode with no code present returns the text unchanged, HTML-escaped", () => {
   assert.equal(highlightCode("Hola <mundo> & adiós"), "Hola &lt;mundo&gt; &amp; adiós");
 });
+
+import { codeForDisplay } from "../.test-build/views/mailcode.js";
+
+test("codeForDisplay groups digits in pairs for easier reading", () => {
+  assert.equal(codeForDisplay("4821"), "48 21");
+  assert.equal(codeForDisplay("90214"), "90 21 4");
+  assert.equal(codeForDisplay(""), "");
+});

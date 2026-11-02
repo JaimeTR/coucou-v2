@@ -12,6 +12,7 @@ import { buildPrompt } from "./chat";
 import { buildChoose, buildUpload, buildUploading } from "./upload";
 import { renderIntegrationCard, type IntegrationCardHooks } from "./integrations";
 import { buildQuestion } from "./question";
+import { buildMailCodeView } from "./mailcode";
 import { formatMinutes } from "../island/recap";
 import { renderShareImage, toPngBlob, toPngDataUrl } from "../island/recapShare";
 import { Bridge } from "../core/bridge";
@@ -654,6 +655,7 @@ export function buildViews(
   map.set("empty", buildEmpty(actions));
   map.set("approval", buildApproval(actions));
   map.set("question", buildQuestion(actions));
+  map.set("mailcode", buildMailCodeView(actions));
   map.set("diff", buildDiff(actions));
   map.set("error", buildError(actions));
   map.set("finished", buildFinished(actions));

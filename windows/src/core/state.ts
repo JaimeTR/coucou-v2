@@ -450,6 +450,8 @@ class AppState {
   /** What Spotify plays, while its pill is on screen. */
   spotify: SpotifyState | null = null;
   pendingQuestion: PendingQuestion | null = null;
+  /** A verification code found in a watched mailbox, waiting on the mailcode card. */
+  pendingMailCode: { code: string; subject: string; from: string } | null = null;
 
   /** Plan usage from the statusLine relay; null until Claude Code reports it. */
   plan: PlanUsage | null = null;

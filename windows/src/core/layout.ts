@@ -12,6 +12,7 @@ export type IslandViewName =
   | "diff"
   | "error"
   | "finished"
+  | "mailcode"
   | "confused"
   | "upload"
   | "uploading"
@@ -78,6 +79,7 @@ export const VIEW_LAYOUTS: Record<IslandViewName, ViewLayout> = {
   diff: { height: 236, botX: 40, botY: null, botDiameter: 30, agentMode: "none" },
   error: { height: 160, botX: 62, botY: null, botDiameter: 58, agentMode: "column" },
   finished: { height: 160, botX: 62, botY: null, botDiameter: 58, agentMode: "column" },
+  mailcode: { height: 160, botX: 62, botY: null, botDiameter: 58, agentMode: "none" },
   confused: { height: 160, botX: 76, botY: null, botDiameter: 66, agentMode: "column" },
   upload: { height: 176, botX: 140, botY: 104, botDiameter: 62, agentMode: "column" },
   // botY 103 = bar top (42 + 58) + 3, so the dot really rides the bar. The Swift

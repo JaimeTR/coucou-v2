@@ -758,3 +758,22 @@ export function endQuestion() {
   if (questionTimeout != null) window.clearTimeout(questionTimeout);
   questionTimeout = null;
 }
+
+// ── Verification codes found in a watched mailbox ─────────────────────────────
+
+/** Opens the mailcode card on a "mail-code" event; auto-dismisses after 15 s. */
+export function registerMailCodeHandler(island: Island): void {
+  void onEvent<{ code: string; subject: string; from: string }>("mail-code", (payload) => {
+    State.pendingMailCode = payload;
+    Sound.play("question");
+    island.alert("mailcode");
+    window.setTimeout(() => {
+      if (State.pendingMailCode?.code === payload.code) {
+        State.pendingMailCode = null;
+        if (State.view === "mailcode") island.setView(State.defaultView());
+        State.notify();
+      }
+    }, 15_000);
+    State.notify();
+  });
+}

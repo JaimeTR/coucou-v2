@@ -13,7 +13,7 @@ import { State, type Settings } from "./core/state";
 import { applyLanguage, uiLanguage } from "./core/i18n";
 import { Island } from "./island/island";
 import { registerDictation } from "./island/dictation";
-import { Recap, registerHookHandlers } from "./island/hooks";
+import { Recap, registerHookHandlers, registerMailCodeHandler } from "./island/hooks";
 import { registerIntegrationHandlers, refreshConfigured } from "./island/integrations";
 import type { Rule } from "./island/rules";
 
@@ -167,6 +167,7 @@ async function main() {
   });
 
   registerHookHandlers(island);
+  registerMailCodeHandler(island);
   registerIntegrationHandlers(island);
   registerDictation(island);
 
