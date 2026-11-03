@@ -51,7 +51,7 @@ use desktop::{create, home, hide, is_visible, move_to, position, show};
 use files::DroppedFile;
 use hooks::{HookPreview, HookStatus};
 use island::{PollGate, ScreenInfo};
-use mail::{mail_accounts, mail_list, mail_read, mail_search, MailState};
+use mail::{mail_accounts, mail_imap_add, mail_imap_remove, mail_list, mail_read, mail_search, MailState};
 use pipe::Pending;
 use settings::Settings;
 use whatsapp::{whatsapp_ignore, whatsapp_install, whatsapp_save_gateway, whatsapp_send, whatsapp_set_options, whatsapp_settings, whatsapp_test, whatsapp_unignore};
@@ -310,6 +310,8 @@ fn save_settings(app: AppHandle, mut settings: Settings) {
         settings.sync_url = current.sync_url.clone();
         settings.sync_rev = current.sync_rev;
         settings.sync_device = current.sync_device.clone();
+        // The directly connected mail accounts belong to the mail commands (they hold the password too).
+        settings.mail_imap_accounts = current.mail_imap_accounts.clone();
         // Same reasoning: the WhatsApp lifecycle (whatsapp.rs) owns these, keeping its own
         // in-memory copy in step via its own commands — an unrelated save from the Settings
         // window (volume, a toggle) must not clobber them with its possibly-stale copy.
@@ -1405,6 +1407,8 @@ pub fn run() {
             voice_speak,
             voice_list,
             voice_transcribe,
+            mail_imap_add,
+            mail_imap_remove,
             whatsapp_settings,
             whatsapp_set_options,
             whatsapp_save_gateway,
@@ -1461,6 +1465,7 @@ pub fn run() {
             updater::spawn(handle.clone());
             whatsapp::start(&handle, &loaded.active_integrations);
             mail::watch::start(&handle);
+            mail::direct::start(&handle);
             shortcuts::start(&handle);
             let _ = desktop::create(&handle);
             Ok(())

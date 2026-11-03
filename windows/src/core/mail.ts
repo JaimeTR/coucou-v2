@@ -6,6 +6,8 @@ export interface MailAccountInfo {
   id: string;
   label: string;
   folders: string[];
+  /** Connected straight to the provider over IMAP: can be removed here. */
+  direct?: boolean;
 }
 
 export interface MailMessageInfo {

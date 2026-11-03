@@ -50,8 +50,16 @@ fn is_custom_key(key: &str) -> bool {
         && key.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
 }
 
+/// The password of a directly connected mail account: "mail-imap-<slug>".
+fn is_imap_key(key: &str) -> bool {
+    key.len() <= 56
+        && key.starts_with("mail-imap-")
+        && key.len() > "mail-imap-".len()
+        && key.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+}
+
 fn entry(key: &str) -> Option<Entry> {
-    if !KNOWN_KEYS.contains(&key) && !INTERNAL_KEYS.contains(&key) && !is_custom_key(key) {
+    if !KNOWN_KEYS.contains(&key) && !INTERNAL_KEYS.contains(&key) && !is_custom_key(key) && !is_imap_key(key) {
         return None;
     }
     Entry::new(SERVICE, key).ok()

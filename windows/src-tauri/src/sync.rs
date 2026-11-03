@@ -26,7 +26,7 @@ pub const CODE_KEY: &str = "sync-code";
 /// Settings that describe this machine, not the person: they never travel.
 const PER_DEVICE: &[&str] = &[
     "screen", "islandPosition", "islandOffset", "autostart", "hooksInstalled",
-    "syncUrl", "syncRev", "syncDevice", "mailWatchedAccounts",
+    "syncUrl", "syncRev", "syncDevice", "mailWatchedAccounts", "mailImapAccounts",
 ];
 
 pub struct Keys {

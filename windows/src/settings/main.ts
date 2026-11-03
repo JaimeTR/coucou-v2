@@ -17,6 +17,7 @@ import { pairingQr } from "./qr";
 import { isOutfit, OUTFIT_NAMES, OUTFITS } from "../mochi/outfits";
 import { TOPIC_NAMES, TOPICS } from "../pet/phrases";
 import { MODE_CHOICES, MODE_NAMES } from "../core/modes";
+import type { MailAccountInfo } from "../core/mail";
 import type { WhatsAppInstallStep, WhatsAppIslandView, WhatsAppSettingsView } from "../core/whatsapp";
 
 /** A paw: the pet. */
@@ -1756,6 +1757,61 @@ function updatesRow(): HTMLElement {
   );
 }
 
+/** "Conectar un correo": Gmail, Titan or any IMAP server, with the password in the credential store. */
+function imapForm(onAdded: (a: MailAccountInfo) => Promise<void>): HTMLElement {
+  const preset = h("select", {}) as HTMLSelectElement;
+  preset.append(
+    h("option", { value: "gmail", text: "Gmail" }),
+    h("option", { value: "titan", text: "Titan" }),
+    h("option", { value: "other", text: "Otro (IMAP)" }),
+  );
+  const user = h("input", { type: "email", placeholder: "tucorreo@ejemplo.com", autocomplete: "off", spellcheck: "false" }) as HTMLInputElement;
+  const pass = h("input", { type: "password", placeholder: "contraseña (de aplicación en Gmail)", autocomplete: "off" }) as HTMLInputElement;
+  const host = h("input", { type: "text", placeholder: "imap.ejemplo.com", autocomplete: "off", spellcheck: "false" }) as HTMLInputElement;
+  const port = h("input", { type: "number", value: "993", min: "1", max: "65535", style: "width:80px" }) as HTMLInputElement;
+  const custom = h("div", { class: "row" }, h("label", { text: "Servidor" }), host, port);
+  const result = h("div", { class: "notice" });
+  const hint = h("div", { class: "hint" });
+  const sync = () => {
+    custom.style.display = preset.value === "other" ? "" : "none";
+    hint.textContent =
+      preset.value === "gmail"
+        ? "Gmail pide una contraseña de aplicación: Cuenta de Google → Seguridad → Verificación en dos pasos → Contraseñas de aplicaciones (y IMAP activado)."
+        : preset.value === "titan"
+          ? "Titan: tu correo completo y su contraseña. Servidor imap.titan.email, puerto 993."
+          : "El servidor IMAP de tu proveedor, normalmente con el puerto 993 (conexión segura).";
+  };
+  preset.addEventListener("change", sync);
+  sync();
+  const connect = h("button", { text: "Probar y conectar" }) as HTMLButtonElement;
+  connect.addEventListener("click", async () => {
+    connect.disabled = true;
+    result.className = "notice";
+    result.textContent = "Conectando…";
+    try {
+      const added = await Bridge.mailImapAdd("", preset.value, host.value, Number(port.value) || 993, user.value, pass.value);
+      pass.value = "";
+      result.className = "notice ok";
+      result.textContent = "Conectado. La contraseña se guardó en el Administrador de credenciales.";
+      await onAdded(added);
+    } catch (e) {
+      result.className = "notice err";
+      result.textContent = String(e).replace(/^Error:\s*/, "");
+    } finally {
+      connect.disabled = false;
+    }
+  });
+  return group("Conectar un correo",
+    field("Proveedor", "", preset),
+    field("Correo", "", user),
+    field("Contraseña", "Se guarda en el Administrador de credenciales de Windows, nunca en un archivo.", pass),
+    custom,
+    h("div", { class: "row" }, connect),
+    hint,
+    result,
+  );
+}
+
 function mailSection(): HTMLElement {
   const list = h("div", { class: "mail-accounts-list" });
   const note = h("div", { class: "hint" });
@@ -1766,7 +1822,7 @@ function mailSection(): HTMLElement {
     try {
       const accounts = (await Bridge.mailAccounts()) ?? [];
       if (accounts.length === 0) {
-        note.textContent = "No se encontró un perfil de Thunderbird en este PC.";
+        note.textContent = "Aún no hay cuentas: conecta Gmail o Titan abajo, o instala Thunderbird.";
         return;
       }
       for (const a of accounts) {
@@ -1779,7 +1835,14 @@ function mailSection(): HTMLElement {
             : settings.mailWatchedAccounts.filter((id) => id !== a.id);
           void save();
         });
-        list.append(field(a.label, a.folders.length === 1 ? "1 carpeta" : `${a.folders.length} carpetas`, box));
+        const remove = a.direct
+          ? h("button", { class: "danger", text: "Quitar", onclick: async () => {
+              await Bridge.mailImapRemove(a.id);
+              settings.mailWatchedAccounts = settings.mailWatchedAccounts.filter((id) => id !== a.id);
+              void reload();
+            } })
+          : null;
+        list.append(field(a.label, a.direct ? "Conectada directamente (IMAP)" : a.folders.length === 1 ? "1 carpeta" : `${a.folders.length} carpetas`, box, ...(remove ? [remove] : [])));
       }
     } catch (err) {
       note.textContent = String(err).replace(/^Error:\s*/, "");
@@ -1790,8 +1853,13 @@ function mailSection(): HTMLElement {
   return h(
     "section",
     { class: "plain" },
-    h("p", { class: "lead", text: "Lee tu correo de Thunderbird en este PC, sin conexión. Gmail u Outlook solo en el navegador no aparecen aquí a menos que los agregues a Thunderbird." }),
+    h("p", { class: "lead", text: "Lee tu correo de dos maneras: las cuentas de Thunderbird de este PC (sin conexión), o conectando Gmail, Titan u otro correo directamente. Solo lectura: nunca marca nada como leído." }),
     group("Cuentas", list, note),
+    imapForm(async (added) => {
+      settings.mailWatchedAccounts = [...settings.mailWatchedAccounts.filter((id) => id !== added.id), added.id];
+      await save();
+      void reload();
+    }),
   );
 }
 

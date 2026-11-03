@@ -4,7 +4,12 @@
 
 Coucou v2 es el fork de [JaimeTR](https://github.com/JaimeTR) de [Coucou, de Louis Raillé](https://github.com/Louis-CFM/coucou) (MIT). Las notas de la versión de macOS siguen en el [CHANGELOG.md](../CHANGELOG.md) de la raíz.
 
-## Sin publicar
+## 1.6.0 — 2 de noviembre de 2026
+- **Correo de Gmail, Titan y cualquier servidor IMAP** (Ajustes → Correo → Conectar un correo): sin Thunderbird. Primero se prueba el acceso y solo entonces se guarda; la contraseña va al Administrador de credenciales de Windows, nunca a un archivo, y solo se envía al servidor que elegiste. Gmail pide una contraseña de aplicación (Cuenta de Google → Seguridad → Contraseñas de aplicaciones). Misma bandeja, búsqueda, lector y tarjeta de códigos de verificación que las cuentas de Thunderbird; solo lectura (no marca nada como leído), se revisa cada minuto y es por equipo (no se sincroniza).
+- **WhatsApp aparcado**: su pill y sus ajustes se esconden por ahora y no corre nada de él; el código queda para más adelante.
+- La isla es un poco más alta y las etiquetas de los pills se alinean, para que quepan hasta 6 pills.
+
+### Antes en esta versión
 - **Correo (Thunderbird)**: un pill nuevo lee tu correo de Thunderbird en este PC — bandeja, buscar, leer un mensaje — sin conexión ni contraseñas; eliges qué cuentas en Ajustes → Correo. Cuando llega un código de verificación, una tarjeta lo muestra en grande con un botón de copiar.
 
 ## 1.5.2 — 1 de noviembre de 2026

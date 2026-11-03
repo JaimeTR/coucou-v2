@@ -227,6 +227,8 @@ export interface Settings {
   activeIntegrations: string[];
   /** Thunderbird account ids (profile::Account.id) the Mail pill watches. */
   mailWatchedAccounts: string[];
+  /** Mail accounts connected straight over IMAP (Rust owns the list; the password is never here). */
+  mailImapAccounts: { id: string; label: string; host: string; port: number; user: string }[];
   /** WhatsApp (GOWA gateway): on/off. URL and credential are secrets, not here. */
   whatsappEnabled: boolean;
   /** Local webhook listener port. */
@@ -348,6 +350,7 @@ export const DEFAULT_SETTINGS: Settings = {
   absenceInterval: 180,
   activeIntegrations: ["agent_claude-desktop", "integration_spotify", "integration_mail_thunderbird"],
   mailWatchedAccounts: [],
+  mailImapAccounts: [],
   whatsappEnabled: false,
   whatsappPort: 47823,
   whatsappMuteGroups: true,

@@ -35,6 +35,8 @@ sha2 = "0.10"
 hmac = "0.12"
 base64 = "0.22"
 mail-parser = "1.0.0"
+# Mail straight from Gmail / Titan / any IMAP server (mail/direct.rs).
+imap = { version = "3.0.0-alpha.15", default-features = false, features = ["rustls-tls"] }
 zip = { version = "2", default-features = false, features = ["deflate"] }
 tauri-plugin-updater = "2"
 

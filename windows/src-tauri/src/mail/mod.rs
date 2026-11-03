@@ -2,6 +2,7 @@
 // profile. Nothing is read until an account is in Settings' watched list
 // (mail_watched_accounts); no network call is made for this feature at all.
 
+pub mod direct;
 pub mod index;
 pub mod mbox;
 pub mod otp;
@@ -22,6 +23,9 @@ pub struct AccountInfo {
     pub id: String,
     pub label: String,
     pub folders: Vec<String>,
+    /// Connected straight to the provider over IMAP (can be removed from Settings).
+    #[serde(default)]
+    pub direct: bool,
 }
 
 #[derive(Serialize, Clone, Debug, PartialEq, Eq)]
@@ -37,7 +41,7 @@ pub struct MessageInfo {
 }
 
 fn to_account_info(a: &Account) -> AccountInfo {
-    AccountInfo { id: a.id.clone(), label: a.label.clone(), folders: a.folders.iter().map(|f| f.name.clone()).collect() }
+    AccountInfo { id: a.id.clone(), label: a.label.clone(), folders: a.folders.iter().map(|f| f.name.clone()).collect(), direct: false }
 }
 
 #[cfg(test)]
@@ -197,9 +201,20 @@ async fn off_main<T: Send + 'static>(f: impl FnOnce() -> Result<T, String> + Sen
 }
 
 #[tauri::command]
-pub fn mail_accounts() -> Result<Vec<AccountInfo>, String> {
-    let dir = profile_dir()?;
-    Ok(profile::accounts(&dir).iter().map(to_account_info).collect())
+pub fn mail_accounts(app: tauri::AppHandle) -> Result<Vec<AccountInfo>, String> {
+    // Without Thunderbird the directly connected accounts are still listed.
+    let mut out: Vec<AccountInfo> = profile_dir().map(|dir| profile::accounts(&dir).iter().map(to_account_info).collect()).unwrap_or_default();
+    let direct_accounts = app.state::<crate::Shared>().settings.lock().unwrap().mail_imap_accounts.clone();
+    out.extend(direct_accounts.iter().map(|a| AccountInfo {
+        id: direct::account_id(&a.id),
+        label: format!("{} ({})", a.label, a.user),
+        folders: vec!["INBOX".into()],
+        direct: true,
+    }));
+    if out.is_empty() {
+        return Err("No se encontró un perfil de Thunderbird ni hay cuentas conectadas.".into());
+    }
+    Ok(out)
 }
 
 /// Read-only over what the watcher has already indexed: no file read here,
@@ -211,6 +226,9 @@ pub fn mail_accounts() -> Result<Vec<AccountInfo>, String> {
 pub async fn mail_list(app: tauri::AppHandle, account: String, folder: String) -> Result<Vec<MessageInfo>, String> {
     off_main(move || {
         require_watched(&watched_accounts(&app), &account)?;
+        if account.starts_with(direct::PREFIX) {
+            return Ok(direct::cached(&account).iter().take(MAX_RESULTS).map(|h| info(&account, "INBOX", h)).collect());
+        }
         Ok(list(&app.state::<MailState>().indexes.lock().unwrap(), &account, &folder))
     })
     .await
@@ -221,7 +239,17 @@ pub async fn mail_list(app: tauri::AppHandle, account: String, folder: String) -
 pub async fn mail_search(app: tauri::AppHandle, query: String) -> Result<Vec<MessageInfo>, String> {
     off_main(move || {
         let watched = watched_accounts(&app);
-        Ok(search(&app.state::<MailState>().indexes.lock().unwrap(), &watched, &query))
+        let mut hits = search(&app.state::<MailState>().indexes.lock().unwrap(), &watched, &query);
+        let q = query.to_lowercase();
+        let mut more: Vec<(MessageInfo, i64)> = direct::cached_all(&watched)
+            .into_iter()
+            .filter(|(_, h)| h.subject.to_lowercase().contains(&q) || h.from.to_lowercase().contains(&q))
+            .map(|(a, h)| (info(&a, "INBOX", &h), h.timestamp))
+            .collect();
+        more.sort_by(|a, b| b.1.cmp(&a.1));
+        hits.extend(more.into_iter().map(|(m, _)| m));
+        hits.truncate(MAX_RESULTS);
+        Ok(hits)
     })
     .await
 }
@@ -230,6 +258,11 @@ pub async fn mail_search(app: tauri::AppHandle, query: String) -> Result<Vec<Mes
 pub async fn mail_read(app: tauri::AppHandle, account: String, folder: String, offset: usize, len: usize) -> Result<String, String> {
     off_main(move || {
         require_watched(&watched_accounts(&app), &account)?;
+        if account.starts_with(direct::PREFIX) {
+            let acc = direct::find(&app, &account).ok_or("Esa cuenta ya no está conectada.")?;
+            let pass = direct::password(&acc).ok_or("Falta la contraseña de esa cuenta.")?;
+            return direct::read(&acc, &pass, offset);
+        }
         let moved = || "Ese mensaje ya no está donde se esperaba.".to_string();
         offset.checked_add(len).ok_or_else(moved)?;
         let f = find_folder(&account, &folder)?;
@@ -238,6 +271,72 @@ pub async fn mail_read(app: tauri::AppHandle, account: String, folder: String, o
             return Err(moved());
         }
         mbox::parse_body(&raw).ok_or_else(|| "No se pudo leer este mensaje.".to_string())
+    })
+    .await
+}
+
+/// Connects a mail account straight over IMAP (Gmail, Titan, any server). The login is
+/// tried first; only a working account is kept, and its password goes to the credential
+/// store. `preset` is "gmail", "titan" or anything else (then `host` and `port` count).
+/// Watching it (the Settings toggle) is the front end's, like for the other accounts.
+#[tauri::command]
+pub async fn mail_imap_add(app: tauri::AppHandle, label: String, preset: String, host: String, port: u16, user: String, password: String) -> Result<AccountInfo, String> {
+    off_main(move || {
+        let (host, port) = match direct::preset(&preset) {
+            Some((h, p)) => (h.to_string(), p),
+            None => (host.trim().to_lowercase(), port),
+        };
+        let user = user.trim().to_string();
+        if !direct::valid_host(&host) || port == 0 {
+            return Err("El servidor o el puerto no son válidos.".into());
+        }
+        if user.is_empty() || user.len() > 120 || password.is_empty() {
+            return Err("Falta el correo o la contraseña.".into());
+        }
+        let id = direct::slug(&user);
+        if id.is_empty() {
+            return Err("El correo no es válido.".into());
+        }
+        let label = if label.trim().is_empty() { preset_label(&preset, &host) } else { label.trim().chars().take(40).collect() };
+        let acc = direct::ImapAccount { id: id.clone(), label: label.clone(), host, port, user: user.clone() };
+        direct::check(&acc, &password)?;
+        crate::secrets::set(&direct::secret_key(&id), &password)?;
+        let shared = app.state::<crate::Shared>();
+        let snapshot = {
+            let mut s = shared.settings.lock().unwrap();
+            s.mail_imap_accounts.retain(|a| a.id != id);
+            s.mail_imap_accounts.push(acc);
+            s.clone()
+        };
+        crate::settings::save(&snapshot).map_err(|e| e.to_string())?;
+        Ok(AccountInfo { id: direct::account_id(&id), label: format!("{label} ({user})"), folders: vec!["INBOX".into()], direct: true })
+    })
+    .await
+}
+
+fn preset_label(preset: &str, host: &str) -> String {
+    match preset {
+        "gmail" => "Gmail".into(),
+        "titan" => "Titan".into(),
+        _ => host.to_string(),
+    }
+}
+
+/// Forgets a directly connected account: its entry, its password and what was cached.
+#[tauri::command]
+pub async fn mail_imap_remove(app: tauri::AppHandle, account: String) -> Result<(), String> {
+    off_main(move || {
+        let Some(id) = account.strip_prefix(direct::PREFIX).map(str::to_string) else { return Ok(()) };
+        let shared = app.state::<crate::Shared>();
+        let snapshot = {
+            let mut s = shared.settings.lock().unwrap();
+            s.mail_imap_accounts.retain(|a| a.id != id);
+            s.mail_watched_accounts.retain(|a| *a != account);
+            s.clone()
+        };
+        let _ = crate::secrets::clear(&direct::secret_key(&id));
+        direct::forget(&account);
+        crate::settings::save(&snapshot).map_err(|e| e.to_string())
     })
     .await
 }

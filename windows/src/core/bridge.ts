@@ -310,6 +310,10 @@ export const Bridge = {
   mailList: (account: string, folder: string) => call<MailMessageInfo[]>("mail_list", { account, folder }),
   mailSearch: (query: string) => call<MailMessageInfo[]>("mail_search", { query }),
   mailRead: (account: string, folder: string, offset: number, len: number) => callOrThrow<string>("mail_read", { account, folder, offset, len }),
+  /** Connects Gmail / Titan / any IMAP server; the login is tried first. The password goes to the credential store. */
+  mailImapAdd: (label: string, preset: string, host: string, port: number, user: string, password: string) =>
+    callOrThrow<MailAccountInfo>("mail_imap_add", { label, preset, host, port, user, password }),
+  mailImapRemove: (account: string) => callOrThrow<void>("mail_imap_remove", { account }),
 
 
   // ── Desktop (Mochi) window ─────────────────────────────────────────────────

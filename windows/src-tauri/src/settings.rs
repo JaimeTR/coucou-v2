@@ -45,6 +45,10 @@ pub struct Settings {
     /// until the person picks one in Settings — nothing is read before that.
     #[serde(default)]
     pub mail_watched_accounts: Vec<String>,
+    /// Mail accounts read straight over IMAP (Gmail, Titan…), see mail/direct.rs. The
+    /// password is in the credential store, not here. Per computer: never synced.
+    #[serde(default)]
+    pub mail_imap_accounts: Vec<crate::mail::direct::ImapAccount>,
     /// WhatsApp (GOWA gateway): on/off. URL and credential are secrets (see secrets.rs).
     #[serde(default)]
     pub whatsapp_enabled: bool,
@@ -496,6 +500,7 @@ impl Default for Settings {
             language: default_greeting_language(),
             custom_pills: Vec::new(),
             mail_watched_accounts: Vec::new(),
+            mail_imap_accounts: Vec::new(),
             whatsapp_enabled: false,
             whatsapp_port: default_whatsapp_port(),
             whatsapp_mute_groups: true,
