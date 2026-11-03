@@ -1938,13 +1938,17 @@ input[type="range"]::-webkit-slider-thumb {
   }
 }
 
+/* Centred on Mochi's own centre line (y = 90 of the 150 px welcome area), whatever
+   the number of rows: the box is 180 px tall from the top, so its middle is at 90. */
 .gp-group {
   position: absolute;
   left: 396px;
-  top: 46px;
+  top: 0;
+  height: 180px;
   width: 214px;
   display: flex;
   flex-direction: column;
+  justify-content: center;
   gap: 5px;
 }
 
