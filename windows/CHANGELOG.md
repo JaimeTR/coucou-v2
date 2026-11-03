@@ -4,6 +4,9 @@
 
 Coucou v2 is [JaimeTR](https://github.com/JaimeTR)'s fork of [Coucou by Louis Raillé](https://github.com/Louis-CFM/coucou) (MIT). The macOS release notes stay in the root [CHANGELOG.md](../CHANGELOG.md).
 
+## 1.6.1 — November 2, 2026
+- **Welcome**: the "Continue where I left off" rows are now centred on Mochi's centre line (they sat a little high).
+
 ## 1.6.0 — November 2, 2026
 - **Mail from Gmail, Titan and any IMAP server** (Settings → Correo → Connect a mail account): no Thunderbird needed. The login is tried before anything is kept; the password goes to the Windows Credential Manager, never to a file, and is only ever sent to the server you chose. Gmail needs an app password (Google account → Security → App passwords). Same inbox, search, reader and verification-code card as the Thunderbird accounts; read-only (nothing is marked as read), checked every minute, and per computer (never synced).
 - **WhatsApp is parked**: its pill and settings are hidden for now and nothing of it runs; the code stays for later.
