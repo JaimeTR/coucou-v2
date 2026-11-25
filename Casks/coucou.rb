@@ -1,6 +1,6 @@
 cask "coucou" do
-  version "0.5.8"
-  sha256 "b6732b578f6f51cfc053bcc9e6f3468315d67dfc38d90a2c7c1ebd94c09f83d5"
+  version "0.6.2"
+  sha256 "e1d50c1939aba83fe06b0252cfdcf4fa157bff6b6ac24b002fa5dced5e603848"
 
   url "https://github.com/Louis-CFM/coucou/releases/download/v#{version}/Coucou.zip"
   name "Coucou"

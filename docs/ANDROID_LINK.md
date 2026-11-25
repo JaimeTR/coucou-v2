@@ -4,9 +4,9 @@ How *Coucou for Android* talks to a desktop Coucou. The iPhone uses iCloud (Clou
 push, neither of which exists on Android, so the Android app connects to the desktop directly over
 the local network.
 
-Status: the Android client, `android/tools/dev-desktop.mjs` (a stand-in desktop for testing) and the
-real desktop server of the Windows/Linux app (`windows/src-tauri/src/phone_link/`) implement this.
-The Mac app is left to its author.
+Status: the Android client, `android/tools/dev-desktop.mjs` (a stand-in desktop for testing), the
+real desktop server of the Windows/Linux app (`windows/src-tauri/src/phone_link/`) and the Mac app
+(`NotchBuddy/Sources/App/AndroidLink/`) implement this.
 
 ## Transport
 
@@ -253,6 +253,43 @@ did not choose to leave project names out of the recap. A week with no session, 
 `{"type":"recap"}` means the computer has nothing to show and the phone removes the card. The phone ignores a `recap` on a connection that was
 not offered the capability, and a number that is not a whole number in range makes it drop the card. Nothing goes back.
 
+## Starting a Claude Code session (optional capability `launch`)
+
+The island's "New Claude Code session" card, asked for from the phone. A phone that sends `caps: ["launch"]` in its `hello`, while the
+user has turned on "Let the phone start Claude Code sessions" on the computer (off by default, a switch of its own; re-read for every
+connection **and for every request**; a change disconnects the phones once), is offered `launch` in `welcome.caps`. Any other phone is
+sent nothing about it, and its `launch` messages are an unknown type: ignored and not answered.
+
+| Direction | `type` | fields |
+|---|---|---|
+| computer to phone | `projects` | `projects[]`: `{id, name}`, at most 10, most recent first |
+| phone to computer | `launch` | `id` (1 to 64 chars of `[A-Za-z0-9_-]`, made by the phone), `project` (an `id` of the list), `prompt` (at most 4000 characters) |
+| computer to phone | `launchResult` | `id`, `ok`; when `ok` is false, `reason` |
+
+- **The list** is the one of the island's card: the folders Claude Code sessions ran in (and a folder the user chose there). `name` is
+  the **folder name only**, at most 64 characters; `id` is 16 lowercase hex characters, the start of the SHA-256 of a random value made
+  at each start of Coucou and the path. **The path never leaves the computer**, and an id says nothing about it. The list is sent right
+  after the first `sessions` (even when empty) and again whenever it changes.
+- **The phone can only name a project of the list.** `launch` has no field for a path, a command or an option, and the computer reads
+  none. A `project` that is not an id of the list is refused, whatever it looks like.
+- `reason` is one of `off` (the switch was turned off since the phone connected), `empty` or `too_long` (the prompt, after control
+  characters are replaced by spaces and it is trimmed), `unknown_project`, `rate` (6 sessions started from phones in 10 minutes, all
+  phones together), `failed` (the folder is gone or no terminal could be opened).
+- **The computer starts the session with the island's own launcher** (`launch.rs`, `launch_from_phone`): the same terminals, the same
+  check that the folder exists, and the prompt handed over the same way, **never written into a command line** (an environment variable
+  on Linux, a temporary file read and deleted by PowerShell on Windows). There is no second launcher.
+- **Claude Code always starts in the standard permission mode** (`claude --permission-mode default`), whatever the computer's own
+  Claude Code settings say: a phone can never start a session that doesn't ask for approval. On Linux it is started as `command claude`,
+  so an alias or a shell function in the user's .bashrc or .zshrc cannot add a flag of its own; on Windows `Get-Command -CommandType
+  Application` already skips them. The island's own launch is unchanged.
+- The answer goes to the phone that asked. A `launch` whose `id` is not valid is ignored (there is nothing to answer to); the same `id`
+  twice starts one session. The prompt is never logged, on either side, and the phone does not keep it.
+- **The phone asks for its screen lock (fingerprint, pattern, PIN) before it sends**, like Allow; with no screen lock set up it sends
+  nothing. If no `launchResult` comes within 10 seconds the phone says so and does not claim the session started.
+- Old and new together: a computer that does not know `launch` does not offer it and ignores the message, and the phone says "Your
+  computer doesn't offer this yet"; an older phone never asks, so a newer computer sends it nothing new.
+- Windows and Linux only for now. The Mac does not offer `launch`.
+
 ## Admission (what a flood cannot do)
 
 The server answers the local network before it knows who is calling, so it bounds what a caller who has not yet sent
@@ -348,9 +385,50 @@ simply keeps using the saved address.**
 - Permission requests (Allow/Deny) go to every phone. A question from Claude Code goes only to a phone with the `answers`
   capability (Settings → Android phone → "Let the phone answer Claude Code's questions", off by default); otherwise its
   options are picked on the island.
+- Sessions from the phone (Settings → Android phone → "Let the phone start Claude Code sessions"): off by default, owned by Rust like
+  the other switches (`phoneLaunch` in settings.json; the webview cannot change it). The island publishes its projects
+  (`phone_link_publish_projects`, the island window only); the hub keeps the paths and tells a phone the names and ids. A request ends
+  in `launch::launch_from_phone`, the launcher behind the island's card, always in the standard permission mode.
 - New crates: `mdns-sd` (+ `flume`, `if-addrs`, `socket-pktinfo`, `spin`; default features off, so no async runtime or logger) announces the computer on the local network while the link is on (`phone_link/discovery.rs`); `rcgen` (+ `yasna`) makes the certificate once, `qrcode` draws the pairing QR; `rustls`,
   `tokio-rustls` and `ring` were already in the dependency tree (through `reqwest`) and are now named
   directly. Hashing, randomness and the constant-time comparison use `ring`; no other crate.
+
+## Mac implementation notes
+
+The Mac app speaks the same protocol v1 as the Windows/Linux one, in Swift with Network.framework, CryptoKit and Security only
+(`NotchBuddy/Sources/App/AndroidLink/`). The phone cannot tell a Mac from a PC (`welcome.os` is `macos`).
+
+- **Settings → Android phone**: off by default (`androidLinkEnabled`). Turning it on starts a TLS listener and a Bonjour announcement;
+  turning it off, or quitting, stops both. While it is off nothing listens and no timer runs; while it is on the work is event driven
+  (island changes are published after a short debounce, a phone's lines are handled as they arrive), with no polling. Not in the
+  App Store build (the sandbox has no server entitlement); that build keeps the iPhone link only.
+- **Transport**: an `NWListener` on port 47821 (else any free port), IPv4 only, TLS 1.2 or 1.3, with the self-signed certificate
+  (ECDSA P-256, valid 2024 to 2124, common name `Coucou phone link`). Peers that are not on the local network are dropped before any byte
+  is read. At most 8 connections, 10 s to say hello (3 s when the pool is filling up), 20 min idle, 64 KiB lines.
+- **Secrets**: the certificate, its key and the pairing token are generic-password items of the Keychain
+  (`android-link-cert`, `android-link-key`, `android-link-token`), never a file and never UserDefaults. Network.framework needs a
+  `SecIdentity`, so the key and certificate are also added to the Keychain as key and certificate items while the link runs and removed
+  when it stops. Without a Keychain the link does not start. "Pair again" replaces the token and disconnects the phone that had the old one.
+- **Pairing code**: shown only after a click, as on the PC: a QR code (CoreImage) and the `coucou://pair` link with this Mac's LAN address.
+- **Approvals**: the island's pending request is published with its queue id as the request id, so the fingerprint is
+  `sha256(pillId, sessionId, tool, command, requestId)` joined by U+001F and asking for the same command twice gives two fingerprints.
+  A phone's decision is applied only to the request still pending with that fingerprint, once, within 115 s, through
+  `HookServer.sendApprovalDecision`, the same path as a click on the Mac's own card; the Mac's card keeps working all along.
+  `allow` for a command cut to 500 characters is ignored (the request stays pending), `deny` works.
+- **Admission**: the same numbers and rules as `admission.rs` (2 silent connections per address, 4 for strangers together, 8 remembered
+  addresses, shorter waits when filling up), in `AndroidLinkAdmission.swift` with the same tests.
+- **Discovery**: `_coucou._tcp` with TXT `v=1` and `fp=<first 16 hex of the certificate SHA-256>`, nothing else, published by the listener
+  itself, so it is withdrawn with it.
+- **Capabilities the Mac offers**, each only to a phone that asked for it and read again for every connection:
+  `details` ("Show session details on the phone"), `answers` ("Let the phone answer Claude Code's questions") and `usage`
+  ("Show my plan usage on the phone"), all off by default. Changing one of these switches disconnects the phones once so they reconnect
+  and are told. Not offered yet: `chat`, `diffs`, `services`, `recap`, `prefs`, `relay` and `launch`; a phone that asks for them is simply not
+  offered them and everything else works.
+- **What differs from the PC**: a question is offered only if it fits the limits above, and only the first such question waiting is
+  offered; the others stay on the Mac. Sessions are the island's agent pills (a session popped out of its pill keeps its own pill id,
+  like `integration_claude#2`). No demo data ever leaves the Mac.
+- **Tests**: `scripts/test-android-link.sh` (CI) checks the fingerprint, pairing link, TXT record, local-network, admission, framing,
+  hub and certificate rules against the vectors of the Rust and Kotlin tests.
 
 ## Android notes
 
@@ -362,6 +440,8 @@ simply keeps using the saved address.**
 
 - `android/tools/dev-desktop.mjs` pretends to be a desktop (needs `node` and `openssl`). With `--fake-chat` it offers
   `chat` with a fake provider (no key, no cost): `/error`, `/auth`, `/slow`, `/long` and `/rewrite` trigger the odd cases.
+  With `--launch` it offers `launch` with three fake projects and starts nothing (`/fail` as the prompt is answered as a
+  terminal that did not open).
 - `DevDesktopInteropTest` runs the Android client against it.
 - `cargo test -p coucou phone_link` also tests the announcement (what is published and when, that no secret can be in it); the real multicast needs a real network and is not in the tests.
 - `cargo test -p coucou phone_link` tests the real server (wrong token, fingerprint mismatch, oversize
