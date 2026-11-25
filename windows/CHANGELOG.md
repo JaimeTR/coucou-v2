@@ -4,6 +4,23 @@
 
 Coucou v2 is [JaimeTR](https://github.com/JaimeTR)'s fork of [Coucou by Louis Raillé](https://github.com/Louis-CFM/coucou) (MIT). The macOS release notes stay in the root [CHANGELOG.md](../CHANGELOG.md).
 
+## 1.7.0 — November 25, 2026
+Brought over from the original's Windows and Linux 0.5.9 and 0.6.0.
+
+**Security** (by @Ohualtex)
+- The relay pipe only accepts programs running under your own account *(Windows)*.
+- Coucou's local folders are restricted to you, SYSTEM and administrators *(Windows)*.
+- The hook relay is replaced when its contents differ (SHA-256), not only its size and date *(Windows)*.
+- Settings says so when the relay could not start.
+
+**Fixes**
+- A permission or question card answered in the terminal or in Claude's app closes by itself, and so does one whose turn is over (by @arnavaggarwal-dev and the original).
+- Background task notifications and other injected text no longer show as your prompt (by @arnavaggarwal-dev).
+- The finished card goes away when a new prompt comes (by @rollecode).
+- A failed drop's note no longer reopens a folded island (by @mahach666).
+- The upload bar and percentage move with Mochi, and the island and Mochi stay off the taskbar and Alt+Tab *(Windows)* (by @arnavaggarwal-dev).
+- The 7-day GitHub strip is graded against its own week (by @rollecode).
+
 ## 1.6.1 — November 2, 2026
 - **Welcome**: the "Continue where I left off" rows are now centred on Mochi's centre line (they sat a little high).
 

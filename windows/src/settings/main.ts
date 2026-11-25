@@ -996,6 +996,13 @@ function claudeSection(status: HookStatus): HTMLElement {
       }));
     }
 
+    if (status.relayError) {
+      body.append(h("div", {
+        class: "notice warn",
+        text: `El relay de los hooks no pudo arrancar (${status.relayError}). Los hooks no llegarán a Coucou.`,
+      }));
+    }
+
     // Hooks written by an older build lack the one that answers Claude's questions.
     if (status.installed && status.outdated) {
       body.append(h("div", {

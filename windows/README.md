@@ -29,7 +29,7 @@ Approve Claude Code permissions, watch your session work, drop a file, chat with
 
 ## What's new in v2
 
-Coucou v2 turns Mochi into a small personal assistant. Everything below is new on top of the original app; the full list is in [CHANGELOG.md](CHANGELOG.md). **Current version: 1.2.0** (October 11, 2026).
+Coucou v2 turns Mochi into a small personal assistant. Everything below is new on top of the original app; the full list is in [CHANGELOG.md](CHANGELOG.md). **Current version: 1.7.0** (November 25, 2026).
 
 | | |
 |---|---|

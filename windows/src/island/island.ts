@@ -19,7 +19,7 @@ import { BotEngine, hexToRGB } from "../mochi/engine";
 import { Greeting } from "../mochi/greeting";
 import { createMiniBot, pruneMiniBots, syncMiniBotStates, tickMiniBots } from "../mochi/minibots";
 import { UploadCanvas } from "../upload/canvas";
-import { USC, UploadSeq } from "../upload/sequence";
+import { USC, UploadSeq, uploadProgressCurve } from "../upload/sequence";
 import { planColor, primaryPercent } from "../views/plan";
 import { buildHeader, buildViews, type ViewActions, type ViewHost } from "../views/views";
 import { h } from "../views/dom";
@@ -733,7 +733,11 @@ export class Island {
         this.engine.animateMorph(0);
         this.setView("note");
         Sound.play("error");
-        window.setTimeout(() => this.setView(State.defaultView()), 2400);
+        window.setTimeout(() => {
+          // Only the note still on screen: setView would reopen a folded island
+          // and replace a view the user opened since.
+          if (State.mode === "expanded" && State.view === "note") this.setView(State.defaultView());
+        }, 2400);
       });
   }
 
@@ -746,6 +750,10 @@ export class Island {
     if (since == null) return;
     const dur = State.uploadDuration;
     const p = Math.max(0, Math.min(1, (since - PRE_PROGRESS) / dur));
+
+    // The bar and the percentage follow the same eased curve as Mochi.
+    State.uploadProgress = uploadProgressCurve(p);
+    if (State.view === "uploading") this.views.get("uploading")?.sync();
 
     const tens = Math.floor(p * 10);
     if (tens > this.uploadTens && tens < 10) {

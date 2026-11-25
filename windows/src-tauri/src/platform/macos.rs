@@ -304,6 +304,11 @@ pub fn set_activating(win: &WebviewWindow, activating: bool) {
 /// Click-through here is the poll's ignore-cursor toggle, not a region.
 pub fn set_input_region(_win: &WebviewWindow, _rect: Option<(f64, f64, f64, f64)>) {}
 
+/// Click-through on or off (Windows needs more; see platform/windows.rs).
+pub fn set_click_through(win: &WebviewWindow, ignore: bool) {
+    let _ = win.set_ignore_cursor_events(ignore);
+}
+
 #[cfg(test)]
 mod mode_tests {
     use super::fullscreen_owner;

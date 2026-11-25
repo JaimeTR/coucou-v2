@@ -11,6 +11,7 @@ import { mayNotify, mustDecline } from "../core/modes";
 import { State, type AskQuestion, type PlanUsage, type PlanWindow } from "../core/state";
 import { computeDiff, diffStepLabel } from "./diff";
 import { matchRule, ruleFor } from "./rules";
+import { promptStep, settledElsewhere } from "./hookText";
 import { RecapRecorder, type RecapData } from "./recap";
 import type { Island } from "./island";
 
@@ -45,8 +46,15 @@ const MAX_PENDING = 5;
  * never take down a request that came later.
  */
 function armRequestTimeout(island: Island, requestId: string) {
-  window.setTimeout(() => {
-    if (State.pendingApproval?.requestId === requestId) {
+  window.setTimeout(() => expireRequest(island, requestId), 110_000);
+}
+
+/** The request is nobody's to answer any more: its card, or its place in line, goes. */
+function expireRequest(island: Island, requestId: string) {
+    if (State.pendingQuestion?.requestId === requestId) {
+      endQuestion();
+      dropQuestionCard(island);
+    } else if (State.pendingApproval?.requestId === requestId) {
       void Bridge.setDecisionShortcuts(false);
       const pill = State.pendingApproval.agentId ?? CLAUDE_ID;
       State.pendingApproval = null;
@@ -64,7 +72,6 @@ function armRequestTimeout(island: Island, requestId: string) {
       if (!State.approvalQueue.some((x) => (x.agentId ?? CLAUDE_ID) === pill)) State.setPillBadge(pill, null);
       State.notify();
     }
-  }, 110_000);
 }
 
 /**
@@ -357,6 +364,8 @@ export function parseQuestions(input: Record<string, unknown> | undefined): AskQ
 export function registerHookHandlers(island: Island) {
   void onEvent<HookPayload>("hook", (payload) => handleHook(island, payload));
   void onEvent<StatuslinePayload>("statusline", (payload) => handleStatusline(payload));
+  // The relay hung up or the app stopped waiting: the card would be lying.
+  void onEvent<string>("approval-expired", (id) => expireRequest(island, id));
   // `npm run dev` in a plain browser has no relay: let the page replay events by
   // hand (window.__coucou.hook({...})). Vite drops this from the real build.
   if (import.meta.env.DEV) {
@@ -455,6 +464,16 @@ function handleHook(island: Island, payload: HookPayload) {
     }
   };
 
+  // Answered in the terminal or the app, or the turn is over: the card goes.
+  const sessionId = payload.session_id ?? "";
+  for (const waiting of [State.pendingApproval, ...State.approvalQueue]) {
+    const tool = payload.tool_name ?? "Tool";
+    if (waiting && settledElsewhere(waiting, name, agentId, sessionId, tool, approvalTarget(tool, payload.tool_input ?? {}))) {
+      void Bridge.approvalDecline(waiting.requestId);
+      expireRequest(island, waiting.requestId);
+    }
+  }
+
   switch (name) {
     case "SessionStart":
       ensurePill();
@@ -467,8 +486,10 @@ function handleHook(island: Island, payload: HookPayload) {
       State.updateTask(agentId, "thinking");
       // The field is `prompt`; reading `message` meant this step was always blank.
       Recap.prompt(session, agentId, projectName);
-      const asked = payload.prompt ?? payload.message;
-      if (asked) State.appendStep(agentId, asked.slice(0, 60));
+      const asked = promptStep(payload.prompt ?? payload.message ?? "");
+      if (asked) State.appendStep(agentId, asked);
+      // A new turn: the finished card would show the prompt as if it were the answer.
+      if (State.mode === "expanded" && State.view === "finished" && State.focusId === agentId) island.setView("overview");
       surface("overview", false);
       break;
     }
@@ -741,15 +762,18 @@ function handleQuestion(
   }
   questionTimeout = window.setTimeout(() => {
     questionTimeout = null;
-    if (!State.pendingQuestion) return;
-    State.pendingQuestion = null;
-    State.isPinned = false;
-    island.dropPin();
-    State.updateTask(CLAUDE_ID, "working");
-    State.setPillBadge(CLAUDE_ID, null);
-    if (State.view === "question") island.setView(State.defaultView());
-    State.notify();
+    if (State.pendingQuestion) dropQuestionCard(island);
   }, 125_000);
+  State.notify();
+}
+
+function dropQuestionCard(island: Island) {
+  State.pendingQuestion = null;
+  State.isPinned = false;
+  island.dropPin();
+  State.updateTask(CLAUDE_ID, "working");
+  State.setPillBadge(CLAUDE_ID, null);
+  if (State.view === "question") island.setView(State.defaultView());
   State.notify();
 }
 

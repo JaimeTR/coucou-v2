@@ -4,6 +4,23 @@
 
 Coucou v2 es el fork de [JaimeTR](https://github.com/JaimeTR) de [Coucou, de Louis Raillé](https://github.com/Louis-CFM/coucou) (MIT). Las notas de la versión de macOS siguen en el [CHANGELOG.md](../CHANGELOG.md) de la raíz.
 
+## 1.7.0 — 25 de noviembre de 2026
+Traído del Windows y Linux 0.5.9 y 0.6.0 del original.
+
+**Seguridad** (de @Ohualtex)
+- El canal (pipe) del relay solo acepta programas de tu propia cuenta *(Windows)*.
+- Las carpetas locales de Coucou quedan restringidas a ti, SYSTEM y los administradores *(Windows)*.
+- El relay de los hooks se reemplaza cuando su contenido difiere (SHA-256), no solo su tamaño y fecha *(Windows)*.
+- Ajustes avisa si el relay no pudo arrancar.
+
+**Arreglos**
+- La tarjeta de permiso o pregunta que respondes en la terminal o en la app de Claude se cierra sola, igual que la de un turno ya terminado (de @arnavaggarwal-dev y el original).
+- Las notificaciones de tareas en segundo plano y otros textos inyectados ya no salen como tu prompt (de @arnavaggarwal-dev).
+- La tarjeta de terminado se va cuando llega un prompt nuevo (de @rollecode).
+- El aviso de un archivo que falló al soltarlo ya no reabre la isla plegada (de @mahach666).
+- La barra y el porcentaje de subida se mueven con Mochi, y la isla y Mochi no aparecen en la barra de tareas ni en Alt+Tab *(Windows)* (de @arnavaggarwal-dev).
+- La tira de 7 días de GitHub se colorea según su propia semana (de @rollecode).
+
 ## 1.6.1 — 2 de noviembre de 2026
 - **Bienvenida**: las filas de "Continuar donde lo dejé" quedan centradas en la línea de Mochi (estaban un poco altas).
 

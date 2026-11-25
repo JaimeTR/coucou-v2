@@ -29,7 +29,7 @@ Aprueba los permisos de Claude Code, mira trabajar tu sesión, suelta un archivo
 
 ## Novedades de la v2
 
-Coucou v2 convierte a Mochi en un pequeño asistente personal. Todo lo de abajo es nuevo respecto a la app original; la lista completa está en [CHANGELOG.es.md](CHANGELOG.es.md). **Versión actual: 1.2.0** (11 de octubre de 2026).
+Coucou v2 convierte a Mochi en un pequeño asistente personal. Todo lo de abajo es nuevo respecto a la app original; la lista completa está en [CHANGELOG.es.md](CHANGELOG.es.md). **Versión actual: 1.7.0** (25 de noviembre de 2026).
 
 | | |
 |---|---|

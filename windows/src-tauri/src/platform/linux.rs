@@ -408,6 +408,11 @@ fn apply_input_region(gw: &impl IsA<gtk::Widget>, rect: Region) {
     }
 }
 
+/// Click-through on or off (Windows needs more; see platform/windows.rs).
+pub fn set_click_through(win: &WebviewWindow, ignore: bool) {
+    let _ = win.set_ignore_cursor_events(ignore);
+}
+
 #[cfg(test)]
 mod tests {
     #[test]

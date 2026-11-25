@@ -92,6 +92,7 @@ export const EN: ReadonlyArray<readonly [string, string]> = [
   ["en la bienvenida: tu último proyecto y lo que espera (revisiones, CI)", "on the welcome: your last project and what is waiting (reviews, CI)"],
   ["Coucou está conectado a tus sesiones de Claude Code. Las herramientas, las preguntas y las peticiones de permiso aparecen en la isla, y puedes responderlas ahí.", "Coucou is connected to your Claude Code sessions. Tools, questions and permission requests show up in the island, and you can answer them there."],
   ["Instala los hooks para ver tus sesiones de Claude Code en la isla y aprobar permisos sin dejar lo que estás haciendo.", "Install the hooks to see your Claude Code sessions in the island and approve permissions without leaving what you're doing."],
+  ["El relay de los hooks no pudo arrancar ({0}). Los hooks no llegarán a Coucou.", "The hook relay could not start ({0}). Hooks will not reach Coucou."],
   ["coucou-hook.exe aún no está en su sitio. Reinicia Coucou; si sigue fallando, compílalo con `cargo build -p coucou-hook`.", "coucou-hook.exe is not in place yet. Restart Coucou; if it keeps failing, build it with `cargo build -p coucou-hook`."],
   ["Hooks desactualizados: actualízalos para responder las preguntas de Claude desde la isla.", "Outdated hooks: update them to answer Claude's questions from the island."],
   ["Instalar hooks…", "Install hooks…"],

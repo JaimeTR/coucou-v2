@@ -81,7 +81,7 @@ pub fn create(app: &AppHandle) {
         Ok(win) => {
             platform::make_non_activating(&win);
             // Nothing is hit until the page says where Mochi is.
-            let _ = win.set_ignore_cursor_events(true);
+            crate::platform::set_click_through(&win, true);
         }
         Err(err) => crate::log::line(format!("pet window failed: {err}")),
     }
@@ -105,7 +105,7 @@ pub fn show(app: &AppHandle, edge: &str, along: f64) -> Result<(), String> {
     };
     let (x, y) = placement(edge, area, w, h, along).ok_or("borde desconocido")?;
     HIT.lock().unwrap().clear();
-    let _ = win.set_ignore_cursor_events(true);
+    crate::platform::set_click_through(&win, true);
     let _ = win.set_size(PhysicalSize::new(w as u32, h as u32));
     let _ = win.set_position(PhysicalPosition::new(x, y));
     let _ = win.set_always_on_top(true);
@@ -135,7 +135,7 @@ fn watch(app: AppHandle) {
     let me = VISIT.fetch_add(1, Ordering::Relaxed) + 1;
     if !platform::CURSOR_POLL {
         if let Some(win) = app.get_webview_window(LABEL) {
-            let _ = win.set_ignore_cursor_events(false);
+            crate::platform::set_click_through(&win, false);
         }
         return;
     }
@@ -152,7 +152,7 @@ fn watch(app: AppHandle) {
             let over = inside(&HIT.lock().unwrap(), x, y);
             if ignoring == over {
                 ignoring = !over;
-                let _ = win.set_ignore_cursor_events(ignoring);
+                crate::platform::set_click_through(&win, ignoring);
             }
             if (x - last.0).abs() >= 1.0 || (y - last.1).abs() >= 1.0 {
                 last = (x, y);

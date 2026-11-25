@@ -352,6 +352,7 @@ export interface HookStatus {
   settingsPath: string;
   hookPath: string;
   hookReady: boolean;
+  relayError?: string | null;
 }
 
 export interface HookPreview {

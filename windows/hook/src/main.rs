@@ -18,7 +18,7 @@
 
 use std::io::{Read, Write};
 use std::sync::mpsc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 /// Budget for getting a pipe connection. Beyond this Claude Code wins, always.
 const CONNECT_TIMEOUT: Duration = Duration::from_millis(300);
@@ -46,12 +46,15 @@ const PREVIOUS_STATUSLINE_BUDGET: Duration = Duration::from_secs(10);
 #[cfg(windows)]
 mod win;
 #[cfg(windows)]
-use win::{ancestor_pids, connect};
+use win::{ancestor_pids, connect, parent};
 
 #[cfg(unix)]
 mod unix;
 #[cfg(unix)]
-use unix::{ancestor_pids, connect};
+use unix::{ancestor_pids, connect, parent};
+
+/// How often a waiting relay checks that the process that ran it is still there.
+const PARENT_POLL: Duration = Duration::from_millis(100);
 
 /// Events that fire dozens of times a minute carry no process chain: the island
 /// learns it from the first event of the session, and the walk is not free.
@@ -95,8 +98,14 @@ fn main() {
         let _ = tx.send(talk(&payload, waits_for_answer));
     });
 
+    // Claude Code ends the relay when its prompt is answered in the terminal,
+    // and the app sees the pipe close at once. A shell between them (Git Bash,
+    // cmd) can be the one ended, leaving us orphaned: its going ends us too.
+    let parent = if waits_for_answer { parent() } else { None };
+    let answer = wait(&rx, budget, || parent.as_ref().is_some_and(|p| p.gone()));
+
     let mut printed = false;
-    if let Ok(Some(decision)) = rx.recv_timeout(budget) {
+    if let Some(decision) = answer {
         let json = match &ask_questions {
             Some(questions) => answer_json(&decision, questions),
             None if agent == "copilot" || agent == "muse" => simple_decision_json(&decision),
@@ -117,6 +126,24 @@ fn main() {
     }
     // Nothing printed: Claude Code asks in the terminal, as if we were not here.
     finish(printed)
+}
+
+/// The worker's answer, or None once `budget` runs out or `gone()` says the
+/// process that ran us has gone.
+fn wait(rx: &mpsc::Receiver<Option<String>>, budget: Duration, gone: impl Fn() -> bool) -> Option<String> {
+    let deadline = Instant::now() + budget;
+    loop {
+        let left = deadline.saturating_duration_since(Instant::now());
+        if left.is_zero() {
+            return None;
+        }
+        match rx.recv_timeout(left.min(PARENT_POLL)) {
+            Ok(decision) => return decision,
+            Err(mpsc::RecvTimeoutError::Timeout) if gone() => return None,
+            Err(mpsc::RecvTimeoutError::Timeout) => {}
+            Err(mpsc::RecvTimeoutError::Disconnected) => return None,
+        }
+    }
 }
 
 /// Other agents speak their own dialect. Gemini CLI's hook events and tool names
@@ -787,5 +814,26 @@ mod tests {
         assert_eq!(v["rate_limits"]["five_hour"]["used_percentage"], 23.5);
         assert!(v.get("cwd").is_none() && v.get("model").is_none());
         assert!(statusline_message(b"not json").is_none());
+    }
+
+    #[test]
+    fn a_waiting_relay_gives_up_as_soon_as_its_parent_is_gone() {
+        let (tx, rx) = mpsc::channel::<Option<String>>();
+        let started = Instant::now();
+        let checks = std::cell::Cell::new(0);
+        let gone = || {
+            checks.set(checks.get() + 1);
+            checks.get() >= 2
+        };
+        assert_eq!(wait(&rx, Duration::from_secs(5), gone), None);
+        assert!(started.elapsed() < Duration::from_secs(1), "{:?}", started.elapsed());
+        // An answer still wins while the parent is there.
+        tx.send(Some("allow".into())).unwrap();
+        assert_eq!(wait(&rx, Duration::from_secs(5), || false).as_deref(), Some("allow"));
+        // And the budget still ends a wait nobody answers.
+        let started = Instant::now();
+        assert_eq!(wait(&rx, Duration::from_millis(150), || false), None);
+        assert!(started.elapsed() >= Duration::from_millis(150));
+        drop(tx);
     }
 }
